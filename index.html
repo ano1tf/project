@@ -10,9 +10,12 @@
 <meta property="og:image" content="assets/kreo-logo-web.png">
 <meta property="og:type" content="website">
 <link rel="icon" href="assets/kreo-logo-web.png">
+<meta name="theme-color" content="#ffffff">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
+
+<div class="progress-bar" aria-hidden="true"></div>
 
 <!-- Header -->
 <header id="header">
@@ -202,7 +205,42 @@
             </div>
           </div>
         </div>
+
+        <div class="f-row">
+          <div class="f-copy" data-reveal>
+            <h3>Des centaines d'assets.<br>Zéro page blanche.</h3>
+            <p class="lead">Sprites, sons, effets et décors prêts à l'emploi — pour démarrer instantanément et te concentrer sur le jeu.</p>
+            <a class="link" href="#showcase">Explorer la bibliothèque
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </a>
+          </div>
+          <div class="f-visual" data-reveal>
+            <div class="visual-card">
+              <div class="assets-grid">
+                <img src="assets/showcase/sky-runner.jpg" alt="Sprites prêts à l'emploi" loading="lazy">
+                <img src="assets/showcase/neon-drift.jpg" alt="Décors prêts à l'emploi" loading="lazy">
+                <img src="assets/showcase/nova-strike.jpg" alt="Effets prêts à l'emploi" loading="lazy">
+              </div>
+              <div class="mini-row">
+                <span class="mini-chip">Sprites</span>
+                <span class="mini-chip">Sons</span>
+                <span class="mini-chip">Effets</span>
+                <span class="mini-chip">Décors</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ STATEMENT ============ -->
+  <section class="statement">
+    <div class="container">
+      <span class="eyebrow" data-reveal>La promesse</span>
+      <p class="statement-text">
+        <span class="s-word">Si</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">l'imaginer,</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">le</span> <span class="s-word">créer.</span>
+      </p>
     </div>
   </section>
 
@@ -217,7 +255,7 @@
       <div class="tiles" data-reveal-group>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <img src="assets/showcase/sky-runner.jpg" alt="Sky Runner — jeu de plateforme" loading="lazy">
+            <div class="tile-imgwrap"><img src="assets/showcase/sky-runner.jpg" alt="Sky Runner — jeu de plateforme" loading="lazy"></div>
             <div class="tile-play">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
               Jouer
@@ -230,7 +268,7 @@
         </article>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <img src="assets/showcase/neon-drift.jpg" alt="Neon Drift — jeu de course" loading="lazy">
+            <div class="tile-imgwrap"><img src="assets/showcase/neon-drift.jpg" alt="Neon Drift — jeu de course" loading="lazy"></div>
             <div class="tile-play">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
               Jouer
@@ -243,7 +281,7 @@
         </article>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <img src="assets/showcase/nova-strike.jpg" alt="Nova Strike — shooter spatial" loading="lazy">
+            <div class="tile-imgwrap"><img src="assets/showcase/nova-strike.jpg" alt="Nova Strike — shooter spatial" loading="lazy"></div>
             <div class="tile-play">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
               Jouer
@@ -256,7 +294,7 @@
         </article>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux — puzzle" loading="lazy">
+            <div class="tile-imgwrap"><img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux — puzzle" loading="lazy"></div>
             <div class="tile-play">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
               Jouer
@@ -434,7 +472,11 @@
     </div>
     <div class="footer-bottom">
       <div class="footer-note">© 2026 KREO. Fait avec ❤️ pour les créateurs.</div>
-      <div class="footer-note">Gratuit pour commencer · 100% navigateur</div>
+      <div class="footer-legal">
+        <a href="#">Confidentialité</a>
+        <a href="#">Conditions</a>
+        <a href="#">Mentions légales</a>
+      </div>
     </div>
   </div>
 </footer>

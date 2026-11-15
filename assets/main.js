@@ -31,11 +31,22 @@
     .from('.hero-proof', { y: 14, opacity: 0, duration: 0.8 }, 1.15)
     .from('#mockup', { y: 80, opacity: 0, scale: 0.965, duration: 1.6, ease: 'power2.out' }, 0.85);
 
-  /* ---------- Mockup: subtle scroll parallax (Apple product-shot style) ---------- */
-  gsap.to('#mockup', {
-    yPercent: -5,
-    ease: 'none',
+  /* ---------- Hero mockup: scroll-zoom settle (Apple product-shot style) ---------- */
+  gsap.fromTo('.hero-visual', { scale: 1.045 }, {
+    scale: 0.98, yPercent: -3, ease: 'none',
     scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: 0.8 }
+  });
+
+  /* ---------- Scroll progress bar ---------- */
+  gsap.to('.progress-bar', {
+    scaleX: 1, ease: 'none',
+    scrollTrigger: { start: 0, end: 'max', scrub: 0.3 }
+  });
+
+  /* ---------- Statement: words lit by scroll ---------- */
+  gsap.fromTo('.s-word', { opacity: 0.12 }, {
+    opacity: 1, stagger: 0.12, ease: 'none',
+    scrollTrigger: { trigger: '.statement', start: 'top 78%', end: 'bottom 55%', scrub: 0.5 }
   });
 
   /* ---------- Scroll reveals: gentle, slow ---------- */
@@ -68,6 +79,25 @@
             el.textContent = Number.isInteger(end) ? String(Math.round(obj.v)) : obj.v.toFixed(1).replace('.', ',');
           }
         });
+      }
+    });
+  });
+
+  /* ---------- Showcase tiles: image parallax ---------- */
+  gsap.utils.toArray('.tile-imgwrap img').forEach((img) => {
+    gsap.fromTo(img, { yPercent: -6 }, {
+      yPercent: 6, ease: 'none',
+      scrollTrigger: { trigger: img.closest('.tile'), start: 'top bottom', end: 'bottom top', scrub: 0.6 }
+    });
+  });
+
+  /* ---------- Nav: highlight current section ---------- */
+  document.querySelectorAll('section[id]').forEach((sec) => {
+    ScrollTrigger.create({
+      trigger: sec, start: 'top 45%', end: 'bottom 45%',
+      onToggle: (self) => {
+        const link = document.querySelector('.nav-links a[href="#' + sec.id + '"]');
+        if (link) link.classList.toggle('active', self.isActive);
       }
     });
   });
