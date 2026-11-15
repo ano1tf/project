@@ -14,15 +14,6 @@
 </head>
 <body>
 
-<!-- Ambient background -->
-<div class="bg-fx" aria-hidden="true">
-  <div class="orb orb-v"></div>
-  <div class="orb orb-c"></div>
-  <div class="orb orb-3"></div>
-  <div class="grid-fx"></div>
-  <div class="noise-fx"></div>
-</div>
-
 <!-- Header -->
 <header id="header">
   <div class="container">
@@ -30,21 +21,20 @@
       <a class="brand" href="#top"><img src="assets/kreo-logo-web.png" alt="Logo KREO">KREO</a>
       <nav class="nav-links">
         <a href="#features">Fonctionnalités</a>
-        <a href="#steps">Comment ça marche</a>
         <a href="#showcase">Jeux</a>
+        <a href="#steps">Comment ça marche</a>
         <a href="#pricing">Tarifs</a>
         <a href="#faq">FAQ</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn btn-ghost btn-sm" href="#discord">💬 Discord</a>
-        <a class="btn btn-primary btn-sm magnetic" href="#start">Commencer</a>
+        <a class="btn btn-fill" href="#start">Commencer</a>
       </div>
       <button class="burger" id="burger" aria-label="Ouvrir le menu"><span></span><span></span><span></span></button>
     </div>
     <div class="mobile-menu" id="mobileMenu">
       <a href="#features">Fonctionnalités</a>
-      <a href="#steps">Comment ça marche</a>
       <a href="#showcase">Jeux</a>
+      <a href="#steps">Comment ça marche</a>
       <a href="#pricing">Tarifs</a>
       <a href="#faq">FAQ</a>
       <a href="#discord">Discord</a>
@@ -56,41 +46,49 @@
 
   <!-- ============ HERO ============ -->
   <section class="hero">
-    <div class="container hero-grid">
-      <div class="hero-copy">
-        <div class="badge"><span class="dot"></span> Éditeur de jeux 100% web — bientôt disponible</div>
-        <h1 class="hero-title">
-          <span class="line"><span class="word"><i>Crée</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>jeu.</i></span></span>
-          <span class="line"><span class="word"><i class="grad-text">Dans</i></span> <span class="word"><i class="grad-text">ton</i></span> <span class="word"><i class="grad-text">navigateur.</i></span></span>
-        </h1>
-        <p class="hero-sub">L'éditeur de jeux qui ne s'installe pas : dessine tes niveaux, programme en blocs, publie et partage en quelques minutes. Aucun code obligatoire.</p>
-        <div class="hero-cta">
-          <a class="btn btn-primary magnetic" href="#start">▶ Commencer à créer — gratuit</a>
-          <a class="btn btn-ghost" href="#discord">💬 Rejoindre le Discord</a>
-        </div>
-        <div class="hero-proof">
-          <span><span class="tick">✓</span> 0 installation</span>
-          <span><span class="tick">✓</span> 5 min pour ton 1er jeu</span>
-          <span><span class="tick">✓</span> 1 lien à partager</span>
-        </div>
+    <div class="container">
+      <div class="hero-eyebrow">Bientôt disponible</div>
+      <h1 class="hero-title">
+        <span class="line"><span class="word"><i>Crée</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>jeu.</i></span></span>
+        <span class="line"><span class="word"><i>Dans</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>navigateur.</i></span></span>
+      </h1>
+      <p class="lead">KREO transforme ton navigateur en studio de création. Dessine tes niveaux, programme en blocs, publie — en quelques minutes.</p>
+      <div class="hero-cta">
+        <a class="btn btn-fill" href="#start">Commencer à créer</a>
+        <a class="link" href="#discord">Rejoindre le Discord
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
       </div>
+      <div class="hero-proof"><span>Gratuit pour commencer</span>·<span>Aucune installation</span>·<span>100% navigateur</span></div>
 
+      <!-- Editor mockup -->
       <div class="hero-visual">
-        <!-- Editor mockup -->
         <div class="mockup" id="mockup">
           <div class="mockup-bar">
             <span class="win-dot r"></span><span class="win-dot y"></span><span class="win-dot g"></span>
-            <div class="mockup-tab">🚀 space-run.kro — Éditeur KREO</div>
+            <div class="mockup-tab">space-run.kro — KREO</div>
             <div class="mockup-pill">En ligne</div>
           </div>
           <div class="mockup-body">
             <div class="mock-side left">
-              <div class="tool">🖱️</div>
-              <div class="tool active">🧱</div>
-              <div class="tool">🖌️</div>
-              <div class="tool">👾</div>
-              <div class="tool">🔊</div>
-              <div class="tool">⚙️</div>
+              <div class="tool">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l12 6.5-5 1.3 2.5 5.2-2.4 1.1L10.7 13 6 16z"/></svg>
+              </div>
+              <div class="tool active">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.8"/></svg>
+              </div>
+              <div class="tool">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 9.5-9.5a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/></svg>
+              </div>
+              <div class="tool">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16.5l4.5-4 3.5 3 3.5-3 4 3.5"/></svg>
+              </div>
+              <div class="tool">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l4 3.5v-11L7 10z"/><path d="M14 9.2a4 4 0 0 1 0 5.6"/><path d="M16.5 7a7 7 0 0 1 0 10"/></svg>
+              </div>
+              <div class="tool">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4L6 18M18 18l-1.6-1.6M7.6 7.6L6 6"/></svg>
+              </div>
             </div>
             <div class="mock-canvas">
               <div class="canvas-grid"></div>
@@ -106,48 +104,23 @@
               <div class="platform pl3"><span class="coin c3"></span><span class="flag"></span></div>
             </div>
             <div class="mock-side right">
-              <div class="prop-row"><span>Vie</span><b>3 ❤️</b></div>
+              <div class="prop-row"><span>Vie</span><b>3</b></div>
               <div class="prop-row"><span>Vitesse</span><b>1,2</b></div>
               <div class="prop-row"><span>Score</span><b>2450</b></div>
               <div class="prop-row"><span>Niveau</span><b>2-1</b></div>
-              <div class="mock-btn">▶ Tester</div>
+              <div class="mock-btn">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
+                Tester
+              </div>
             </div>
           </div>
         </div>
-        <!-- Floating chips -->
-        <div class="float-chip chip-1">👾 3 amis en jeu</div>
-        <div class="float-chip chip-2">🪙 +250 pièces</div>
-        <div class="float-chip chip-3">🚀 Publier</div>
       </div>
     </div>
   </section>
 
-  <!-- ============ MARQUEE ============ -->
-  <div class="marquee" aria-hidden="true">
-    <div class="marquee-track">
-      <div class="marquee-group">
-        <span>0 installation</span><span class="star-sep">✦</span>
-        <span>100% web</span><span class="star-sep">✦</span>
-        <span>Blocs visuels</span><span class="star-sep">✦</span>
-        <span>Multiplayer</span><span class="star-sep">✦</span>
-        <span>Publication en 1 clic</span><span class="star-sep">✦</span>
-        <span>Assets intégrés</span><span class="star-sep">✦</span>
-        <span>Gratuit pour débuter</span><span class="star-sep">✦</span>
-      </div>
-      <div class="marquee-group">
-        <span>0 installation</span><span class="star-sep">✦</span>
-        <span>100% web</span><span class="star-sep">✦</span>
-        <span>Blocs visuels</span><span class="star-sep">✦</span>
-        <span>Multiplayer</span><span class="star-sep">✦</span>
-        <span>Publication en 1 clic</span><span class="star-sep">✦</span>
-        <span>Assets intégrés</span><span class="star-sep">✦</span>
-        <span>Gratuit pour débuter</span><span class="star-sep">✦</span>
-      </div>
-    </div>
-  </div>
-
   <!-- ============ STATS ============ -->
-  <section class="stats" style="padding-top:24px">
+  <section class="stats" style="padding:80px 0">
     <div class="container">
       <div class="stats-grid" data-reveal-group>
         <div class="stat" data-reveal-item>
@@ -170,51 +143,135 @@
     </div>
   </section>
 
-  <!-- ============ FEATURES ============ -->
-  <section id="features">
+  <!-- ============ FEATURE ROWS ============ -->
+  <section id="features" class="bg-alt">
     <div class="container">
       <div class="section-head" data-reveal>
         <span class="eyebrow">Fonctionnalités</span>
-        <h2>Tout ce qu'il faut pour créer,<br>rien pour te ralentir</h2>
-        <p>Un éditeur pensé pour tout le monde : du tout premier jeu jusqu'à la publication.</p>
+        <h2>Tout ce qu'il faut.<br>Rien de superflu.</h2>
+        <p class="lead">Un éditeur pensé pour créer vite et bien, du tout premier jeu jusqu'à la publication.</p>
       </div>
-      <div class="bento" data-reveal-group>
-        <div class="feature-card wide" data-reveal-item>
-          <div class="glow"></div>
-          <div class="f-icon">🌐</div>
-          <h3>100% web, 0 installation</h3>
-          <p>Ouvre ton navigateur et crée. Sur PC, Mac ou Chromebook — tes projets te suivent partout, sans téléchargement ni mise à jour.</p>
+
+      <div class="f-row">
+        <div class="f-copy" data-reveal>
+          <h3>Programme sans écrire<br>une seule ligne de code.</h3>
+          <p class="lead">La logique de ton jeu se construit par blocs, en glissant-déposant. Simple pour débuter. Puissant pour aller loin.</p>
+          <a class="link" href="#steps">Découvrir les blocs
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
         </div>
-        <div class="feature-card" data-reveal-item>
-          <div class="glow"></div>
-          <div class="f-icon">🧩</div>
-          <h3>Programmation en blocs</h3>
-          <p>Crée ta logique de jeu en glissant des blocs. Simple pour débuter, puissant pour aller loin.</p>
+        <div class="f-visual" data-reveal>
+          <div class="visual-card">
+            <div class="blocks">
+              <div class="block"><span class="b-dot"></span> Quand le joueur appuie sur Espace <small>Événement</small></div>
+              <div class="block"><span class="b-dot c2"></span> Ajouter 100 au score <small>Action</small></div>
+              <div class="block"><span class="b-dot c3"></span> Jouer un son de pièce <small>Action</small></div>
+            </div>
+          </div>
         </div>
-        <div class="feature-card" data-reveal-item>
-          <div class="glow"></div>
-          <div class="f-icon">🗺️</div>
-          <h3>Éditeur de niveaux</h3>
-          <p>Dessine tes maps au pinceau, place tes objets et teste instantanément.</p>
+      </div>
+
+      <div class="f-row">
+        <div class="f-copy" data-reveal>
+          <h3>Publie. Partage.<br>Joue.</h3>
+          <p class="lead">Ton jeu obtient un lien jouable instantanément — sur mobile, tablette ou ordinateur. Un clic, et tes amis sont dedans.</p>
+          <a class="link" href="#showcase">Voir des exemples
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
         </div>
-        <div class="feature-card" data-reveal-item>
-          <div class="glow"></div>
-          <div class="f-icon">🎨</div>
-          <h3>Assets prêts à l'emploi</h3>
-          <p>Sprites, sons et effets inclus pour ne jamais partir de zéro.</p>
+        <div class="f-visual" data-reveal>
+          <div class="visual-card">
+            <div class="link-field">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" stroke-width="1.8" stroke-linecap="round"><path d="M9.5 14.5a4 4 0 0 0 6 .4l2.5-2.5a4 4 0 0 0-5.7-5.7L11 8"/><path d="M14.5 9.5a4 4 0 0 0-6-.4L6 11.6a4 4 0 0 0 5.7 5.7L13 16"/></svg>
+              <span class="lf-url">kreo.games/space-run</span>
+              <span class="lf-copy">Copier</span>
+            </div>
+            <div class="mini-row">
+              <span class="mini-chip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
+                Jouable partout
+              </span>
+              <span class="mini-chip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.8 20a5 5 0 0 1 4.7-4.7"/></svg>
+                Multijoueur
+              </span>
+              <span class="mini-chip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg>
+                Gratuit
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="feature-card" data-reveal-item>
-          <div class="glow"></div>
-          <div class="f-icon">🚀</div>
-          <h3>Publication en 1 clic</h3>
-          <p>Un lien jouable à partager instantanément avec tes amis.</p>
-        </div>
-        <div class="feature-card" data-reveal-item>
-          <div class="glow"></div>
-          <div class="f-icon">👥</div>
-          <h3>Multiplayer</h3>
-          <p>Joue et crée avec tes amis, en ligne, directement dans le navigateur.</p>
-        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SHOWCASE (dark) ============ -->
+  <section id="showcase" class="showcase">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">Galerie</span>
+        <h2>Des jeux qui ont<br>du style.</h2>
+        <p class="lead">Créés avec KREO par des joueurs comme toi.</p>
+      </div>
+      <div class="tiles" data-reveal-group>
+        <article class="tile" data-reveal-item>
+          <div class="tile-media">
+            <img src="assets/showcase/sky-runner.jpg" alt="Sky Runner — jeu de plateforme" loading="lazy">
+            <div class="tile-play">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
+              Jouer
+            </div>
+          </div>
+          <div class="tile-info">
+            <h3>Sky Runner</h3>
+            <p>Plateforme · par Léo</p>
+          </div>
+        </article>
+        <article class="tile" data-reveal-item>
+          <div class="tile-media">
+            <img src="assets/showcase/neon-drift.jpg" alt="Neon Drift — jeu de course" loading="lazy">
+            <div class="tile-play">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
+              Jouer
+            </div>
+          </div>
+          <div class="tile-info">
+            <h3>Neon Drift</h3>
+            <p>Course · par Maya</p>
+          </div>
+        </article>
+        <article class="tile" data-reveal-item>
+          <div class="tile-media">
+            <img src="assets/showcase/nova-strike.jpg" alt="Nova Strike — shooter spatial" loading="lazy">
+            <div class="tile-play">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
+              Jouer
+            </div>
+          </div>
+          <div class="tile-info">
+            <h3>Nova Strike</h3>
+            <p>Arcade · par Samir</p>
+          </div>
+        </article>
+        <article class="tile" data-reveal-item>
+          <div class="tile-media">
+            <img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux — puzzle" loading="lazy">
+            <div class="tile-play">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
+              Jouer
+            </div>
+          </div>
+          <div class="tile-info">
+            <h3>L'Île aux Cristaux</h3>
+            <p>Réflexion · par Chloé</p>
+          </div>
+        </article>
+      </div>
+      <div class="showcase-foot" data-reveal>
+        <a class="link" href="#start">Crée le tien
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
       </div>
     </div>
   </section>
@@ -224,98 +281,32 @@
     <div class="container">
       <div class="section-head" data-reveal>
         <span class="eyebrow">Comment ça marche</span>
-        <h2>Trois étapes, et ton jeu est en ligne</h2>
-        <p>Pas de manuel de 200 pages. Tu commences tout de suite.</p>
+        <h2>Trois gestes,<br>et c'est en ligne.</h2>
       </div>
       <div class="steps" data-reveal-group>
         <div class="step" data-reveal-item>
-          <div class="step-num">1</div>
+          <div class="step-num">01</div>
           <h3>Crée</h3>
-          <p>Ouvre l'éditeur dans ton navigateur. Pas d'installation, pas d'attente — juste ton imagination.</p>
+          <p>Ouvre l'éditeur dans ton navigateur. Aucune installation, aucune attente.</p>
         </div>
         <div class="step" data-reveal-item>
-          <div class="step-num">2</div>
+          <div class="step-num">02</div>
           <h3>Construis</h3>
-          <p>Glisse-dépose, dessine tes niveaux, programme en blocs. Tout se joue en temps réel.</p>
+          <p>Dessine tes niveaux, glisse tes blocs, teste en temps réel.</p>
         </div>
         <div class="step" data-reveal-item>
-          <div class="step-num">3</div>
+          <div class="step-num">03</div>
           <h3>Publie</h3>
-          <p>Partage ton lien, reçois des joueurs et des retours sur le Discord KREO.</p>
+          <p>Partage ton lien et reçois tes premiers joueurs.</p>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ SHOWCASE ============ -->
-  <section id="showcase">
-    <div class="container">
-      <div class="section-head" data-reveal>
-        <span class="eyebrow">Galerie</span>
-        <h2>Des jeux comme ceux-ci,<br>créés par des joueurs comme toi</h2>
-        <p>Un aperçu de ce que l'éditeur KREO rend possible.</p>
-      </div>
-      <div class="games" data-reveal-group>
-        <article class="game-card" data-reveal-item>
-          <div class="game-media">
-            <img src="assets/showcase/sky-runner.jpg" alt="Sky Runner — jeu de plateforme" loading="lazy">
-            <div class="play-fab">▶</div>
-          </div>
-          <div class="game-info">
-            <div>
-              <h3>Sky Runner</h3>
-              <div class="author">par Léo · Plateforme</div>
-            </div>
-            <span class="tag">Aventure</span>
-          </div>
-        </article>
-        <article class="game-card" data-reveal-item>
-          <div class="game-media">
-            <img src="assets/showcase/neon-drift.jpg" alt="Neon Drift — jeu de course" loading="lazy">
-            <div class="play-fab">▶</div>
-          </div>
-          <div class="game-info">
-            <div>
-              <h3>Neon Drift</h3>
-              <div class="author">par Maya · Course</div>
-            </div>
-            <span class="tag">Arcade</span>
-          </div>
-        </article>
-        <article class="game-card" data-reveal-item>
-          <div class="game-media">
-            <img src="assets/showcase/nova-strike.jpg" alt="Nova Strike — shooter spatial" loading="lazy">
-            <div class="play-fab">▶</div>
-          </div>
-          <div class="game-info">
-            <div>
-              <h3>Nova Strike</h3>
-              <div class="author">par Samir · Shooter spatial</div>
-            </div>
-            <span class="tag">Action</span>
-          </div>
-        </article>
-        <article class="game-card" data-reveal-item>
-          <div class="game-media">
-            <img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux — puzzle" loading="lazy">
-            <div class="play-fab">▶</div>
-          </div>
-          <div class="game-info">
-            <div>
-              <h3>L'Île aux Cristaux</h3>
-              <div class="author">par Chloé · Puzzle</div>
-            </div>
-            <span class="tag">Réflexion</span>
-          </div>
-        </article>
       </div>
     </div>
   </section>
 
   <!-- ============ DISCORD ============ -->
-  <section id="discord">
+  <section id="discord" class="bg-alt">
     <div class="container">
-      <div class="discord-panel" data-reveal>
+      <div class="discord-card" data-reveal>
         <div class="avatars">
           <div class="avatar av-1">L</div>
           <div class="avatar av-2">M</div>
@@ -323,16 +314,9 @@
           <div class="avatar av-4">C</div>
           <div class="avatar av-5">+ toi</div>
         </div>
-        <span class="eyebrow">Communauté</span>
-        <h2>Rejoins la communauté KREO</h2>
-        <p style="color:var(--muted);max-width:520px;margin:0 auto">Entraide, défis hebdomadaires, partage de jeux et retours en avant-première. C'est là que les créateurs se retrouvent.</p>
-        <div class="discord-chips">
-          <span class="d-chip">🏆 Défis hebdo</span>
-          <span class="d-chip">💡 Entraide</span>
-          <span class="d-chip">🎮 Partage de jeux</span>
-          <span class="d-chip">🔮 Avant-premières</span>
-        </div>
-        <a class="btn btn-discord magnetic" href="#">Rejoindre le serveur Discord</a>
+        <h2>La communauté KREO.</h2>
+        <p class="lead">Défis créatifs, entraide et avant-premières. C'est là que les créateurs se retrouvent.</p>
+        <a class="btn btn-discord" href="#">Rejoindre le serveur Discord</a>
       </div>
     </div>
   </section>
@@ -342,66 +326,76 @@
     <div class="container">
       <div class="section-head" data-reveal>
         <span class="eyebrow">Tarifs</span>
-        <h2>Gratuit pour créer, toujours</h2>
-        <p>Commence sans carte bancaire. Évolue quand tu veux.</p>
+        <h2>Gratuit pour commencer.</h2>
+        <p class="lead">Sans carte bancaire. Évolue quand tu veux.</p>
       </div>
       <div class="plans" data-reveal-group>
         <div class="plan" data-reveal-item>
-          <h3>Gratuit</h3>
+          <div class="plan-name">Gratuit</div>
           <div class="plan-price">0 €<small> / toujours</small></div>
-          <div class="plan-desc">Tout ce qu'il faut pour créer et publier tes jeux.</div>
+          <div class="plan-desc">Tout ce qu'il faut pour créer et publier.</div>
           <ul>
-            <li><span class="tick">✓</span> Jeux et projets illimités</li>
-            <li><span class="tick">✓</span> Programmation en blocs</li>
-            <li><span class="tick">✓</span> Assets de base inclus</li>
-            <li><span class="tick">✓</span> Publication par lien</li>
-            <li><span class="tick">✓</span> Accès au Discord</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Projets illimités</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Programmation en blocs</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Assets de base inclus</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Publication par lien</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Accès au Discord</li>
           </ul>
           <a class="btn btn-ghost" href="#start">Commencer gratuitement</a>
         </div>
         <div class="plan pro" data-reveal-item>
-          <h3>Pro <span class="soon">Bientôt</span></h3>
+          <div class="plan-name">Pro <span class="soon-tag">Bientôt</span></div>
           <div class="plan-price">— €<small> / mois</small></div>
-          <div class="plan-desc">Pour les créateurs qui veulent aller plus loin.</div>
+          <div class="plan-desc">Pour aller plus loin.</div>
           <ul>
-            <li><span class="tick">✓</span> Tout le plan Gratuit</li>
-            <li><span class="tick">✓</span> Assets premium</li>
-            <li><span class="tick">✓</span> Multiplayer avancé</li>
-            <li><span class="tick">✓</span> Statistiques de jeu</li>
-            <li><span class="tick">✓</span> Badge créateur</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Tout le plan Gratuit</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Assets premium</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Multijoueur avancé</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Statistiques de jeu</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Badge créateur</li>
           </ul>
-          <a class="btn btn-primary" href="#discord">Rejoindre la liste d'attente</a>
+          <a class="btn btn-white" href="#discord">Rejoindre la liste d'attente</a>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ============ FAQ ============ -->
-  <section id="faq">
+  <section id="faq" class="bg-alt">
     <div class="container">
       <div class="section-head" data-reveal>
         <span class="eyebrow">FAQ</span>
-        <h2>Questions fréquentes</h2>
+        <h2>Questions fréquentes.</h2>
       </div>
       <div class="faq-list" data-reveal-group>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Faut-il savoir coder ?<span class="faq-icon">+</span></button>
+          <button class="faq-q">Faut-il savoir coder ?
+            <span class="faq-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+          </button>
           <div class="faq-a"><p>Non. KREO utilise une programmation visuelle en blocs : tu construis la logique de ton jeu en glissant-déposant, sans écrire une seule ligne de code.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Ça marche sur mobile ?<span class="faq-icon">+</span></button>
-          <div class="faq-a"><p>Oui ! KREO fonctionne directement dans le navigateur, sur ordinateur, tablette et mobile. Rien à installer.</p></div>
+          <button class="faq-q">Ça marche sur mobile ?
+            <span class="faq-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+          </button>
+          <div class="faq-a"><p>Oui. KREO fonctionne directement dans le navigateur, sur ordinateur, tablette et mobile. Rien à installer.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">C'est vraiment gratuit ?<span class="faq-icon">+</span></button>
+          <button class="faq-q">C'est vraiment gratuit ?
+            <span class="faq-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+          </button>
           <div class="faq-a"><p>Oui. Tu peux créer et publier tes jeux gratuitement, pour toujours. Le futur plan Pro ajoutera des options avancées, sans jamais retirer le gratuit.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Mes jeux m'appartiennent-ils ?<span class="faq-icon">+</span></button>
+          <button class="faq-q">Mes jeux m'appartiennent-ils ?
+            <span class="faq-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+          </button>
           <div class="faq-a"><p>Oui, à 100%. Ce que tu crées avec KREO t'appartient entièrement.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Comment rejoindre la communauté ?<span class="faq-icon">+</span></button>
+          <button class="faq-q">Comment rejoindre la communauté ?
+            <span class="faq-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+          </button>
           <div class="faq-a"><p>Un clic sur le bouton Discord et c'est fait. Tu y trouveras de l'aide, des défis créatifs et des joueurs pour tester tes jeux.</p></div>
         </div>
       </div>
@@ -410,15 +404,15 @@
 
   <!-- ============ FINAL CTA ============ -->
   <section class="final-cta" id="start">
-    <div class="final-orb" aria-hidden="true"></div>
     <div class="container">
-      <h2 data-reveal>Ton premier jeu t'attend.</h2>
+      <h2 data-reveal>Ton premier jeu commence maintenant.</h2>
       <p class="lead" data-reveal>Gratuit pour débuter. Aucune installation. Juste ton navigateur et ton imagination.</p>
-      <div class="cta-row hero-cta" style="justify-content:center" data-reveal>
-        <a class="btn btn-primary magnetic" href="#">▶ Commencer à créer</a>
-        <a class="btn btn-ghost" href="#discord">💬 Rejoindre le Discord</a>
+      <div class="hero-cta" data-reveal>
+        <a class="btn btn-fill" href="#">Commencer à créer</a>
+        <a class="link" href="#discord">Rejoindre le Discord
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
       </div>
-      <p class="final-note" data-reveal>Bientôt disponible — rejoins le Discord pour être prévenu en premier.</p>
     </div>
   </section>
 
@@ -426,16 +420,22 @@
 
 <!-- ============ FOOTER ============ -->
 <footer>
-  <div class="container footer-grid">
-    <a class="brand" href="#top"><img src="assets/kreo-logo-web.png" alt="KREO">KREO</a>
-    <div class="footer-links">
-      <a href="#features">Fonctionnalités</a>
-      <a href="#showcase">Jeux</a>
-      <a href="#pricing">Tarifs</a>
-      <a href="#faq">FAQ</a>
-      <a href="#discord">Discord</a>
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand"><img src="assets/kreo-logo-web.png" alt="KREO">KREO</div>
+      <div class="footer-links">
+        <a href="#features">Fonctionnalités</a>
+        <a href="#showcase">Jeux</a>
+        <a href="#steps">Comment ça marche</a>
+        <a href="#pricing">Tarifs</a>
+        <a href="#faq">FAQ</a>
+        <a href="#discord">Discord</a>
+      </div>
     </div>
-    <div class="footer-note">© 2026 KREO — Fait avec ❤️ pour les créateurs</div>
+    <div class="footer-bottom">
+      <div class="footer-note">© 2026 KREO. Fait avec ❤️ pour les créateurs.</div>
+      <div class="footer-note">Gratuit pour commencer · 100% navigateur</div>
+    </div>
   </div>
 </footer>
 
