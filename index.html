@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KREO — Crée ton jeu dans ton navigateur</title>
+<meta name="description" content="KREO, l'éditeur de jeux 100% web. Crée, publie et partage ton jeu en quelques minutes, sans installation.">
+<link rel="icon" href="assets/kreo-logo-web.png">
+<style>
+  :root{
+    --bg:#0A0A0F; --bg2:#12121A; --card:rgba(255,255,255,.04);
+    --violet:#7C3AED; --cyan:#06B6D4; --text:#F4F4F5; --muted:#A1A1AA;
+    --grad:linear-gradient(135deg,var(--violet),var(--cyan));
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+
+  /* Header */
+  header{position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);background:rgba(10,10,15,.75);border-bottom:1px solid rgba(255,255,255,.08)}
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:22px;letter-spacing:.18em}
+  .brand img{width:40px;height:40px;border-radius:10px;object-fit:cover}
+  .links{display:flex;gap:28px;color:var(--muted);font-size:15px}
+  .links a:hover{color:#fff}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;font-weight:700;font-size:15px;transition:.2s;border:1px solid transparent;cursor:pointer}
+  .btn-primary{background:var(--grad);color:#fff;box-shadow:0 8px 28px rgba(124,58,237,.35)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(6,182,212,.35)}
+  .btn-ghost{border-color:rgba(255,255,255,.18);color:#fff;background:rgba(255,255,255,.04)}
+  .btn-ghost:hover{background:rgba(255,255,255,.1)}
+  .nav-cta{display:flex;gap:12px}
+  @media(max-width:760px){.links{display:none}.nav-cta .btn-ghost{display:none}}
+
+  /* Hero */
+  .hero{position:relative;text-align:center;padding:96px 0 72px}
+  .hero::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(600px 300px at 20% 0%,rgba(124,58,237,.22),transparent 60%),
+    radial-gradient(600px 300px at 80% 10%,rgba(6,182,212,.18),transparent 60%);pointer-events:none}
+  .hero>*{position:relative}
+  .hero-logo{width:150px;height:150px;border-radius:28px;object-fit:cover;box-shadow:0 24px 60px rgba(124,58,237,.35);margin-bottom:28px}
+  .badge{display:inline-block;padding:6px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:var(--card);color:var(--muted);font-size:13px;margin-bottom:20px}
+  h1{font-size:clamp(38px,6vw,64px);line-height:1.08;letter-spacing:-.02em;margin-bottom:18px}
+  h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{max-width:620px;margin:0 auto 34px;color:var(--muted);font-size:18px}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .cta-row .btn{padding:15px 30px;font-size:16px}
+  .proof{margin-top:26px;color:var(--muted);font-size:14px}
+  .proof b{color:#fff}
+
+  /* Sections */
+  section{padding:72px 0}
+  h2{font-size:clamp(28px,4vw,40px);text-align:center;margin-bottom:12px;letter-spacing:-.02em}
+  .lead{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 44px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:28px;transition:.25s}
+  .card:hover{transform:translateY(-4px);border-color:rgba(124,58,237,.5)}
+  .card .ico{font-size:32px;margin-bottom:14px}
+  .card h3{margin-bottom:8px;font-size:18px}
+  .card p{color:var(--muted);font-size:15px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;counter-reset:step}
+  .step{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:28px}
+  .step .num{display:inline-flex;width:44px;height:44px;border-radius:12px;background:var(--grad);align-items:center;justify-content:center;font-weight:800;font-size:20px;margin-bottom:14px}
+  .step h3{margin-bottom:8px}
+  .step p{color:var(--muted);font-size:15px}
+
+  /* Brand preview */
+  .brandbox{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch}
+  @media(max-width:760px){.brandbox{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:28px;text-align:center}
+  .panel img{width:180px;height:180px;border-radius:20px;object-fit:cover}
+  .swatches{display:flex;gap:12px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+  .sw{width:64px;height:64px;border-radius:14px;border:1px solid rgba(255,255,255,.15);display:flex;align-items:flex-end;justify-content:center;font-size:10px;padding:6px;color:#fff;text-shadow:0 1px 4px #000}
+
+  /* Discord */
+  .discord{background:linear-gradient(135deg,rgba(88,101,242,.18),rgba(124,58,237,.12));border:1px solid rgba(88,101,242,.35);border-radius:24px;padding:48px 32px;text-align:center}
+  .discord h2{margin-bottom:12px}
+  .discord p{color:var(--muted);max-width:520px;margin:0 auto 26px}
+
+  /* Final CTA */
+  .final{text-align:center;padding:96px 0}
+  .final h2{font-size:clamp(32px,5vw,52px)}
+  footer{border-top:1px solid rgba(255,255,255,.08);padding:36px 0;color:var(--muted);text-align:center;font-size:14px}
+  footer .brand{justify-content:center;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#"><img src="assets/kreo-logo-web.png" alt="KREO">KREO</a>
+    <nav class="links">
+      <a href="#features">Fonctionnalités</a>
+      <a href="#how">Comment ça marche</a>
+      <a href="#brand">Logo</a>
+      <a href="#discord">Discord</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="#discord">💬 Discord</a>
+      <a class="btn btn-primary" href="#how">▶ Commencer à créer</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <div class="hero">
+    <div class="wrap">
+      <img class="hero-logo" src="assets/kreo-logo-web.png" alt="Logo KREO">
+      <div class="badge">🎮 Éditeur de jeux 100% web — Bientôt disponible</div>
+      <h1>Crée ton jeu.<br><span class="grad">Directement dans ton navigateur.</span></h1>
+      <p class="sub">Aucune installation, aucun code obligatoire. Dessine, programme en blocs, publie et partage ton jeu en quelques minutes.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#how">▶ Commencer à créer — gratuit</a>
+        <a class="btn btn-ghost" href="#discord">💬 Rejoindre le Discord</a>
+      </div>
+      <p class="proof"><b>0 installation</b> · <b>5 min</b> pour ton premier jeu · <b>1 lien</b> à partager</p>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="wrap">
+      <h2>Tout ce qu'il faut pour créer</h2>
+      <p class="lead">Un éditeur pensé pour tout le monde, du premier jeu à la publication.</p>
+      <div class="grid">
+        <div class="card"><div class="ico">🌐</div><h3>100% Web</h3><p>Aucun téléchargement. Ouvre ton navigateur, commence à créer, partout.</p></div>
+        <div class="card"><div class="ico">🧩</div><h3>Blocs visuels</h3><p>Programme sans coder grâce au drag &amp; drop. Simple pour débuter, puissant pour aller plus loin.</p></div>
+        <div class="card"><div class="ico">🗺️</div><h3>Éditeur de niveaux</h3><p>Dessine tes maps au pinceau, place tes objets, teste en temps réel.</p></div>
+        <div class="card"><div class="ico">🎨</div><h3>Assets intégrés</h3><p>Sprites, sons et effets prêts à l'emploi pour ne jamais partir de zéro.</p></div>
+        <div class="card"><div class="ico">🚀</div><h3>Publication en 1 clic</h3><p>Un lien jouable à partager avec qui tu veux, instantanément.</p></div>
+        <div class="card"><div class="ico">👥</div><h3>Multiplayer</h3><p>Joue et crée avec tes amis, en ligne, directement dans le navigateur.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW -->
+  <section id="how">
+    <div class="wrap">
+      <h2>Comment ça marche</h2>
+      <p class="lead">Trois étapes, et ton jeu est en ligne.</p>
+      <div class="steps">
+        <div class="step"><div class="num">1</div><h3>Crée</h3><p>Ouvre l'éditeur dans ton navigateur. Pas d'installation, pas d'attente.</p></div>
+        <div class="step"><div class="num">2</div><h3>Construis</h3><p>Glisse-dépose, dessine, programme en blocs. Ton imagination fait le reste.</p></div>
+        <div class="step"><div class="num">3</div><h3>Publie</h3><p>Partage ton lien, reçois des joueurs et des retours sur Discord.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BRAND / LOGO -->
+  <section id="brand">
+    <div class="wrap">
+      <h2>Identité KREO</h2>
+      <p class="lead">Le logo et la palette qui accompagneront l'éditeur et la communauté.</p>
+      <div class="brandbox">
+        <div class="panel">
+          <img src="assets/kreo-logo-web.png" alt="Logo KREO">
+          <p style="margin-top:16px;color:var(--muted)">Logo officiel — K géométrique, dégradé violet → cyan sur fond noir.</p>
+        </div>
+        <div class="panel">
+          <h3 style="margin-bottom:8px">Palette</h3>
+          <p style="color:var(--muted);font-size:14px">Sombre moderne + accent électrique, pensée pour Discord et les écrans de jeu.</p>
+          <div class="swatches">
+            <div class="sw" style="background:#0A0A0F">Fond<br>#0A0A0F</div>
+            <div class="sw" style="background:#7C3AED">Violet<br>#7C3AED</div>
+            <div class="sw" style="background:#06B6D4">Cyan<br>#06B6D4</div>
+            <div class="sw" style="background:linear-gradient(135deg,#7C3AED,#06B6D4)">Dégradé</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DISCORD -->
+  <section id="discord">
+    <div class="wrap">
+      <div class="discord">
+        <h2>Rejoins la communauté KREO 💬</h2>
+        <p>Entraide, défis hebdomadaires, partage de jeux et retours en avant-première. C'est là que tout se passe.</p>
+        <a class="btn btn-primary" href="#" style="background:#5865F2;box-shadow:0 8px 28px rgba(88,101,242,.4)">Rejoindre le serveur Discord</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final">
+    <div class="wrap">
+      <h2>Ton premier jeu t'attend.</h2>
+      <p class="lead" style="margin-bottom:30px">Gratuit pour débuter. Aucune installation. Juste ton navigateur et ton imagination.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#how">▶ Commencer à créer</a>
+        <a class="btn btn-ghost" href="#discord">💬 Rejoindre le Discord</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="assets/kreo-logo-web.png" alt="KREO" style="width:32px;height:32px;border-radius:8px">KREO</a>
+    <p>© 2026 KREO — Fait avec ❤️ pour les créateurs. · <a href="#discord" style="text-decoration:underline">Discord</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
