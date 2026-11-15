@@ -3,204 +3,444 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KREO — Crée ton jeu dans ton navigateur</title>
-<meta name="description" content="KREO, l'éditeur de jeux 100% web. Crée, publie et partage ton jeu en quelques minutes, sans installation.">
+<title>KREO — Crée ton jeu directement dans ton navigateur</title>
+<meta name="description" content="KREO, l'éditeur de jeux 100% web. Dessine, programme en blocs, publie et partage ton jeu en quelques minutes. Aucune installation, aucun code obligatoire.">
+<meta property="og:title" content="KREO — Crée ton jeu directement dans ton navigateur">
+<meta property="og:description" content="L'éditeur de jeux 100% web : crée, publie et partage en quelques minutes.">
+<meta property="og:image" content="assets/kreo-logo-web.png">
+<meta property="og:type" content="website">
 <link rel="icon" href="assets/kreo-logo-web.png">
-<style>
-  :root{
-    --bg:#0A0A0F; --bg2:#12121A; --card:rgba(255,255,255,.04);
-    --violet:#7C3AED; --cyan:#06B6D4; --text:#F4F4F5; --muted:#A1A1AA;
-    --grad:linear-gradient(135deg,var(--violet),var(--cyan));
-  }
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6;overflow-x:hidden}
-  a{color:inherit;text-decoration:none}
-  .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
-
-  /* Header */
-  header{position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);background:rgba(10,10,15,.75);border-bottom:1px solid rgba(255,255,255,.08)}
-  .nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
-  .brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:22px;letter-spacing:.18em}
-  .brand img{width:40px;height:40px;border-radius:10px;object-fit:cover}
-  .links{display:flex;gap:28px;color:var(--muted);font-size:15px}
-  .links a:hover{color:#fff}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;font-weight:700;font-size:15px;transition:.2s;border:1px solid transparent;cursor:pointer}
-  .btn-primary{background:var(--grad);color:#fff;box-shadow:0 8px 28px rgba(124,58,237,.35)}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(6,182,212,.35)}
-  .btn-ghost{border-color:rgba(255,255,255,.18);color:#fff;background:rgba(255,255,255,.04)}
-  .btn-ghost:hover{background:rgba(255,255,255,.1)}
-  .nav-cta{display:flex;gap:12px}
-  @media(max-width:760px){.links{display:none}.nav-cta .btn-ghost{display:none}}
-
-  /* Hero */
-  .hero{position:relative;text-align:center;padding:96px 0 72px}
-  .hero::before{content:"";position:absolute;inset:0;background:
-    radial-gradient(600px 300px at 20% 0%,rgba(124,58,237,.22),transparent 60%),
-    radial-gradient(600px 300px at 80% 10%,rgba(6,182,212,.18),transparent 60%);pointer-events:none}
-  .hero>*{position:relative}
-  .hero-logo{width:150px;height:150px;border-radius:28px;object-fit:cover;box-shadow:0 24px 60px rgba(124,58,237,.35);margin-bottom:28px}
-  .badge{display:inline-block;padding:6px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:var(--card);color:var(--muted);font-size:13px;margin-bottom:20px}
-  h1{font-size:clamp(38px,6vw,64px);line-height:1.08;letter-spacing:-.02em;margin-bottom:18px}
-  h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .sub{max-width:620px;margin:0 auto 34px;color:var(--muted);font-size:18px}
-  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-  .cta-row .btn{padding:15px 30px;font-size:16px}
-  .proof{margin-top:26px;color:var(--muted);font-size:14px}
-  .proof b{color:#fff}
-
-  /* Sections */
-  section{padding:72px 0}
-  h2{font-size:clamp(28px,4vw,40px);text-align:center;margin-bottom:12px;letter-spacing:-.02em}
-  .lead{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 44px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
-  .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:28px;transition:.25s}
-  .card:hover{transform:translateY(-4px);border-color:rgba(124,58,237,.5)}
-  .card .ico{font-size:32px;margin-bottom:14px}
-  .card h3{margin-bottom:8px;font-size:18px}
-  .card p{color:var(--muted);font-size:15px}
-  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;counter-reset:step}
-  .step{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:28px}
-  .step .num{display:inline-flex;width:44px;height:44px;border-radius:12px;background:var(--grad);align-items:center;justify-content:center;font-weight:800;font-size:20px;margin-bottom:14px}
-  .step h3{margin-bottom:8px}
-  .step p{color:var(--muted);font-size:15px}
-
-  /* Brand preview */
-  .brandbox{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch}
-  @media(max-width:760px){.brandbox{grid-template-columns:1fr}}
-  .panel{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:28px;text-align:center}
-  .panel img{width:180px;height:180px;border-radius:20px;object-fit:cover}
-  .swatches{display:flex;gap:12px;justify-content:center;margin-top:18px;flex-wrap:wrap}
-  .sw{width:64px;height:64px;border-radius:14px;border:1px solid rgba(255,255,255,.15);display:flex;align-items:flex-end;justify-content:center;font-size:10px;padding:6px;color:#fff;text-shadow:0 1px 4px #000}
-
-  /* Discord */
-  .discord{background:linear-gradient(135deg,rgba(88,101,242,.18),rgba(124,58,237,.12));border:1px solid rgba(88,101,242,.35);border-radius:24px;padding:48px 32px;text-align:center}
-  .discord h2{margin-bottom:12px}
-  .discord p{color:var(--muted);max-width:520px;margin:0 auto 26px}
-
-  /* Final CTA */
-  .final{text-align:center;padding:96px 0}
-  .final h2{font-size:clamp(32px,5vw,52px)}
-  footer{border-top:1px solid rgba(255,255,255,.08);padding:36px 0;color:var(--muted);text-align:center;font-size:14px}
-  footer .brand{justify-content:center;margin-bottom:12px}
-</style>
+<link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
 
-<header>
-  <div class="wrap nav">
-    <a class="brand" href="#"><img src="assets/kreo-logo-web.png" alt="KREO">KREO</a>
-    <nav class="links">
+<!-- Ambient background -->
+<div class="bg-fx" aria-hidden="true">
+  <div class="orb orb-v"></div>
+  <div class="orb orb-c"></div>
+  <div class="orb orb-3"></div>
+  <div class="grid-fx"></div>
+  <div class="noise-fx"></div>
+</div>
+
+<!-- Header -->
+<header id="header">
+  <div class="container">
+    <div class="nav">
+      <a class="brand" href="#top"><img src="assets/kreo-logo-web.png" alt="Logo KREO">KREO</a>
+      <nav class="nav-links">
+        <a href="#features">Fonctionnalités</a>
+        <a href="#steps">Comment ça marche</a>
+        <a href="#showcase">Jeux</a>
+        <a href="#pricing">Tarifs</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn btn-ghost btn-sm" href="#discord">💬 Discord</a>
+        <a class="btn btn-primary btn-sm magnetic" href="#start">Commencer</a>
+      </div>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu"><span></span><span></span><span></span></button>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
       <a href="#features">Fonctionnalités</a>
-      <a href="#how">Comment ça marche</a>
-      <a href="#brand">Logo</a>
+      <a href="#steps">Comment ça marche</a>
+      <a href="#showcase">Jeux</a>
+      <a href="#pricing">Tarifs</a>
+      <a href="#faq">FAQ</a>
       <a href="#discord">Discord</a>
-    </nav>
-    <div class="nav-cta">
-      <a class="btn btn-ghost" href="#discord">💬 Discord</a>
-      <a class="btn btn-primary" href="#how">▶ Commencer à créer</a>
     </div>
   </div>
 </header>
 
-<main>
-  <!-- HERO -->
-  <div class="hero">
-    <div class="wrap">
-      <img class="hero-logo" src="assets/kreo-logo-web.png" alt="Logo KREO">
-      <div class="badge">🎮 Éditeur de jeux 100% web — Bientôt disponible</div>
-      <h1>Crée ton jeu.<br><span class="grad">Directement dans ton navigateur.</span></h1>
-      <p class="sub">Aucune installation, aucun code obligatoire. Dessine, programme en blocs, publie et partage ton jeu en quelques minutes.</p>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="#how">▶ Commencer à créer — gratuit</a>
-        <a class="btn btn-ghost" href="#discord">💬 Rejoindre le Discord</a>
+<main id="top">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <div class="badge"><span class="dot"></span> Éditeur de jeux 100% web — bientôt disponible</div>
+        <h1 class="hero-title">
+          <span class="line"><span class="word"><i>Crée</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>jeu.</i></span></span>
+          <span class="line"><span class="word"><i class="grad-text">Dans</i></span> <span class="word"><i class="grad-text">ton</i></span> <span class="word"><i class="grad-text">navigateur.</i></span></span>
+        </h1>
+        <p class="hero-sub">L'éditeur de jeux qui ne s'installe pas : dessine tes niveaux, programme en blocs, publie et partage en quelques minutes. Aucun code obligatoire.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary magnetic" href="#start">▶ Commencer à créer — gratuit</a>
+          <a class="btn btn-ghost" href="#discord">💬 Rejoindre le Discord</a>
+        </div>
+        <div class="hero-proof">
+          <span><span class="tick">✓</span> 0 installation</span>
+          <span><span class="tick">✓</span> 5 min pour ton 1er jeu</span>
+          <span><span class="tick">✓</span> 1 lien à partager</span>
+        </div>
       </div>
-      <p class="proof"><b>0 installation</b> · <b>5 min</b> pour ton premier jeu · <b>1 lien</b> à partager</p>
+
+      <div class="hero-visual">
+        <!-- Editor mockup -->
+        <div class="mockup" id="mockup">
+          <div class="mockup-bar">
+            <span class="win-dot r"></span><span class="win-dot y"></span><span class="win-dot g"></span>
+            <div class="mockup-tab">🚀 space-run.kro — Éditeur KREO</div>
+            <div class="mockup-pill">En ligne</div>
+          </div>
+          <div class="mockup-body">
+            <div class="mock-side left">
+              <div class="tool">🖱️</div>
+              <div class="tool active">🧱</div>
+              <div class="tool">🖌️</div>
+              <div class="tool">👾</div>
+              <div class="tool">🔊</div>
+              <div class="tool">⚙️</div>
+            </div>
+            <div class="mock-canvas">
+              <div class="canvas-grid"></div>
+              <div class="star" style="top:18%;left:14%"></div>
+              <div class="star" style="top:32%;left:70%"></div>
+              <div class="star" style="top:12%;left:52%"></div>
+              <div class="star" style="top:46%;left:30%"></div>
+              <div class="star" style="top:24%;left:86%"></div>
+              <div class="planet p1"></div>
+              <div class="planet p2"></div>
+              <div class="platform pl1"><span class="hero-sprite"></span></div>
+              <div class="platform pl2"><span class="coin c1"></span><span class="coin c2"></span></div>
+              <div class="platform pl3"><span class="coin c3"></span><span class="flag"></span></div>
+            </div>
+            <div class="mock-side right">
+              <div class="prop-row"><span>Vie</span><b>3 ❤️</b></div>
+              <div class="prop-row"><span>Vitesse</span><b>1,2</b></div>
+              <div class="prop-row"><span>Score</span><b>2450</b></div>
+              <div class="prop-row"><span>Niveau</span><b>2-1</b></div>
+              <div class="mock-btn">▶ Tester</div>
+            </div>
+          </div>
+        </div>
+        <!-- Floating chips -->
+        <div class="float-chip chip-1">👾 3 amis en jeu</div>
+        <div class="float-chip chip-2">🪙 +250 pièces</div>
+        <div class="float-chip chip-3">🚀 Publier</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MARQUEE ============ -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <div class="marquee-group">
+        <span>0 installation</span><span class="star-sep">✦</span>
+        <span>100% web</span><span class="star-sep">✦</span>
+        <span>Blocs visuels</span><span class="star-sep">✦</span>
+        <span>Multiplayer</span><span class="star-sep">✦</span>
+        <span>Publication en 1 clic</span><span class="star-sep">✦</span>
+        <span>Assets intégrés</span><span class="star-sep">✦</span>
+        <span>Gratuit pour débuter</span><span class="star-sep">✦</span>
+      </div>
+      <div class="marquee-group">
+        <span>0 installation</span><span class="star-sep">✦</span>
+        <span>100% web</span><span class="star-sep">✦</span>
+        <span>Blocs visuels</span><span class="star-sep">✦</span>
+        <span>Multiplayer</span><span class="star-sep">✦</span>
+        <span>Publication en 1 clic</span><span class="star-sep">✦</span>
+        <span>Assets intégrés</span><span class="star-sep">✦</span>
+        <span>Gratuit pour débuter</span><span class="star-sep">✦</span>
+      </div>
     </div>
   </div>
 
-  <!-- FEATURES -->
+  <!-- ============ STATS ============ -->
+  <section class="stats" style="padding-top:24px">
+    <div class="container">
+      <div class="stats-grid" data-reveal-group>
+        <div class="stat" data-reveal-item>
+          <div class="stat-num"><span class="count" data-count="100">100</span>%</div>
+          <div class="stat-label">dans ton navigateur</div>
+        </div>
+        <div class="stat" data-reveal-item>
+          <div class="stat-num"><span class="count" data-count="5">5</span> min</div>
+          <div class="stat-label">pour ton premier jeu</div>
+        </div>
+        <div class="stat" data-reveal-item>
+          <div class="stat-num"><span class="count" data-count="1">1</span> clic</div>
+          <div class="stat-label">pour le publier</div>
+        </div>
+        <div class="stat" data-reveal-item>
+          <div class="stat-num"><span class="count" data-count="0">0</span> €</div>
+          <div class="stat-label">pour commencer</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
   <section id="features">
-    <div class="wrap">
-      <h2>Tout ce qu'il faut pour créer</h2>
-      <p class="lead">Un éditeur pensé pour tout le monde, du premier jeu à la publication.</p>
-      <div class="grid">
-        <div class="card"><div class="ico">🌐</div><h3>100% Web</h3><p>Aucun téléchargement. Ouvre ton navigateur, commence à créer, partout.</p></div>
-        <div class="card"><div class="ico">🧩</div><h3>Blocs visuels</h3><p>Programme sans coder grâce au drag &amp; drop. Simple pour débuter, puissant pour aller plus loin.</p></div>
-        <div class="card"><div class="ico">🗺️</div><h3>Éditeur de niveaux</h3><p>Dessine tes maps au pinceau, place tes objets, teste en temps réel.</p></div>
-        <div class="card"><div class="ico">🎨</div><h3>Assets intégrés</h3><p>Sprites, sons et effets prêts à l'emploi pour ne jamais partir de zéro.</p></div>
-        <div class="card"><div class="ico">🚀</div><h3>Publication en 1 clic</h3><p>Un lien jouable à partager avec qui tu veux, instantanément.</p></div>
-        <div class="card"><div class="ico">👥</div><h3>Multiplayer</h3><p>Joue et crée avec tes amis, en ligne, directement dans le navigateur.</p></div>
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">Fonctionnalités</span>
+        <h2>Tout ce qu'il faut pour créer,<br>rien pour te ralentir</h2>
+        <p>Un éditeur pensé pour tout le monde : du tout premier jeu jusqu'à la publication.</p>
       </div>
-    </div>
-  </section>
-
-  <!-- HOW -->
-  <section id="how">
-    <div class="wrap">
-      <h2>Comment ça marche</h2>
-      <p class="lead">Trois étapes, et ton jeu est en ligne.</p>
-      <div class="steps">
-        <div class="step"><div class="num">1</div><h3>Crée</h3><p>Ouvre l'éditeur dans ton navigateur. Pas d'installation, pas d'attente.</p></div>
-        <div class="step"><div class="num">2</div><h3>Construis</h3><p>Glisse-dépose, dessine, programme en blocs. Ton imagination fait le reste.</p></div>
-        <div class="step"><div class="num">3</div><h3>Publie</h3><p>Partage ton lien, reçois des joueurs et des retours sur Discord.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- BRAND / LOGO -->
-  <section id="brand">
-    <div class="wrap">
-      <h2>Identité KREO</h2>
-      <p class="lead">Le logo et la palette qui accompagneront l'éditeur et la communauté.</p>
-      <div class="brandbox">
-        <div class="panel">
-          <img src="assets/kreo-logo-web.png" alt="Logo KREO">
-          <p style="margin-top:16px;color:var(--muted)">Logo officiel — K géométrique, dégradé violet → cyan sur fond noir.</p>
+      <div class="bento" data-reveal-group>
+        <div class="feature-card wide" data-reveal-item>
+          <div class="glow"></div>
+          <div class="f-icon">🌐</div>
+          <h3>100% web, 0 installation</h3>
+          <p>Ouvre ton navigateur et crée. Sur PC, Mac ou Chromebook — tes projets te suivent partout, sans téléchargement ni mise à jour.</p>
         </div>
-        <div class="panel">
-          <h3 style="margin-bottom:8px">Palette</h3>
-          <p style="color:var(--muted);font-size:14px">Sombre moderne + accent électrique, pensée pour Discord et les écrans de jeu.</p>
-          <div class="swatches">
-            <div class="sw" style="background:#0A0A0F">Fond<br>#0A0A0F</div>
-            <div class="sw" style="background:#7C3AED">Violet<br>#7C3AED</div>
-            <div class="sw" style="background:#06B6D4">Cyan<br>#06B6D4</div>
-            <div class="sw" style="background:linear-gradient(135deg,#7C3AED,#06B6D4)">Dégradé</div>
+        <div class="feature-card" data-reveal-item>
+          <div class="glow"></div>
+          <div class="f-icon">🧩</div>
+          <h3>Programmation en blocs</h3>
+          <p>Crée ta logique de jeu en glissant des blocs. Simple pour débuter, puissant pour aller loin.</p>
+        </div>
+        <div class="feature-card" data-reveal-item>
+          <div class="glow"></div>
+          <div class="f-icon">🗺️</div>
+          <h3>Éditeur de niveaux</h3>
+          <p>Dessine tes maps au pinceau, place tes objets et teste instantanément.</p>
+        </div>
+        <div class="feature-card" data-reveal-item>
+          <div class="glow"></div>
+          <div class="f-icon">🎨</div>
+          <h3>Assets prêts à l'emploi</h3>
+          <p>Sprites, sons et effets inclus pour ne jamais partir de zéro.</p>
+        </div>
+        <div class="feature-card" data-reveal-item>
+          <div class="glow"></div>
+          <div class="f-icon">🚀</div>
+          <h3>Publication en 1 clic</h3>
+          <p>Un lien jouable à partager instantanément avec tes amis.</p>
+        </div>
+        <div class="feature-card" data-reveal-item>
+          <div class="glow"></div>
+          <div class="f-icon">👥</div>
+          <h3>Multiplayer</h3>
+          <p>Joue et crée avec tes amis, en ligne, directement dans le navigateur.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STEPS ============ -->
+  <section id="steps">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">Comment ça marche</span>
+        <h2>Trois étapes, et ton jeu est en ligne</h2>
+        <p>Pas de manuel de 200 pages. Tu commences tout de suite.</p>
+      </div>
+      <div class="steps" data-reveal-group>
+        <div class="step" data-reveal-item>
+          <div class="step-num">1</div>
+          <h3>Crée</h3>
+          <p>Ouvre l'éditeur dans ton navigateur. Pas d'installation, pas d'attente — juste ton imagination.</p>
+        </div>
+        <div class="step" data-reveal-item>
+          <div class="step-num">2</div>
+          <h3>Construis</h3>
+          <p>Glisse-dépose, dessine tes niveaux, programme en blocs. Tout se joue en temps réel.</p>
+        </div>
+        <div class="step" data-reveal-item>
+          <div class="step-num">3</div>
+          <h3>Publie</h3>
+          <p>Partage ton lien, reçois des joueurs et des retours sur le Discord KREO.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SHOWCASE ============ -->
+  <section id="showcase">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">Galerie</span>
+        <h2>Des jeux comme ceux-ci,<br>créés par des joueurs comme toi</h2>
+        <p>Un aperçu de ce que l'éditeur KREO rend possible.</p>
+      </div>
+      <div class="games" data-reveal-group>
+        <article class="game-card" data-reveal-item>
+          <div class="game-media">
+            <img src="assets/showcase/sky-runner.jpg" alt="Sky Runner — jeu de plateforme" loading="lazy">
+            <div class="play-fab">▶</div>
           </div>
+          <div class="game-info">
+            <div>
+              <h3>Sky Runner</h3>
+              <div class="author">par Léo · Plateforme</div>
+            </div>
+            <span class="tag">Aventure</span>
+          </div>
+        </article>
+        <article class="game-card" data-reveal-item>
+          <div class="game-media">
+            <img src="assets/showcase/neon-drift.jpg" alt="Neon Drift — jeu de course" loading="lazy">
+            <div class="play-fab">▶</div>
+          </div>
+          <div class="game-info">
+            <div>
+              <h3>Neon Drift</h3>
+              <div class="author">par Maya · Course</div>
+            </div>
+            <span class="tag">Arcade</span>
+          </div>
+        </article>
+        <article class="game-card" data-reveal-item>
+          <div class="game-media">
+            <img src="assets/showcase/nova-strike.jpg" alt="Nova Strike — shooter spatial" loading="lazy">
+            <div class="play-fab">▶</div>
+          </div>
+          <div class="game-info">
+            <div>
+              <h3>Nova Strike</h3>
+              <div class="author">par Samir · Shooter spatial</div>
+            </div>
+            <span class="tag">Action</span>
+          </div>
+        </article>
+        <article class="game-card" data-reveal-item>
+          <div class="game-media">
+            <img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux — puzzle" loading="lazy">
+            <div class="play-fab">▶</div>
+          </div>
+          <div class="game-info">
+            <div>
+              <h3>L'Île aux Cristaux</h3>
+              <div class="author">par Chloé · Puzzle</div>
+            </div>
+            <span class="tag">Réflexion</span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DISCORD ============ -->
+  <section id="discord">
+    <div class="container">
+      <div class="discord-panel" data-reveal>
+        <div class="avatars">
+          <div class="avatar av-1">L</div>
+          <div class="avatar av-2">M</div>
+          <div class="avatar av-3">S</div>
+          <div class="avatar av-4">C</div>
+          <div class="avatar av-5">+ toi</div>
+        </div>
+        <span class="eyebrow">Communauté</span>
+        <h2>Rejoins la communauté KREO</h2>
+        <p style="color:var(--muted);max-width:520px;margin:0 auto">Entraide, défis hebdomadaires, partage de jeux et retours en avant-première. C'est là que les créateurs se retrouvent.</p>
+        <div class="discord-chips">
+          <span class="d-chip">🏆 Défis hebdo</span>
+          <span class="d-chip">💡 Entraide</span>
+          <span class="d-chip">🎮 Partage de jeux</span>
+          <span class="d-chip">🔮 Avant-premières</span>
+        </div>
+        <a class="btn btn-discord magnetic" href="#">Rejoindre le serveur Discord</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRICING ============ -->
+  <section id="pricing">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">Tarifs</span>
+        <h2>Gratuit pour créer, toujours</h2>
+        <p>Commence sans carte bancaire. Évolue quand tu veux.</p>
+      </div>
+      <div class="plans" data-reveal-group>
+        <div class="plan" data-reveal-item>
+          <h3>Gratuit</h3>
+          <div class="plan-price">0 €<small> / toujours</small></div>
+          <div class="plan-desc">Tout ce qu'il faut pour créer et publier tes jeux.</div>
+          <ul>
+            <li><span class="tick">✓</span> Jeux et projets illimités</li>
+            <li><span class="tick">✓</span> Programmation en blocs</li>
+            <li><span class="tick">✓</span> Assets de base inclus</li>
+            <li><span class="tick">✓</span> Publication par lien</li>
+            <li><span class="tick">✓</span> Accès au Discord</li>
+          </ul>
+          <a class="btn btn-ghost" href="#start">Commencer gratuitement</a>
+        </div>
+        <div class="plan pro" data-reveal-item>
+          <h3>Pro <span class="soon">Bientôt</span></h3>
+          <div class="plan-price">— €<small> / mois</small></div>
+          <div class="plan-desc">Pour les créateurs qui veulent aller plus loin.</div>
+          <ul>
+            <li><span class="tick">✓</span> Tout le plan Gratuit</li>
+            <li><span class="tick">✓</span> Assets premium</li>
+            <li><span class="tick">✓</span> Multiplayer avancé</li>
+            <li><span class="tick">✓</span> Statistiques de jeu</li>
+            <li><span class="tick">✓</span> Badge créateur</li>
+          </ul>
+          <a class="btn btn-primary" href="#discord">Rejoindre la liste d'attente</a>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- DISCORD -->
-  <section id="discord">
-    <div class="wrap">
-      <div class="discord">
-        <h2>Rejoins la communauté KREO 💬</h2>
-        <p>Entraide, défis hebdomadaires, partage de jeux et retours en avant-première. C'est là que tout se passe.</p>
-        <a class="btn btn-primary" href="#" style="background:#5865F2;box-shadow:0 8px 28px rgba(88,101,242,.4)">Rejoindre le serveur Discord</a>
+  <!-- ============ FAQ ============ -->
+  <section id="faq">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">FAQ</span>
+        <h2>Questions fréquentes</h2>
+      </div>
+      <div class="faq-list" data-reveal-group>
+        <div class="faq-item" data-reveal-item>
+          <button class="faq-q">Faut-il savoir coder ?<span class="faq-icon">+</span></button>
+          <div class="faq-a"><p>Non. KREO utilise une programmation visuelle en blocs : tu construis la logique de ton jeu en glissant-déposant, sans écrire une seule ligne de code.</p></div>
+        </div>
+        <div class="faq-item" data-reveal-item>
+          <button class="faq-q">Ça marche sur mobile ?<span class="faq-icon">+</span></button>
+          <div class="faq-a"><p>Oui ! KREO fonctionne directement dans le navigateur, sur ordinateur, tablette et mobile. Rien à installer.</p></div>
+        </div>
+        <div class="faq-item" data-reveal-item>
+          <button class="faq-q">C'est vraiment gratuit ?<span class="faq-icon">+</span></button>
+          <div class="faq-a"><p>Oui. Tu peux créer et publier tes jeux gratuitement, pour toujours. Le futur plan Pro ajoutera des options avancées, sans jamais retirer le gratuit.</p></div>
+        </div>
+        <div class="faq-item" data-reveal-item>
+          <button class="faq-q">Mes jeux m'appartiennent-ils ?<span class="faq-icon">+</span></button>
+          <div class="faq-a"><p>Oui, à 100%. Ce que tu crées avec KREO t'appartient entièrement.</p></div>
+        </div>
+        <div class="faq-item" data-reveal-item>
+          <button class="faq-q">Comment rejoindre la communauté ?<span class="faq-icon">+</span></button>
+          <div class="faq-a"><p>Un clic sur le bouton Discord et c'est fait. Tu y trouveras de l'aide, des défis créatifs et des joueurs pour tester tes jeux.</p></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- FINAL CTA -->
-  <section class="final">
-    <div class="wrap">
-      <h2>Ton premier jeu t'attend.</h2>
-      <p class="lead" style="margin-bottom:30px">Gratuit pour débuter. Aucune installation. Juste ton navigateur et ton imagination.</p>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="#how">▶ Commencer à créer</a>
+  <!-- ============ FINAL CTA ============ -->
+  <section class="final-cta" id="start">
+    <div class="final-orb" aria-hidden="true"></div>
+    <div class="container">
+      <h2 data-reveal>Ton premier jeu t'attend.</h2>
+      <p class="lead" data-reveal>Gratuit pour débuter. Aucune installation. Juste ton navigateur et ton imagination.</p>
+      <div class="cta-row hero-cta" style="justify-content:center" data-reveal>
+        <a class="btn btn-primary magnetic" href="#">▶ Commencer à créer</a>
         <a class="btn btn-ghost" href="#discord">💬 Rejoindre le Discord</a>
       </div>
+      <p class="final-note" data-reveal>Bientôt disponible — rejoins le Discord pour être prévenu en premier.</p>
     </div>
   </section>
+
 </main>
 
+<!-- ============ FOOTER ============ -->
 <footer>
-  <div class="wrap">
-    <a class="brand" href="#"><img src="assets/kreo-logo-web.png" alt="KREO" style="width:32px;height:32px;border-radius:8px">KREO</a>
-    <p>© 2026 KREO — Fait avec ❤️ pour les créateurs. · <a href="#discord" style="text-decoration:underline">Discord</a></p>
+  <div class="container footer-grid">
+    <a class="brand" href="#top"><img src="assets/kreo-logo-web.png" alt="KREO">KREO</a>
+    <div class="footer-links">
+      <a href="#features">Fonctionnalités</a>
+      <a href="#showcase">Jeux</a>
+      <a href="#pricing">Tarifs</a>
+      <a href="#faq">FAQ</a>
+      <a href="#discord">Discord</a>
+    </div>
+    <div class="footer-note">© 2026 KREO — Fait avec ❤️ pour les créateurs</div>
   </div>
 </footer>
 
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/main.js"></script>
 </body>
 </html>
