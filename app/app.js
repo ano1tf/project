@@ -377,3 +377,37 @@
   const hash = (location.hash || '').replace('#', '');
   if (['home', 'games', 'models', 'settings'].indexOf(hash) !== -1) setView(hash);
 })();
+
+/* ============================================================
+   KREO — Compte réel (authentification Turso)
+   Remplit les infos de l'utilisateur connecté et branche
+   la déconnexion. La page est protégée côté serveur.
+   ============================================================ */
+(function () {
+  'use strict';
+  const auth = window.KREO_AUTH;
+  if (!auth) return;
+
+  auth.require().then(function (u) {
+    if (!u) return;
+    function fill(id, v) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = v;
+    }
+    function avatar(id) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = (u.name || '?').trim().charAt(0).toUpperCase();
+    }
+    fill('userName', u.name);
+    fill('greetName', u.name);
+    fill('pName', u.name);
+    fill('pMail', u.email);
+    avatar('userAvatar');
+    avatar('pAvatar');
+    const docTitle = document.querySelector('.user-chip .u-name');
+    if (docTitle) docTitle.title = u.email;
+  });
+
+  const out = document.getElementById('btnLogout');
+  if (out) out.addEventListener('click', function () { auth.logout(); });
+})();

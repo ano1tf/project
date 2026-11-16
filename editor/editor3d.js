@@ -17,7 +17,11 @@ const reg = new Map();            // id → record
 let nextId = 1;
 const state = {
   selectedId: null,
+  selectedIds: [],
+  clipboard: null,
+  textures: {},
   play: false,
+  paused: false,
   won: false,
   lost: false,
   score: 0,
@@ -167,12 +171,16 @@ transform.setRotationSnap(THREE.MathUtils.degToRad(15));
 transform.setScaleSnap(0.1);
 transform.addEventListener('dragging-changed', function (e) {
   orbit.enabled = !e.value;
-  if (!e.value && state.selectedId) {
+  if (e.value) {
+    // Snapshot AVANT modification : l'annulation restaure vraiment l'état précédent
+    if (state.selectedId) pushHistory();
+    capturePrimary();
+  } else if (state.selectedId) {
     markDirty();
-    pushHistory();
   }
 });
 transform.addEventListener('objectChange', function () {
+  propagateTransform();
   syncTransformInputs();
   markDirty();
 });
@@ -185,23 +193,29 @@ const undoStack = [], redoStack = [];
 function serialize() {
   return JSON.stringify({
     scene: state.scene,
-    objects: Array.from(reg.values()).map(recToProps)
+    objects: Array.from(reg.values()).map(recToProps),
+    textures: state.textures || {}
   });
 }
 function pushHistory() {
   undoStack.push(serialize());
   if (undoStack.length > 60) undoStack.shift();
   redoStack.length = 0;
+  updateStatusSave();
 }
 function undo() {
-  if (!undoStack.length) return;
+  if (!undoStack.length) { toast('ed.nothingUndo', '↺'); return; }
   redoStack.push(serialize());
   rebuildFromData(JSON.parse(undoStack.pop()), true);
+  toast('ed.undone', '↺');
+  updateStatusSave();
 }
 function redo() {
-  if (!redoStack.length) return;
+  if (!redoStack.length) { toast('ed.nothingRedo', '↻'); return; }
   undoStack.push(serialize());
   rebuildFromData(JSON.parse(redoStack.pop()), true);
+  toast('ed.redone', '↻');
+  updateStatusSave();
 }
 // Un snapshot AVANT modification
 let pendingSnap = false;
@@ -210,12 +224,34 @@ function takeSnap() { if (pendingSnap) { pendingSnap = false; pushHistory(); mar
 
 function markDirty() {
   state.dirty = true;
+  scheduleAutosave();
   updateStatusSave();
 }
-function updateStatusSave() {
+let autosaveTimer = null;
+function scheduleAutosave() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(function () {
+    if (!state.dirty) return;
+    try {
+      localStorage.setItem(AUTOKEY, serialize());
+      updateStatusSave('auto');
+    } catch (e) { /* quota */ }
+  }, 2500);
+}
+function updateStatusSave(mode) {
+  mode = mode || (state.dirty ? 'dirty' : 'saved');
+  const label = mode === 'dirty' ? t('ed.modified') : (mode === 'auto' ? t('ed.autoSaved') : t('ed.saved'));
   const el = $('#statusSave');
-  el.textContent = state.dirty ? t('ed.modified') : t('ed.saved');
-  el.className = 'sb-save ' + (state.dirty ? 'dirty' : 'ok');
+  el.textContent = label;
+  el.className = 'sb-save ' + (mode === 'dirty' ? 'dirty' : mode === 'auto' ? 'auto' : 'ok');
+  const pill = $('#savePill');
+  if (pill) {
+    pill.setAttribute('data-state', mode);
+    const pt = $('#savePillText');
+    if (pt) pt.textContent = label;
+  }
+  const hist = $('#statusHist');
+  if (hist) hist.textContent = '↺ ' + undoStack.length + ' · ↻ ' + redoStack.length;
 }
 
 /* ================= Objets ================= */
@@ -239,7 +275,8 @@ function createObject(type, opts) {
     collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus'].indexOf(type) !== -1,
     value: opts.value != null ? opts.value : 10,
     speed: opts.speed != null ? opts.speed : 6,
-    jump: opts.jump != null ? opts.jump : 9
+    jump: opts.jump != null ? opts.jump : 9,
+    texture: opts.texture || null
   };
 
   let obj3d = null;
@@ -397,7 +434,12 @@ function recToProps(rec) {
       color: '#' + rec.light.color.getHexString(),
       intensity: rec.light.intensity
     } : null,
-    script: rec.script
+    texture: rec.texture || null,
+    script: rec.script ? {
+      onStart: rec.script.onStart || '',
+      onUpdate: rec.script.onUpdate || '',
+      onCollide: rec.script.onCollide || ''
+    } : { onStart: '', onUpdate: '', onCollide: '' }
   };
 }
 
@@ -427,51 +469,64 @@ function disposeObj(obj3d) {
   });
 }
 
-function deleteObject(id) {
+function deleteObject(id, silent) {
   const rec = findRec(id);
   if (!rec) return;
-  pushHistory();
+  if (!silent) pushHistory();
   scene3d.remove(rec.obj3d);
   disposeObj(rec.obj3d);
   reg.delete(id);
-  if (state.selectedId === id) select(null);
-  renderHierarchy();
-  markDirty();
-  toast('ed.deletedToast', '🗑️');
+  const si = state.selectedIds.indexOf(id);
+  if (si !== -1) state.selectedIds.splice(si, 1);
+  if (state.selectedId === id) state.selectedId = state.selectedIds[state.selectedIds.length - 1] || null;
+  syncSelection();
+  if (!silent) {
+    markDirty();
+    toast('ed.deletedToast', '🗑️');
+  }
   log('− ' + rec.name);
 }
 
-function duplicateObject(id) {
+function duplicateObject(id, silent) {
   const rec = findRec(id);
-  if (!rec) return;
-  pushHistory();
+  if (!rec) return null;
+  if (!silent) pushHistory();
   const p = recToProps(rec);
-  p.id = null;
+  delete p.id;
   p.name = rec.name + ' (2)';
   p.position = [p.position[0] + 1.5, p.position[1] + 0.5, p.position[2] + 1.5];
   const copy = createObject(rec.type, p);
-  select(copy.id);
-  markDirty();
-  toast('ed.copiedToast', '📄');
+  if (!silent) {
+    select(copy.id);
+    markDirty();
+    toast('ed.copiedToast', '📄');
+  }
+  return copy;
 }
 
-function addObject(type) {
+function addObject(type, pos) {
   pushHistory();
   const n = reg.size % 5;
   const rec = createObject(type, {
-    position: [n * 2.2 - 3, type === 'plane' ? 0.25 : 1.4, type === 'goal' ? -4 : (n * 1.4 - 2)]
+    position: pos || [n * 2.2 - 3, type === 'plane' ? 0.25 : 1.4, type === 'goal' ? -4 : (n * 1.4 - 2)]
   });
   select(rec.id);
   markDirty();
   toast('ed.newObj', '＋');
   log('+ ' + rec.name);
+  return rec;
 }
 
 /* ================= Sélection ================= */
 function select(id) {
   state.selectedId = id;
+  state.selectedIds = id ? [id] : [];
+  syncSelection();
+}
+
+function syncSelection() {
   if (selBox) { scene3d.remove(selBox); selBox = null; }
-  const rec = id ? findRec(id) : null;
+  const rec = state.selectedId ? findRec(state.selectedId) : null;
   if (rec) {
     selBox = new THREE.BoxHelper(rec.obj3d, 0x8B7CFF);
     selBox.material.depthTest = false;
@@ -484,6 +539,18 @@ function select(id) {
   }
   renderHierarchy();
   renderInspector();
+}
+
+function toggleSelect(id) {
+  const i = state.selectedIds.indexOf(id);
+  if (i !== -1) {
+    state.selectedIds.splice(i, 1);
+    if (state.selectedId === id) state.selectedId = state.selectedIds[state.selectedIds.length - 1] || null;
+  } else {
+    state.selectedIds.push(id);
+    state.selectedId = id;
+  }
+  syncSelection();
 }
 
 function focusSelection() {
@@ -505,13 +572,28 @@ function renderHierarchy() {
   const el = $('#hierarchy');
   $('#objCount').textContent = reg.size;
   $('#statusCount').textContent = reg.size + ' ' + t('ed.objectsLabel');
+  const selEl = $('#statusSel');
+  if (selEl) {
+    const one = state.selectedIds.length === 1 ? findRec(state.selectedIds[0]) : null;
+    selEl.textContent = state.selectedIds.length > 1
+      ? state.selectedIds.length + ' ' + t('ed.selectedN')
+      : (one ? one.name : t('ed.noSelection'));
+  }
   if (!reg.size) {
     el.innerHTML = '<div class="h-empty">' + t('ed.empty') + '</div>';
     return;
   }
-  el.innerHTML = Array.from(reg.values()).slice().reverse().map(function (rec) {
+  const hq = (typeof hierQuery === 'string' ? hierQuery : '').trim().toLowerCase();
+  const rows = Array.from(reg.values()).slice().reverse().filter(function (rec) {
+    return !hq || rec.name.toLowerCase().indexOf(hq) !== -1 || rec.type.indexOf(hq) !== -1;
+  });
+  if (!rows.length) {
+    el.innerHTML = '<div class="h-empty">' + t('ed.empty') + '</div>';
+    return;
+  }
+  el.innerHTML = rows.map(function (rec) {
     return (
-      '<div class="h-row' + (rec.id === state.selectedId ? ' selected' : '') + (rec.obj3d.visible ? '' : ' hidden-obj') + '" data-id="' + rec.id + '">' +
+      '<div class="h-row' + (state.selectedIds.indexOf(rec.id) !== -1 ? ' selected' : '') + (rec.obj3d.visible ? '' : ' hidden-obj') + '" data-id="' + rec.id + '">' +
         '<div class="h-dot" style="background:' + (TYPE_COLORS[rec.type] || '#999') + '"></div>' +
         '<div class="h-name" title="' + t('ed.renameHint') + '">' + escapeHtml(rec.name) + '</div>' +
         '<button class="h-eye">' + (rec.obj3d.visible
@@ -526,7 +608,14 @@ function renderHierarchy() {
     const id = row.getAttribute('data-id');
     row.addEventListener('click', function (e) {
       if (e.target.closest('.h-eye')) return;
-      select(id);
+      if (e.shiftKey) toggleSelect(id);
+      else select(id);
+    });
+    row.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      if (e.target.closest('.h-eye')) return;
+      if (state.selectedIds.indexOf(id) === -1) select(id);
+      showCtxMenu(e.clientX, e.clientY, objectMenuItems());
     });
     row.addEventListener('dblclick', function (e) {
       if (e.target.closest('.h-eye')) return;
@@ -645,6 +734,8 @@ function renderInspector() {
   $$('.code-tab').forEach(function (tab) {
     tab.classList.toggle('active', tab.getAttribute('data-code') === (view.codeTarget || 'onStart'));
   });
+  renderBlocksUI();
+  refreshCodeView();
 }
 
 function syncTransformInputs() {
@@ -824,6 +915,7 @@ $$('.code-tab').forEach(function (tab) {
 $('#btnApplyCode').addEventListener('click', function () {
   const rec = findRec(state.selectedId);
   if (!rec) return;
+  if (!validateCode()) return;
   pushHistory();
   rec.script = rec.script || { onStart: '', onUpdate: '', onCollide: '' };
   rec.script[view.codeTarget] = $('#codeEditor').value;
@@ -859,9 +951,13 @@ canvas.addEventListener('pointerup', function (e) {
   if (hits.length) {
     let o = hits[0].object;
     while (o && !o.userData.recId) o = o.parent;
-    if (o && o.userData.recId) { select(o.userData.recId); return; }
+    if (o && o.userData.recId) {
+      if (e.shiftKey) toggleSelect(o.userData.recId);
+      else select(o.userData.recId);
+      return;
+    }
   }
-  select(null);
+  if (!e.shiftKey) select(null);
 });
 
 canvas.addEventListener('dblclick', function () {
@@ -961,6 +1057,11 @@ function startPlay() {
   $('#winOverlay').hidden = true;
   $('#loseOverlay').hidden = true;
   $('#btnPlay').classList.add('playing');
+  $('#btnPause').disabled = false;
+  $('#btnStop').disabled = false;
+  $('#btnPause').classList.remove('active');
+  $('#vpPause').hidden = true;
+  state.paused = false;
   $('#playLabel').textContent = t('ed.stop');
   $('#playIcon').innerHTML = '<rect x="7" y="7" width="10" height="10" rx="2"/>';
   updateHUD();
@@ -989,6 +1090,11 @@ function stopPlay() {
   $('#loseOverlay').hidden = true;
   $('#playHint').hidden = true;
   $('#btnPlay').classList.remove('playing');
+  $('#btnPause').disabled = true;
+  $('#btnStop').disabled = true;
+  $('#btnPause').classList.remove('active');
+  $('#vpPause').hidden = true;
+  state.paused = false;
   $('#playLabel').textContent = t('ed.play');
   $('#playIcon').innerHTML = '<path d="M8 5.5v13l10-6.5z"/>';
   log(t('ed.playStopped'), 'play');
@@ -1218,6 +1324,7 @@ function makeApi() {
     },
     get score() { return state.score; },
     message: function (msg) { toast(String(msg), '💬'); log('💬 ' + msg); },
+    sound: function (name) { if (!state.muted && SFX[name]) SFX[name](); },
     addScore: function (n) {
       state.score += (Number(n) || 0);
       updateHUD();
@@ -1315,9 +1422,14 @@ function rebuildFromData(data, keepHistory) {
   $('#inBg').value = state.scene.fogColor || '#B9C9E2';
   scene3d.fog = state.scene.fog !== false ? new THREE.Fog(new THREE.Color(state.scene.fogColor || '#B9C9E2'), 60, 260) : null;
 
+  state.textures = data.textures || {};
   (data.objects || []).forEach(function (p) {
     createObject(p.type, p);
   });
+  reg.forEach(function (rec) {
+    if (rec.texture && state.textures[rec.texture]) applyTextureToRec(rec, rec.texture, true);
+  });
+  renderTexGrid();
 
   let max = 0;
   reg.forEach(function (rec) {
@@ -1332,6 +1444,7 @@ function rebuildFromData(data, keepHistory) {
 }
 
 function newProject() {
+  if (!confirm(t('ed.confirmNew'))) return;
   pushHistory();
   rebuildFromData({
     scene: { name: 'Ma scène', fog: true, fogColor: '#B9C9E2' },
@@ -1389,7 +1502,7 @@ function animate(now) {
   const dt = Math.min(0.04, (now - lastTime) / 1000);
   lastTime = now;
 
-  if (state.play && !state.won && !state.lost) {
+  if (state.play && !state.won && !state.lost && !state.paused) {
     updatePlay(dt);
   } else if (!state.play) {
     orbit.update();
@@ -1404,6 +1517,8 @@ function animate(now) {
   fpsTimer += dt;
   if (fpsTimer > 0.5) {
     $('#vpFps').textContent = Math.round(fpsAcc / fpsCount) + ' FPS';
+    const sz = $('#statusZoom');
+    if (sz && orbit) sz.textContent = 'Caméra · ' + Math.round(camera.position.distanceTo(orbit.target)) + ' m';
     fpsAcc = 0; fpsCount = 0; fpsTimer = 0;
   }
 }
@@ -1435,19 +1550,35 @@ document.addEventListener('keydown', function (e) {
     return;
   }
   if (key === 'escape') {
+    if (hideCtxMenu()) return;
     if (state.play) stopPlay();
     else select(null);
     return;
   }
   if (key === 'delete' || key === 'backspace') {
-    if (!state.play && state.selectedId) { e.preventDefault(); deleteObject(state.selectedId); }
+    if (!state.play && state.selectedIds.length) { e.preventDefault(); deleteSelection(); }
+    return;
+  }
+  if (key === 'p' && state.play) { togglePause(); return; }
+  if (key === 'f2' && !state.play && state.selectedId) {
+    e.preventDefault();
+    const row = $('#hierarchy .h-row[data-id="' + state.selectedId + '"]');
+    if (row) beginRename(row, state.selectedId);
     return;
   }
   if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
   if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
   if ((e.ctrlKey || e.metaKey) && key === 'd') {
     e.preventDefault();
-    if (!state.play && state.selectedId) duplicateObject(state.selectedId);
+    if (!state.play && state.selectedIds.length) duplicateSelection();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && key === 'c') {
+    if (!state.play && !isTyping(e)) { e.preventDefault(); copySelection(); }
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && key === 'v') {
+    if (!state.play && !isTyping(e)) { e.preventDefault(); pasteClipboard(); }
     return;
   }
   if ((e.ctrlKey || e.metaKey) && key === 's') { e.preventDefault(); save(); return; }
@@ -1463,15 +1594,18 @@ document.addEventListener('keydown', function (e) {
 
   // Flèches : déplacer la sélection
   if (!state.play && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].indexOf(key) !== -1) {
-    const rec = findRec(state.selectedId);
-    if (!rec) return;
+    if (!state.selectedIds.length) return;
     e.preventDefault();
     pushHistory();
     const step = e.shiftKey ? 1 : 0.25;
-    if (key === 'arrowleft') rec.obj3d.position.x -= step;
-    if (key === 'arrowright') rec.obj3d.position.x += step;
-    if (key === 'arrowup') rec.obj3d.position.z -= step;
-    if (key === 'arrowdown') rec.obj3d.position.z += step;
+    state.selectedIds.forEach(function (sid) {
+      const rec = findRec(sid);
+      if (!rec) return;
+      if (key === 'arrowleft') rec.obj3d.position.x -= step;
+      if (key === 'arrowright') rec.obj3d.position.x += step;
+      if (key === 'arrowup') rec.obj3d.position.z -= step;
+      if (key === 'arrowdown') rec.obj3d.position.z += step;
+    });
     syncTransformInputs();
     markDirty();
     if (selBox) selBox.update();
@@ -1532,10 +1666,10 @@ $('#btnReplay').addEventListener('click', function () { stopPlay(); startPlay();
 $('#btnReplay2').addEventListener('click', function () { stopPlay(); startPlay(); });
 $('#btnBackEdit').addEventListener('click', stopPlay);
 $('#btnBackEdit2').addEventListener('click', stopPlay);
-$('#btnDelete').addEventListener('click', function () { if (state.selectedId) deleteObject(state.selectedId); });
-$('#btnDelete2').addEventListener('click', function () { if (state.selectedId) deleteObject(state.selectedId); });
-$('#btnDuplicate').addEventListener('click', function () { if (state.selectedId) duplicateObject(state.selectedId); });
-$('#btnDuplicate2').addEventListener('click', function () { if (state.selectedId) duplicateObject(state.selectedId); });
+$('#btnDelete').addEventListener('click', deleteSelection);
+$('#btnDelete2').addEventListener('click', deleteSelection);
+$('#btnDuplicate').addEventListener('click', duplicateSelection);
+$('#btnDuplicate2').addEventListener('click', duplicateSelection);
 $$('#addBar .obj-btn').forEach(function (b) {
   b.addEventListener('click', function () { addObject(b.getAttribute('data-add')); });
 });
@@ -1568,6 +1702,8 @@ window.addEventListener('kreo:editor-render', function () {
   renderInspector();
   $('#playLabel').textContent = state.play ? t('ed.stop') : t('ed.play');
   $('#statusHint').textContent = t('ed.renameHint');
+  renderLib();
+  renderTexGrid();
   if (state.play) updateHUD();
 });
 
@@ -1578,7 +1714,7 @@ setInterval(function () {
 }, 15000);
 
 /* ================= Init ================= */
-(function init() {
+function boot() {
   // Chargement
   let loaded = false;
   try {
@@ -1603,4 +1739,875 @@ setInterval(function () {
   log('KREO 3D · three.js r' + THREE.REVISION);
   log('✦ ' + t('ed.sceneSettings'));
   requestAnimationFrame(animate);
-})();
+}
+
+/* ============================================================
+   KREO ÉDITEUR V2 — sous-systèmes
+   Menu contextuel · bibliothèque · textures · matériaux ·
+   système de blocs (génère du vrai code) · coloration syntaxique ·
+   panneaux redimensionnables · onglets.
+   ============================================================ */
+
+/* ================= Multi-sélection ================= */
+function deleteSelection() {
+  if (!state.selectedIds.length) return;
+  pushHistory();
+  state.selectedIds.slice().forEach(function (id) { deleteObject(id, true); });
+  markDirty();
+  toast('ed.deletedToast', '🗑️');
+}
+
+function duplicateSelection() {
+  if (!state.selectedIds.length) return;
+  pushHistory();
+  const newIds = [];
+  state.selectedIds.slice().forEach(function (id) {
+    const c = duplicateObject(id, true);
+    if (c) newIds.push(c.id);
+  });
+  if (newIds.length) {
+    state.selectedIds = newIds;
+    state.selectedId = newIds[newIds.length - 1];
+    syncSelection();
+    markDirty();
+    toast('ed.copiedToast', '📄');
+  }
+}
+
+function copySelection() {
+  if (!state.selectedIds.length) return;
+  state.clipboard = state.selectedIds.map(function (id) {
+    const rec = findRec(id);
+    return rec ? recToProps(rec) : null;
+  }).filter(Boolean);
+  toast('ed.copied', '📋');
+}
+
+function pasteClipboard() {
+  if (!state.clipboard || !state.clipboard.length) { toast('ed.pasteKo', '📋'); return; }
+  pushHistory();
+  const newIds = [];
+  state.clipboard.forEach(function (p) {
+    const q = JSON.parse(JSON.stringify(p));
+    delete q.id;
+    q.position = [p.position[0] + 1, p.position[1], p.position[2] + 1];
+    const rec = createObject(p.type, q);
+    if (rec) newIds.push(rec.id);
+  });
+  if (newIds.length) {
+    state.selectedIds = newIds;
+    state.selectedId = newIds[newIds.length - 1];
+    syncSelection();
+    markDirty();
+    toast('ed.pasted', '📋');
+  }
+}
+
+/* ================= Menu contextuel ================= */
+const ctxEl = $('#ctxMenu');
+
+function hideCtxMenu() {
+  if (ctxEl && !ctxEl.hidden) { ctxEl.hidden = true; return true; }
+  return false;
+}
+
+function showCtxMenu(x, y, items) {
+  if (!ctxEl) return;
+  ctxEl.innerHTML = items.map(function (it, i) {
+    if (it.sep) return '<div class="ctx-sep"></div>';
+    if (it.title) return '<div class="ctx-title">' + escapeHtml(it.title) + '</div>';
+    return '<button class="ctx-item' + (it.danger ? ' danger' : '') + '" data-i="' + i + '"' + (it.disabled ? ' disabled' : '') + '>' +
+      '<span>' + escapeHtml(it.label) + '</span>' + (it.kbd ? '<kbd>' + escapeHtml(it.kbd) + '</kbd>' : '') + '</button>';
+  }).join('');
+  ctxEl.hidden = false;
+  const w = ctxEl.offsetWidth, h = ctxEl.offsetHeight;
+  ctxEl.style.left = Math.min(x, window.innerWidth - w - 8) + 'px';
+  ctxEl.style.top = Math.min(y, window.innerHeight - h - 8) + 'px';
+  $$('.ctx-item', ctxEl).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const it = items[parseInt(btn.getAttribute('data-i'), 10)];
+      hideCtxMenu();
+      if (it && it.fn) it.fn();
+    });
+  });
+}
+
+document.addEventListener('pointerdown', function (e) {
+  if (ctxEl && !ctxEl.hidden && !ctxEl.contains(e.target)) hideCtxMenu();
+});
+
+function objectMenuItems() {
+  const has = state.selectedIds.length > 0 && !state.play;
+  return [
+    { label: t('ed.ctxRename'), kbd: 'F2', disabled: !has, fn: function () {
+      const row = $('#hierarchy .h-row[data-id="' + state.selectedId + '"]');
+      if (row) beginRename(row, state.selectedId);
+    } },
+    { label: t('ed.ctxFocus'), kbd: 'F', disabled: !has, fn: focusSelection },
+    { label: t('ed.ctxDuplicate'), kbd: 'Ctrl+D', disabled: !has, fn: duplicateSelection },
+    { label: t('ed.ctxCopy'), kbd: 'Ctrl+C', disabled: !has, fn: copySelection },
+    { label: t('ed.ctxPaste'), kbd: 'Ctrl+V', disabled: !state.clipboard, fn: pasteClipboard },
+    { sep: true },
+    { label: t('ed.ctxDelete'), kbd: 'Del', danger: true, disabled: !has, fn: deleteSelection }
+  ];
+}
+
+function addHereMenuItems(pt) {
+  const types = ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'player', 'coin', 'goal', 'sun', 'point'];
+  return [{ title: t('ed.ctxAddHere') }].concat(types.map(function (ty) {
+    return {
+      label: t('ed.add' + ty.charAt(0).toUpperCase() + ty.slice(1)),
+      fn: function () {
+        addObject(ty, pt ? [snapVal(pt.x, 0.5), ty === 'plane' ? 0.25 : 1.4, snapVal(pt.z, 0.5)] : null);
+      }
+    };
+  }));
+}
+
+function groundPoint(e) {
+  const r = canvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const pt = new THREE.Vector3();
+  return raycaster.ray.intersectPlane(plane, pt) ? pt : null;
+}
+
+canvas.addEventListener('contextmenu', function (e) {
+  e.preventDefault();
+  if (state.play) return;
+  const r = canvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(Array.from(reg.values()).map(function (rec) { return rec.obj3d; }), true);
+  let hitId = null;
+  if (hits.length) {
+    let o = hits[0].object;
+    while (o && !o.userData.recId) o = o.parent;
+    if (o && o.userData.recId) hitId = o.userData.recId;
+  }
+  if (hitId) {
+    if (state.selectedIds.indexOf(hitId) === -1) select(hitId);
+    showCtxMenu(e.clientX, e.clientY, objectMenuItems());
+  } else {
+    showCtxMenu(e.clientX, e.clientY, addHereMenuItems(groundPoint(e)));
+  }
+});
+
+/* ================= Transport : pause / stop / annuler ================= */
+function togglePause() {
+  if (!state.play) return;
+  state.paused = !state.paused;
+  const b = $('#btnPause');
+  if (b) b.classList.toggle('active', state.paused);
+  const badge = $('#vpPause');
+  if (badge) badge.hidden = !state.paused;
+  toast(state.paused ? 'ed.pausedT' : 'ed.resumed', state.paused ? '⏸' : '▶');
+  log(state.paused ? t('ed.pausedT') : t('ed.resumed'), 'play');
+}
+
+const btnPauseEl = $('#btnPause');
+if (btnPauseEl) btnPauseEl.addEventListener('click', togglePause);
+const btnStopEl = $('#btnStop');
+if (btnStopEl) btnStopEl.addEventListener('click', function () { if (state.play) stopPlay(); });
+const btnUndoEl = $('#btnUndo');
+if (btnUndoEl) btnUndoEl.addEventListener('click', undo);
+const btnRedoEl = $('#btnRedo');
+if (btnRedoEl) btnRedoEl.addEventListener('click', redo);
+
+/* ================= Bibliothèque d'assets ================= */
+const LIB_ITEMS = [
+  { type: 'cube', cat: 'shapes' }, { type: 'sphere', cat: 'shapes' },
+  { type: 'cylinder', cat: 'shapes' }, { type: 'cone', cat: 'shapes' },
+  { type: 'plane', cat: 'shapes' }, { type: 'torus', cat: 'shapes' },
+  { type: 'player', cat: 'gameplay' }, { type: 'coin', cat: 'gameplay' }, { type: 'goal', cat: 'gameplay' },
+  { type: 'sun', cat: 'lights' }, { type: 'point', cat: 'lights' }
+];
+let libCat = 'all';
+let libQuery = '';
+
+function typeNameOf(ty) {
+  return t('ed.add' + ty.charAt(0).toUpperCase() + ty.slice(1));
+}
+
+function renderLib() {
+  const grid = $('#libGrid');
+  if (!grid) return;
+  const q = libQuery.trim().toLowerCase();
+  const items = LIB_ITEMS.filter(function (it) {
+    const catOk = libCat === 'all' || libCat === it.cat || (libCat === 'materials') || (libCat === 'textures');
+    const nameOk = !q || typeNameOf(it.type).toLowerCase().indexOf(q) !== -1;
+    return catOk && nameOk && libCat !== 'materials' && libCat !== 'textures';
+  });
+  grid.innerHTML = items.map(function (it) {
+    const src = $('#addBar .obj-btn[data-add="' + it.type + '"]');
+    const svg = src ? src.innerHTML : '';
+    return '<button class="lib-card" draggable="true" data-type="' + it.type + '" title="' + escapeHtml(typeNameOf(it.type)) + '">' +
+      svg + '<span class="lib-name">' + escapeHtml(typeNameOf(it.type)) + '</span></button>';
+  }).join('');
+  grid.hidden = items.length === 0;
+
+  $$('.lib-card', grid).forEach(function (card) {
+    const ty = card.getAttribute('data-type');
+    card.addEventListener('click', function () {
+      addObject(ty);
+    });
+    card.addEventListener('dragstart', function (e) {
+      e.dataTransfer.setData('text/kreo-type', ty);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+  });
+
+  const matSection = $('#matSection');
+  const texSection = $('#texSection');
+  if (matSection) matSection.hidden = !(libCat === 'all' || libCat === 'materials');
+  if (texSection) texSection.hidden = !(libCat === 'all' || libCat === 'textures');
+  renderMatGrid();
+}
+
+function renderMatGrid() {
+  const grid = $('#matGrid');
+  if (!grid) return;
+  const hasSel = !!findRec(state.selectedId);
+  grid.innerHTML = MAT_PRESETS.map(function (p, i) {
+    const bg = 'background:linear-gradient(135deg,' + p.color + ',' + (p.emissive || p.color) + ');';
+    return '<button class="mat-chip' + (hasSel ? '' : ' disabled') + '" data-i="' + i + '" style="' + bg + '">' +
+      '<span class="mat-label">' + escapeHtml(t(p.key)) + '</span></button>';
+  }).join('');
+  $$('.mat-chip', grid).forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      applyPreset(MAT_PRESETS[parseInt(chip.getAttribute('data-i'), 10)]);
+    });
+  });
+}
+
+/* Matériaux prêts à l'emploi (vrais réglages PBR) */
+const MAT_PRESETS = [
+  { key: 'ed.matWood', color: '#8B5A2B', metal: 0, rough: 0.85 },
+  { key: 'ed.matMetal', color: '#A8B0BE', metal: 0.95, rough: 0.3 },
+  { key: 'ed.matStone', color: '#8D9199', metal: 0, rough: 0.95 },
+  { key: 'ed.matBrick', color: '#A34E3E', metal: 0, rough: 0.9 },
+  { key: 'ed.matGold', color: '#F5C542', metal: 0.9, rough: 0.25 },
+  { key: 'ed.matGlass', color: '#B9D8E6', metal: 0.1, rough: 0.05, opacity: 0.35 },
+  { key: 'ed.matNeon', color: '#22D3EE', metal: 0.2, rough: 0.35, emissive: '#0E7490' },
+  { key: 'ed.matPlastic', color: '#E86A92', metal: 0.05, rough: 0.45 }
+];
+
+function applyPreset(p) {
+  const rec = findRec(state.selectedId);
+  if (!rec) { toast('ed.needSelect', '🖱️'); return; }
+  armSnap();
+  takeSnap();
+  forEachMat(rec, function (m) {
+    m.color.set(p.color);
+    m.metalness = p.metal;
+    m.roughness = p.rough;
+    m.emissive.set(p.emissive || '#000000');
+    if (p.opacity != null && p.opacity < 1) { m.opacity = p.opacity; m.transparent = true; }
+    else { m.opacity = 1; m.transparent = false; }
+    m.needsUpdate = true;
+  });
+  renderInspector();
+  markDirty();
+  toast('ed.matApplied', '🎨');
+}
+
+/* ================= Textures (import réel de fichiers) ================= */
+function applyTextureToRec(rec, texId, silent) {
+  const tdata = state.textures[texId];
+  if (!rec || !tdata) return;
+  const loader = new THREE.TextureLoader();
+  loader.load(tdata.dataURL, function (tex) {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    forEachMat(rec, function (m) { m.map = tex; m.needsUpdate = true; });
+    rec.texture = texId;
+    if (!silent) {
+      renderInspector();
+      markDirty();
+      toast('ed.texApplied', '🖼️');
+    }
+  });
+}
+
+function clearTextureOfSelection() {
+  const rec = findRec(state.selectedId);
+  if (!rec) { toast('ed.needSelect', '🖱️'); return; }
+  armSnap();
+  takeSnap();
+  forEachMat(rec, function (m) { m.map = null; m.needsUpdate = true; });
+  rec.texture = null;
+  renderInspector();
+  markDirty();
+  toast('ed.texRemoved', '🖼️');
+}
+
+function importTextureFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/png,image/jpeg,image/webp';
+  input.onchange = function () {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      const id = 'tex-' + Date.now();
+      state.textures[id] = { name: f.name, dataURL: String(reader.result) };
+      renderTexGrid();
+      markDirty();
+      toast('ed.texAdded', '🖼️');
+      log('🖼️ ' + f.name);
+    };
+    reader.readAsDataURL(f);
+  };
+  input.click();
+}
+
+function renderTexGrid() {
+  const grid = $('#texGrid');
+  if (!grid) return;
+  const ids = Object.keys(state.textures || {});
+  if (!ids.length) {
+    grid.innerHTML = '<div class="tex-empty">' + t('ed.texEmpty') + '</div>';
+    return;
+  }
+  grid.innerHTML = ids.map(function (id) {
+    return '<div class="tex-card" data-id="' + id + '" title="' + escapeHtml(state.textures[id].name || id) + '" style="background-image:url(' + state.textures[id].dataURL + ')">' +
+      '<button class="tex-del" title="✕">✕</button></div>';
+  }).join('');
+  $$('.tex-card', grid).forEach(function (card) {
+    const id = card.getAttribute('data-id');
+    card.addEventListener('click', function (e) {
+      if (e.target.closest('.tex-del')) return;
+      const rec = findRec(state.selectedId);
+      if (!rec) { toast('ed.needSelect', '🖱️'); return; }
+      armSnap();
+      takeSnap();
+      applyTextureToRec(rec, id, false);
+    });
+    const del = card.querySelector('.tex-del');
+    if (del) del.addEventListener('click', function () {
+      const rec = findRec(state.selectedId);
+      if (rec && rec.texture === id) clearTextureOfSelection();
+      delete state.textures[id];
+      renderTexGrid();
+      markDirty();
+      toast('ed.texRemoved', '🗑️');
+    });
+  });
+}
+
+const btnTexEl = $('#btnImportTexture');
+if (btnTexEl) btnTexEl.addEventListener('click', importTextureFile);
+const btnClearTexEl = $('#btnClearTexture');
+if (btnClearTexEl) btnClearTexEl.addEventListener('click', clearTextureOfSelection);
+
+/* Glisser-déposer de la bibliothèque vers la vue 3D */
+canvas.addEventListener('dragover', function (e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+canvas.addEventListener('drop', function (e) {
+  e.preventDefault();
+  const ty = e.dataTransfer.getData('text/kreo-type');
+  if (!ty) return;
+  const pt = groundPoint(e);
+  addObject(ty, pt ? [snapVal(pt.x, 0.5), ty === 'plane' ? 0.25 : 1.4, snapVal(pt.z, 0.5)] : null);
+});
+
+/* Onglets : Scène / Bibliothèque */
+function setLeftTab(which) {
+  const scene = which === 'scene';
+  const bS = $('#leftTabScene'), bL = $('#leftTabLib');
+  if (bS) bS.classList.toggle('active', scene);
+  if (bL) bL.classList.toggle('active', !scene);
+  const pS = $('#panelScene'), pL = $('#panelLib');
+  if (pS) pS.hidden = !scene;
+  if (pL) pL.hidden = scene;
+  if (!scene) renderLib();
+}
+const lts = $('#leftTabScene');
+if (lts) lts.addEventListener('click', function () { setLeftTab('scene'); });
+const ltl = $('#leftTabLib');
+if (ltl) ltl.addEventListener('click', function () { setLeftTab('lib'); });
+
+const libSearchEl = $('#libSearch');
+if (libSearchEl) {
+  libSearchEl.placeholder = t('ed.search');
+  libSearchEl.addEventListener('input', function () {
+    libQuery = libSearchEl.value;
+    renderLib();
+  });
+}
+$$('#libCats .cat-chip').forEach(function (chip) {
+  chip.addEventListener('click', function () {
+    $$('#libCats .cat-chip').forEach(function (c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    libCat = chip.getAttribute('data-cat');
+    renderLib();
+  });
+});
+
+/* ================= Tiroir bas : Console / API ================= */
+function setDockTab(which) {
+  const con = which === 'console';
+  const bC = $('#tabConsole'), bA = $('#tabApi');
+  if (bC) bC.classList.toggle('active', con);
+  if (bA) bA.classList.toggle('active', !con);
+  const pC = $('#consoleBody'), pA = $('#apiPanel');
+  if (pC) pC.hidden = !con;
+  if (pA) pA.hidden = con;
+}
+const dtC = $('#tabConsole');
+if (dtC) dtC.addEventListener('click', function () { setDockTab('console'); });
+const dtA = $('#tabApi');
+if (dtA) dtA.addEventListener('click', function () { setDockTab('api'); });
+
+/* ================= Coloration syntaxique (éditeur JS) ================= */
+function highlightJs(src) {
+  const re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b\d+(?:\.\d+)?\b)|\b(var|let|const|function|return|if|else|for|while|new|typeof|null|true|false|undefined|this|try|catch|throw|break|continue|in|of|delete|void)\b|\b(scene|self|player|other|dt|Math)\b/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(src))) {
+    out += escapeHtml(src.slice(last, m.index));
+    const cls = m[1] ? 'tok-com' : m[2] ? 'tok-str' : m[3] ? 'tok-num' : m[4] ? 'tok-kw' : 'tok-api';
+    out += '<span class="' + cls + '">' + escapeHtml(m[0]) + '</span>';
+    last = m.index + m[0].length;
+  }
+  out += escapeHtml(src.slice(last));
+  return out;
+}
+
+function refreshCodeView() {
+  const ta = $('#codeEditor');
+  if (!ta) return;
+  const hi = $('#codeHi');
+  const lines = $('#codeLines');
+  if (hi) {
+    const code = hi.querySelector('code');
+    if (code) code.innerHTML = highlightJs(ta.value) + '\n';
+    hi.scrollTop = ta.scrollTop;
+  }
+  if (lines) {
+    const n = ta.value.split('\n').length;
+    let s = '';
+    for (let i = 1; i <= Math.max(n, 6); i++) s += '<span>' + i + '</span>';
+    lines.innerHTML = s;
+    lines.scrollTop = ta.scrollTop;
+  }
+}
+
+function validateCode() {
+  const ta = $('#codeEditor');
+  const err = $('#codeError');
+  if (!ta) return true;
+  try {
+    new Function('scene', 'dt', 'player', 'self', 'other', ta.value);
+    if (err) err.hidden = true;
+    return true;
+  } catch (e) {
+    if (err) { err.hidden = false; err.textContent = '⚠ ' + (e.message || String(e)); }
+    log('code error · ' + (e.message || e), 'err');
+    return false;
+  }
+}
+
+const codeTa = $('#codeEditor');
+if (codeTa) {
+  codeTa.addEventListener('input', refreshCodeView);
+  codeTa.addEventListener('scroll', function () {
+    const hi = $('#codeHi');
+    const lines = $('#codeLines');
+    if (hi) hi.scrollTop = codeTa.scrollTop;
+    if (lines) lines.scrollTop = codeTa.scrollTop;
+  });
+}
+
+/* ================= Système de blocs → vrai code ================= */
+const BLOCK_DEFS = {
+  msg: {
+    cat: 'actions', key: 'ed.blkMsg',
+    params: [{ k: 'text', t: 'text', def: 'Bravo !' }],
+    gen: function (p) { return 'scene.message(' + JSON.stringify(String(p.text || '')) + ');'; }
+  },
+  sound: {
+    cat: 'actions', key: 'ed.blkSound',
+    params: [{ k: 'name', t: 'select', def: 'coin', options: ['jump', 'coin', 'hit', 'win', 'lose'] }],
+    gen: function (p) { return 'scene.sound(' + JSON.stringify(String(p.name || 'coin')) + ');'; }
+  },
+  hide: {
+    cat: 'actions', key: 'ed.blkHide', params: [],
+    gen: function () { return 'self.visible = false;'; }
+  },
+  move: {
+    cat: 'move', key: 'ed.blkMove',
+    params: [{ k: 'axis', t: 'select', def: 'x', options: ['x', 'y', 'z'] }, { k: 'amt', t: 'num', def: 1 }],
+    gen: function (p) { return 'self.position.' + String(p.axis || 'x') + ' += ' + (Number(p.amt) || 0) + ';'; }
+  },
+  rotate: {
+    cat: 'move', key: 'ed.blkRotate',
+    params: [{ k: 'axis', t: 'select', def: 'y', options: ['x', 'y', 'z'] }, { k: 'deg', t: 'num', def: 45 }],
+    gen: function (p) { return 'self.rotation.' + String(p.axis || 'y') + ' += ' + (Number(p.deg) || 0) + ';'; }
+  },
+  teleport: {
+    cat: 'move', key: 'ed.blkTeleport',
+    params: [{ k: 'x', t: 'num', def: 0 }, { k: 'y', t: 'num', def: 2 }, { k: 'z', t: 'num', def: 0 }],
+    gen: function (p) {
+      return 'self.position.x = ' + (Number(p.x) || 0) + ';\n' +
+        'self.position.y = ' + (Number(p.y) || 0) + ';\n' +
+        'self.position.z = ' + (Number(p.z) || 0) + ';';
+    }
+  },
+  toPlayer: {
+    cat: 'move', key: 'ed.blkToPlayer',
+    params: [{ k: 'spd', t: 'num', def: 3 }],
+    gen: function (p) {
+      return 'if (scene.player) {\n' +
+        '  var dx = scene.player.position.x - self.position.x;\n' +
+        '  var dz = scene.player.position.z - self.position.z;\n' +
+        '  var d = Math.sqrt(dx * dx + dz * dz) || 1;\n' +
+        '  self.position.x += dx / d * ' + (Number(p.spd) || 3) + ' * dt;\n' +
+        '  self.position.z += dz / d * ' + (Number(p.spd) || 3) + ' * dt;\n' +
+        '}';
+    }
+  },
+  score: {
+    cat: 'game', key: 'ed.blkScore',
+    params: [{ k: 'n', t: 'num', def: 10 }],
+    gen: function (p) { return 'scene.addScore(' + (Number(p.n) || 0) + ');'; }
+  },
+  win: {
+    cat: 'game', key: 'ed.blkWin',
+    params: [{ k: 'text', t: 'text', def: 'Gagné !' }],
+    gen: function (p) { return 'scene.win(' + JSON.stringify(String(p.text || '')) + ');'; }
+  },
+  lose: {
+    cat: 'game', key: 'ed.blkLose',
+    params: [{ k: 'text', t: 'text', def: 'Perdu !' }],
+    gen: function (p) { return 'scene.lose(' + JSON.stringify(String(p.text || '')) + ');'; }
+  },
+  ifScore: {
+    cat: 'logic', key: 'ed.blkIfScore',
+    params: [{ k: 'n', t: 'num', def: 50 }, { k: 'text', t: 'text', def: 'Bien joué !' }],
+    gen: function (p) {
+      return 'if (scene.score > ' + (Number(p.n) || 0) + ') {\n' +
+        '  scene.message(' + JSON.stringify(String(p.text || '')) + ');\n' +
+        '}';
+    }
+  }
+};
+
+function defaultParams(def) {
+  const out = {};
+  (def.params || []).forEach(function (pd) { out[pd.k] = pd.def; });
+  return out;
+}
+
+function parseBlocks(code) {
+  const lines = String(code || '').split('\n');
+  const blocks = [];
+  const manual = [];
+  let i = 0;
+  while (i < lines.length) {
+    const m = /^\/\/ @kreo-block (\w+) (.*)$/.exec(lines[i]);
+    const def = m ? BLOCK_DEFS[m[1]] : null;
+    if (m && def) {
+      let params = {};
+      try { params = JSON.parse(m[2]); } catch (e) { params = defaultParams(def); }
+      const genLines = def.gen(params).split('\n').length;
+      blocks.push({ id: m[1], params: params });
+      i += 1 + genLines;
+    } else {
+      const ln = lines[i];
+      if (ln.trim() !== '' && ln.trim() !== '// — code libre —') manual.push(ln);
+      i++;
+    }
+  }
+  return { blocks: blocks, manual: manual };
+}
+
+function generateBlocksCode(blocks, manual) {
+  const parts = [];
+  blocks.forEach(function (b) {
+    const def = BLOCK_DEFS[b.id];
+    if (!def) return;
+    parts.push('// @kreo-block ' + b.id + ' ' + JSON.stringify(b.params || {}));
+    parts.push(def.gen(b.params || {}));
+  });
+  if (manual && manual.length) {
+    parts.push('// — code libre —');
+    parts.push(manual.join('\n'));
+  }
+  return parts.join('\n');
+}
+
+function setHookCode(code) {
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+  rec.script = rec.script || { onStart: '', onUpdate: '', onCollide: '' };
+  rec.script[view.codeTarget || 'onStart'] = code;
+  const ta = $('#codeEditor');
+  if (ta) ta.value = code;
+  refreshCodeView();
+  markDirty();
+}
+
+function addBlock(id) {
+  const def = BLOCK_DEFS[id];
+  if (!def) return;
+  const parsed = parseBlocks($('#codeEditor') ? $('#codeEditor').value : '');
+  parsed.blocks.push({ id: id, params: defaultParams(def) });
+  armSnap();
+  takeSnap();
+  setHookCode(generateBlocksCode(parsed.blocks, parsed.manual));
+  renderBlocksUI();
+  toast('ed.blockAdded', '🧱');
+}
+
+function regenFromBlocks(blocks, manual) {
+  armSnap();
+  takeSnap();
+  setHookCode(generateBlocksCode(blocks, manual));
+  renderBlocksUI();
+}
+
+function renderBlocksUI() {
+  const list = $('#blocksList');
+  const palette = $('#blocksPalette');
+  const cats = $('#blockCats');
+  if (!list || !palette || !cats) return;
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+
+  // Catégories
+  const catsDef = [
+    ['all', 'ed.catAll'], ['actions', 'ed.bcatActions'],
+    ['move', 'ed.bcatMove'], ['game', 'ed.bcatGame'], ['logic', 'ed.bcatLogic']
+  ];
+  const curCat = cats.getAttribute('data-cat') || 'all';
+  cats.innerHTML = catsDef.map(function (c) {
+    return '<button class="cat-chip' + (c[0] === curCat ? ' active' : '') + '" data-bcat="' + c[0] + '">' + escapeHtml(t(c[1])) + '</button>';
+  }).join('');
+  $$('.cat-chip', cats).forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      cats.setAttribute('data-cat', chip.getAttribute('data-bcat'));
+      renderBlocksUI();
+    });
+  });
+
+  // Palette
+  const palItems = Object.keys(BLOCK_DEFS).filter(function (id) {
+    return curCat === 'all' || BLOCK_DEFS[id].cat === curCat;
+  });
+  palette.innerHTML = palItems.map(function (id) {
+    return '<button class="block-item" data-id="' + id + '"><span class="bi-icon">＋</span><span>' + escapeHtml(t(BLOCK_DEFS[id].key)) + '</span></button>';
+  }).join('');
+  $$('.block-item', palette).forEach(function (item) {
+    item.addEventListener('click', function () { addBlock(item.getAttribute('data-id')); });
+  });
+
+  // Liste des blocs du script courant
+  const code = $('#codeEditor') ? $('#codeEditor').value : '';
+  const parsed = parseBlocks(code);
+  if (!parsed.blocks.length) {
+    list.innerHTML = '<div class="blocks-empty">' + t('ed.blocksEmpty') + (parsed.manual.length ? ' · ' + t('ed.blocksCodeEdited') : '') + '</div>';
+  } else {
+    list.innerHTML = parsed.blocks.map(function (b, i) {
+      const def = BLOCK_DEFS[b.id];
+      const params = (def.params || []).map(function (pd) {
+        const v = b.params[pd.k] != null ? b.params[pd.k] : pd.def;
+        if (pd.t === 'select') {
+          return '<select data-bi="' + i + '" data-k="' + pd.k + '">' + pd.options.map(function (o) {
+            return '<option value="' + o + '"' + (String(v) === o ? ' selected' : '') + '>' + o + '</option>';
+          }).join('') + '</select>';
+        }
+        if (pd.t === 'num') return '<input type="number" step="0.5" value="' + Number(v) + '" data-bi="' + i + '" data-k="' + pd.k + '">';
+        return '<input type="text" class="wide-p" value="' + escapeHtml(String(v)) + '" data-bi="' + i + '" data-k="' + pd.k + '">';
+      }).join('');
+      return '<div class="block-row">' +
+        '<button class="br-btn up" title="↑">↑</button>' +
+        '<button class="br-btn down" title="↓">↓</button>' +
+        '<span class="br-label">' + escapeHtml(t(def.key)) + '</span>' +
+        params +
+        '<button class="br-btn del" title="✕">✕</button>' +
+        '</div>';
+    }).join('') + (parsed.manual.length ? '<div class="blocks-empty">' + t('ed.blocksCodeEdited') + '</div>' : '');
+
+    $$('.block-row', list).forEach(function (row, i) {
+      const up = row.querySelector('.up');
+      const down = row.querySelector('.down');
+      const del = row.querySelector('.del');
+      if (up) up.addEventListener('click', function () {
+        if (i === 0) return;
+        const arr = parsed.blocks;
+        const tmp = arr[i - 1]; arr[i - 1] = arr[i]; arr[i] = tmp;
+        regenFromBlocks(arr, parsed.manual);
+      });
+      if (down) down.addEventListener('click', function () {
+        const arr = parsed.blocks;
+        if (i >= arr.length - 1) return;
+        const tmp = arr[i + 1]; arr[i + 1] = arr[i]; arr[i] = tmp;
+        regenFromBlocks(arr, parsed.manual);
+      });
+      if (del) del.addEventListener('click', function () {
+        parsed.blocks.splice(i, 1);
+        regenFromBlocks(parsed.blocks, parsed.manual);
+      });
+      $$('input, select', row).forEach(function (inp) {
+        inp.addEventListener('input', function () {
+          const bi = parseInt(inp.getAttribute('data-bi'), 10);
+          const k = inp.getAttribute('data-k');
+          if (!parsed.blocks[bi]) return;
+          parsed.blocks[bi].params[k] = inp.type === 'number' ? parseFloat(inp.value) || 0 : inp.value;
+          setHookCode(generateBlocksCode(parsed.blocks, parsed.manual));
+        });
+        inp.addEventListener('change', function () { renderBlocksUI(); });
+      });
+    });
+  }
+
+  // Aperçu des blocs dans l'onglet Code
+  refreshCodeView();
+}
+
+/* Mode Blocs / Code */
+function setCodeMode(mode) {
+  const bB = $('#codeModeBlocks'), bC = $('#codeModeCode');
+  if (bB) bB.classList.toggle('active', mode === 'blocks');
+  if (bC) bC.classList.toggle('active', mode === 'code');
+  const wrapB = $('#blocksWrap'), wrapC = $('#codeWrap');
+  if (wrapB) wrapB.hidden = mode !== 'blocks';
+  if (wrapC) wrapC.hidden = mode !== 'code';
+  if (mode === 'blocks') renderBlocksUI();
+  else refreshCodeView();
+}
+const mb = $('#codeModeBlocks');
+if (mb) mb.addEventListener('click', function () { setCodeMode('blocks'); });
+const mc = $('#codeModeCode');
+if (mc) mc.addEventListener('click', function () { setCodeMode('code'); });
+
+/* ================= Panneaux redimensionnables ================= */
+function saveLayout() {
+  try {
+    const lp = $('#panelLeft'), rp = $('#panelRight'), bd = $('#bottomDock');
+    localStorage.setItem('kreo-ed-layout', JSON.stringify({
+      left: lp ? lp.style.width : '',
+      right: rp ? rp.style.width : '',
+      bottom: bd ? bd.style.height : ''
+    }));
+  } catch (e) { /* quota */ }
+}
+
+function loadLayout() {
+  try {
+    const raw = localStorage.getItem('kreo-ed-layout');
+    if (!raw) return;
+    const L = JSON.parse(raw);
+    const lp = $('#panelLeft'), rp = $('#panelRight'), bd = $('#bottomDock');
+    if (lp && L.left) lp.style.width = L.left;
+    if (rp && L.right) rp.style.width = L.right;
+    if (bd && L.bottom) bd.style.height = L.bottom;
+  } catch (e) { /* ignore */ }
+}
+
+function initSplitter(el, onMove) {
+  if (!el) return;
+  el.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    el.classList.add('dragging');
+    function mv(ev) { onMove(ev); resize(); }
+    function up() {
+      el.classList.remove('dragging');
+      document.removeEventListener('pointermove', mv);
+      document.removeEventListener('pointerup', up);
+      saveLayout();
+    }
+    document.addEventListener('pointermove', mv);
+    document.addEventListener('pointerup', up);
+  });
+}
+
+initSplitter($('#splitterL'), function (e) {
+  const lp = $('#panelLeft');
+  if (lp) lp.style.width = Math.min(420, Math.max(180, e.clientX - lp.getBoundingClientRect().left)) + 'px';
+});
+initSplitter($('#splitterR'), function (e) {
+  const rp = $('#panelRight');
+  if (rp) rp.style.width = Math.min(430, Math.max(200, window.innerWidth - e.clientX)) + 'px';
+});
+initSplitter($('#splitterB'), function (e) {
+  const bd = $('#bottomDock');
+  if (bd) bd.style.height = Math.min(window.innerHeight * 0.6, Math.max(88, window.innerHeight - e.clientY - 26)) + 'px';
+});
+
+loadLayout();
+
+/* ================= Démarrage des vues V2 ================= */
+renderLib();
+renderTexGrid();
+refreshCodeView();
+
+
+/* ============ Propagation du gizmo à toute la sélection ============ */
+let _lastPrimary = null;
+
+function capturePrimary() {
+  const rec = findRec(state.selectedId);
+  _lastPrimary = rec ? {
+    pos: rec.obj3d.position.clone(),
+    rot: rec.obj3d.rotation.clone(),
+    scl: rec.obj3d.scale.clone()
+  } : null;
+}
+
+function propagateTransform() {
+  const rec = findRec(state.selectedId);
+  if (!rec || state.selectedIds.length < 2 || !_lastPrimary) {
+    capturePrimary();
+    return;
+  }
+  const dp = rec.obj3d.position.clone().sub(_lastPrimary.pos);
+  const drx = rec.obj3d.rotation.x - _lastPrimary.rot.x;
+  const dry = rec.obj3d.rotation.y - _lastPrimary.rot.y;
+  const drz = rec.obj3d.rotation.z - _lastPrimary.rot.z;
+  const dsx = rec.obj3d.scale.x / (_lastPrimary.scl.x || 1);
+  const dsy = rec.obj3d.scale.y / (_lastPrimary.scl.y || 1);
+  const dsz = rec.obj3d.scale.z / (_lastPrimary.scl.z || 1);
+  state.selectedIds.forEach(function (id) {
+    if (id === rec.id) return;
+    const r2 = findRec(id);
+    if (!r2) return;
+    r2.obj3d.position.add(dp);
+    r2.obj3d.rotation.x += drx;
+    r2.obj3d.rotation.y += dry;
+    r2.obj3d.rotation.z += drz;
+    r2.obj3d.scale.x *= dsx;
+    r2.obj3d.scale.y *= dsy;
+    r2.obj3d.scale.z *= dsz;
+    if (selBox) selBox.update();
+  });
+  capturePrimary();
+}
+
+
+/* ============ Recherche dans l'hiérarchie ============ */
+let hierQuery = '';
+const hierSearchEl = $('#hierSearch');
+if (hierSearchEl) {
+  hierSearchEl.addEventListener('input', function () {
+    hierQuery = hierSearchEl.value;
+    renderHierarchy();
+  });
+}
+
+/* ============ Bibliothèque : message si aucun résultat ============ */
+const _renderLibBase = renderLib;
+renderLib = function () {
+  _renderLibBase();
+  const grid = $('#libGrid');
+  if (grid && grid.hidden && libCat !== 'materials' && libCat !== 'textures') {
+    grid.hidden = false;
+    grid.innerHTML = '<div class="tex-empty">' + t('ed.search') + ' · ' + (libQuery || '—') + '</div>';
+  }
+};
+
+/* Démarrage — en toute fin : toutes les const V2 sont initialisées */
+boot();
