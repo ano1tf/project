@@ -61,11 +61,22 @@
     scrollTrigger: { start: 0, end: 'max', scrub: 0.3 }
   });
 
-  /* ---------- Statement: words lit by scroll ---------- */
-  gsap.fromTo('.s-word', { opacity: 0.12 }, {
-    opacity: 1, stagger: 0.12, ease: 'none',
-    scrollTrigger: { trigger: '.statement', start: 'top 78%', end: 'bottom 55%', scrub: 0.5 }
-  });
+  /* ---------- Statement: words lit by scroll (rebindable on lang change) ---------- */
+  let statementTween = null;
+  function setupStatement() {
+    if (statementTween) {
+      if (statementTween.scrollTrigger) statementTween.scrollTrigger.kill();
+      statementTween.kill();
+    }
+    const words = document.querySelectorAll('.s-word');
+    if (!words.length) return;
+    statementTween = gsap.fromTo(words, { opacity: 0.12 }, {
+      opacity: 1, stagger: 0.12, ease: 'none',
+      scrollTrigger: { trigger: '.statement', start: 'top 78%', end: 'bottom 55%', scrub: 0.5 }
+    });
+  }
+  setupStatement();
+  document.addEventListener('kreo:langchange', setupStatement);
 
   /* ---------- Scroll reveals: gentle, slow ---------- */
   gsap.utils.toArray('[data-reveal]').forEach((el) => {

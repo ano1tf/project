@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KREO — Crée ton jeu directement dans ton navigateur</title>
-<meta name="description" content="KREO, l'éditeur de jeux 100% web et entièrement gratuit. Dessine tes niveaux, programme en blocs, publie et partage ton jeu en quelques minutes. Aucune installation.">
+<meta name="description" content="KREO, l'éditeur de jeux 100% web et entièrement gratuit. Dessine tes niveaux, programme par blocs ou en code, publie et partage ton jeu en quelques minutes.">
 <meta property="og:title" content="KREO — Crée ton jeu directement dans ton navigateur">
 <meta property="og:description" content="L'éditeur de jeux 100% web, entièrement gratuit : crée, publie et partage en quelques minutes.">
 <meta property="og:image" content="assets/kreo-logo-web.png">
@@ -14,7 +14,7 @@
 <script>
   (function(){try{var t=localStorage.getItem('kreo-theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 </script>
-<link rel="stylesheet" href="assets/styles.css?v=5">
+<link rel="stylesheet" href="assets/styles.css?v=6">
 </head>
 <body>
 
@@ -26,28 +26,32 @@
     <div class="nav">
       <a class="brand" href="#top"><img src="assets/kreo-logo-web.png" alt="Logo KREO">KREO</a>
       <nav class="nav-links">
-        <a href="#features">Fonctionnalités</a>
-        <a href="#showcase">Jeux</a>
-        <a href="#steps">Comment ça marche</a>
-        <a href="#pricing">Prix</a>
-        <a href="#faq">FAQ</a>
+        <a href="#features" data-i18n="nav.features">Fonctionnalités</a>
+        <a href="#showcase" data-i18n="nav.showcase">Jeux</a>
+        <a href="#steps" data-i18n="nav.steps">Comment ça marche</a>
+        <a href="#pricing" data-i18n="nav.pricing">Prix</a>
+        <a href="#faq" data-i18n="nav.faq">FAQ</a>
       </nav>
       <div class="nav-cta">
+        <button class="lang-toggle" id="langToggle" aria-label="Changer de langue" data-i18n-aria="ui.lang">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
+          <span id="langLabel">FR</span>
+        </button>
         <button class="theme-toggle" id="themeToggle" aria-label="Changer de thème (clair / sombre)">
           <svg class="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>
           <svg class="icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
         </button>
-        <a class="btn btn-fill" href="#start">Commencer</a>
+        <a class="btn btn-fill" href="editor/" data-i18n="nav.start">Commencer</a>
       </div>
       <button class="burger" id="burger" aria-label="Ouvrir le menu"><span></span><span></span><span></span></button>
     </div>
     <div class="mobile-menu" id="mobileMenu">
-      <a href="#features">Fonctionnalités</a>
-      <a href="#showcase">Jeux</a>
-      <a href="#steps">Comment ça marche</a>
-      <a href="#pricing">Prix</a>
-      <a href="#faq">FAQ</a>
-      <a href="#discord">Discord</a>
+      <a href="#features" data-i18n="nav.features">Fonctionnalités</a>
+      <a href="#showcase" data-i18n="nav.showcase">Jeux</a>
+      <a href="#steps" data-i18n="nav.steps">Comment ça marche</a>
+      <a href="#pricing" data-i18n="nav.pricing">Prix</a>
+      <a href="#faq" data-i18n="nav.faq">FAQ</a>
+      <a href="#discord" data-i18n="foot.l1">Discord</a>
     </div>
   </div>
 </header>
@@ -57,27 +61,29 @@
   <!-- ============ HERO ============ -->
   <section class="hero">
     <div class="container">
-      <div class="hero-eyebrow">Bientôt disponible</div>
-      <h1 class="hero-title">
+      <div class="hero-eyebrow" data-i18n="hero.eyebrow">Bientôt disponible</div>
+      <h1 class="hero-title" data-i18n-html="hero.title">
         <span class="line"><span class="word"><i>Crée</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>jeu.</i></span></span>
         <span class="line"><span class="word"><i>Dans</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>navigateur.</i></span></span>
       </h1>
-      <p class="lead">KREO transforme ton navigateur en studio de jeu. Dessine tes niveaux, programme en glissant des blocs, publie en un clic — ton premier jeu est jouable en quelques minutes.</p>
+      <p class="lead" data-i18n="hero.lead">KREO transforme ton navigateur en studio de jeu. Dessine tes niveaux, programme par blocs ou en code, publie en un clic — ton premier jeu est jouable en quelques minutes.</p>
       <div class="hero-cta">
-        <a class="btn btn-fill" href="#start">Commencer à créer</a>
-        <a class="link" href="#discord">Rejoindre le Discord
+        <a class="btn btn-fill" href="editor/" data-i18n="hero.cta1">Commencer à créer</a>
+        <a class="link" href="#discord"><span data-i18n="hero.cta2">Rejoindre le Discord</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </a>
       </div>
-      <div class="hero-proof"><span>Entièrement gratuit</span>·<span>Aucune installation</span>·<span>100% navigateur</span></div>
+      <div class="hero-proof">
+        <span data-i18n="hero.p1">Entièrement gratuit</span>·<span data-i18n="hero.p2">Aucune installation</span>·<span data-i18n="hero.p3">100% navigateur</span>
+      </div>
 
       <!-- Editor mockup -->
       <div class="hero-visual">
         <div class="mockup" id="mockup">
           <div class="mockup-bar">
             <span class="win-dot r"></span><span class="win-dot y"></span><span class="win-dot g"></span>
-            <div class="mockup-tab">space-run.kro — KREO</div>
-            <div class="mockup-pill">En ligne</div>
+            <div class="mockup-tab" data-i18n="mock.tab">space-run.kro — KREO</div>
+            <div class="mockup-pill" data-i18n="mock.online">En ligne</div>
           </div>
           <div class="mockup-body">
             <div class="mock-side left">
@@ -114,13 +120,13 @@
               <div class="platform pl3"><span class="coin c3"></span><span class="flag"></span></div>
             </div>
             <div class="mock-side right">
-              <div class="prop-row"><span>Vie</span><b>3</b></div>
-              <div class="prop-row"><span>Vitesse</span><b>1,2</b></div>
-              <div class="prop-row"><span>Score</span><b>2450</b></div>
-              <div class="prop-row"><span>Niveau</span><b>2-1</b></div>
+              <div class="prop-row"><span data-i18n="mock.vie">Vie</span><b>3</b></div>
+              <div class="prop-row"><span data-i18n="mock.vitesse">Vitesse</span><b>1,2</b></div>
+              <div class="prop-row"><span data-i18n="mock.score">Score</span><b>2450</b></div>
+              <div class="prop-row"><span data-i18n="mock.niveau">Niveau</span><b>2-1</b></div>
               <div class="mock-btn">
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-                Tester
+                <span data-i18n="mock.test">Tester</span>
               </div>
             </div>
           </div>
@@ -134,20 +140,20 @@
     <div class="container">
       <div class="stats-grid" data-reveal-group>
         <div class="stat" data-reveal-item>
-          <div class="stat-num"><span class="count" data-count="100">100</span>%</div>
-          <div class="stat-label">dans ton navigateur</div>
+          <div class="stat-num" data-i18n-html="stats.n1"><span class="count" data-count="100">100</span>%</div>
+          <div class="stat-label" data-i18n="stats.l1">dans ton navigateur</div>
         </div>
         <div class="stat" data-reveal-item>
-          <div class="stat-num"><span class="count" data-count="5">5</span> min</div>
-          <div class="stat-label">pour ton premier jeu</div>
+          <div class="stat-num" data-i18n-html="stats.n2"><span class="count" data-count="5">5</span> min</div>
+          <div class="stat-label" data-i18n="stats.l2">pour ton premier jeu</div>
         </div>
         <div class="stat" data-reveal-item>
-          <div class="stat-num"><span class="count" data-count="1">1</span> clic</div>
-          <div class="stat-label">pour le publier</div>
+          <div class="stat-num" data-i18n-html="stats.n3"><span class="count" data-count="1">1</span> clic</div>
+          <div class="stat-label" data-i18n="stats.l3">pour le publier</div>
         </div>
         <div class="stat" data-reveal-item>
-          <div class="stat-num"><span class="count" data-count="0">0</span> €</div>
-          <div class="stat-label">pour toujours</div>
+          <div class="stat-num" data-i18n-html="stats.n4"><span class="count" data-count="0">0</span> €</div>
+          <div class="stat-label" data-i18n="stats.l4">pour toujours</div>
         </div>
       </div>
     </div>
@@ -157,25 +163,25 @@
   <section id="features" class="bg-alt">
     <div class="container">
       <div class="section-head" data-reveal>
-        <span class="eyebrow">Fonctionnalités</span>
-        <h2>Tout ce qu'il faut.<br>Rien de superflu.</h2>
-        <p class="lead">Un éditeur pensé pour créer vite et bien, du tout premier jeu jusqu'à la publication.</p>
+        <span class="eyebrow" data-i18n="feat.eyebrow">Fonctionnalités</span>
+        <h2 data-i18n-html="feat.title">Tout ce qu'il faut.<br>Rien de superflu.</h2>
+        <p class="lead" data-i18n="feat.lead">Un éditeur pensé pour créer vite et bien, du tout premier jeu jusqu'à la publication.</p>
       </div>
 
       <div class="f-row">
         <div class="f-copy" data-reveal>
-          <h3>Programme sans écrire<br>une seule ligne de code.</h3>
-          <p class="lead">La logique de ton jeu se construit par blocs, en glissant-déposant. Simple pour débuter. Puissant pour aller loin.</p>
-          <a class="link" href="#steps">Découvrir les blocs
+          <h3 data-i18n-html="f1.title">Commence sans code.<br>Va plus loin avec du vrai code.</h3>
+          <p class="lead" data-i18n="f1.lead">La logique de ton jeu se construit par blocs, en glissant-déposant. Et quand tu veux toute la puissance, un vrai éditeur de code JavaScript s'ouvre à toi — sans limite.</p>
+          <a class="link" href="#steps"><span data-i18n="f1.link">Découvrir les blocs</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
           </a>
         </div>
         <div class="f-visual" data-reveal>
           <div class="visual-card">
             <div class="blocks">
-              <div class="block"><span class="b-dot"></span> Quand le joueur appuie sur Espace <small>Événement</small></div>
-              <div class="block"><span class="b-dot c2"></span> Ajouter 100 au score <small>Action</small></div>
-              <div class="block"><span class="b-dot c3"></span> Jouer un son de pièce <small>Action</small></div>
+              <div class="block"><span class="b-dot"></span> <span data-i18n="f1.b1">Quand le joueur appuie sur Espace</span> <small data-i18n="f1.ev">Événement</small></div>
+              <div class="block"><span class="b-dot c2"></span> <span data-i18n="f1.b2">Ajouter 100 au score</span> <small data-i18n="f1.act">Action</small></div>
+              <div class="block"><span class="b-dot c3"></span> <span data-i18n="f1.b3">Jouer un son de pièce</span> <small data-i18n="f1.act">Action</small></div>
             </div>
           </div>
         </div>
@@ -183,9 +189,9 @@
 
       <div class="f-row">
         <div class="f-copy" data-reveal>
-          <h3>Publie. Partage.<br>Joue.</h3>
-          <p class="lead">Ton jeu obtient un lien jouable instantanément — sur mobile, tablette ou ordinateur. Un clic, et tes amis sont dedans.</p>
-          <a class="link" href="#showcase">Voir des exemples
+          <h3 data-i18n-html="f2.title">Publie. Partage.<br>Joue.</h3>
+          <p class="lead" data-i18n="f2.lead">Ton jeu obtient un lien jouable instantanément — sur mobile, tablette ou ordinateur. Un clic, et tes amis sont dedans.</p>
+          <a class="link" href="#showcase"><span data-i18n="f2.link">Voir des exemples</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
           </a>
         </div>
@@ -194,20 +200,20 @@
             <div class="link-field">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" stroke-width="1.8" stroke-linecap="round"><path d="M9.5 14.5a4 4 0 0 0 6 .4l2.5-2.5a4 4 0 0 0-5.7-5.7L11 8"/><path d="M14.5 9.5a4 4 0 0 0-6-.4L6 11.6a4 4 0 0 0 5.7 5.7L13 16"/></svg>
               <span class="lf-url">kreo.games/space-run</span>
-              <span class="lf-copy">Copier</span>
+              <span class="lf-copy" data-i18n="f2.copy">Copier</span>
             </div>
             <div class="mini-row">
               <span class="mini-chip">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
-                Jouable partout
+                <span data-i18n="f2.c1">Jouable partout</span>
               </span>
               <span class="mini-chip">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.8 20a5 5 0 0 1 4.7-4.7"/></svg>
-                Multijoueur
+                <span data-i18n="f2.c2">Multijoueur</span>
               </span>
               <span class="mini-chip">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg>
-                Gratuit
+                <span data-i18n="f2.c3">Gratuit</span>
               </span>
             </div>
           </div>
@@ -216,9 +222,9 @@
 
       <div class="f-row">
         <div class="f-copy" data-reveal>
-          <h3>Des centaines d'assets.<br>Zéro page blanche.</h3>
-          <p class="lead">Sprites, sons, effets et décors prêts à l'emploi — pour démarrer instantanément et te concentrer sur le jeu.</p>
-          <a class="link" href="#showcase">Explorer la bibliothèque
+          <h3 data-i18n-html="f3.title">Des centaines d'assets.<br>Zéro page blanche.</h3>
+          <p class="lead" data-i18n="f3.lead">Sprites, sons, effets et décors prêts à l'emploi — pour démarrer instantanément et te concentrer sur le jeu.</p>
+          <a class="link" href="#showcase"><span data-i18n="f3.link">Explorer la bibliothèque</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
           </a>
         </div>
@@ -230,10 +236,10 @@
               <img src="assets/showcase/nova-strike.jpg" alt="Effets prêts à l'emploi" loading="lazy">
             </div>
             <div class="mini-row">
-              <span class="mini-chip">Sprites</span>
-              <span class="mini-chip">Sons</span>
-              <span class="mini-chip">Effets</span>
-              <span class="mini-chip">Décors</span>
+              <span class="mini-chip" data-i18n="f3.c1">Sprites</span>
+              <span class="mini-chip" data-i18n="f3.c2">Sons</span>
+              <span class="mini-chip" data-i18n="f3.c3">Effets</span>
+              <span class="mini-chip" data-i18n="f3.c4">Décors</span>
             </div>
           </div>
         </div>
@@ -244,8 +250,8 @@
   <!-- ============ STATEMENT ============ -->
   <section class="statement">
     <div class="container">
-      <span class="eyebrow" data-reveal>La promesse</span>
-      <p class="statement-text">
+      <span class="eyebrow" data-reveal data-i18n="st.eyebrow">La promesse</span>
+      <p class="statement-text" data-i18n-html="st.text">
         <span class="s-word">Si</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">l'imaginer,</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">le</span> <span class="s-word">créer.</span>
       </p>
     </div>
@@ -255,66 +261,66 @@
   <section id="showcase" class="showcase">
     <div class="container">
       <div class="section-head" data-reveal>
-        <span class="eyebrow">Galerie</span>
-        <h2>Des jeux qui ont<br>du style.</h2>
-        <p class="lead">Créés avec KREO par des joueurs comme toi.</p>
+        <span class="eyebrow" data-i18n="gal.eyebrow">Galerie</span>
+        <h2 data-i18n-html="gal.title">Des jeux qui ont<br>du style.</h2>
+        <p class="lead" data-i18n="gal.lead">Créés avec KREO par des joueurs comme toi.</p>
       </div>
       <div class="tiles" data-reveal-group>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/sky-runner.jpg" alt="Sky Runner — jeu de plateforme" loading="lazy"></div>
+            <div class="tile-imgwrap"><img src="assets/showcase/sky-runner.jpg" alt="Sky Runner" loading="lazy"></div>
             <div class="tile-play">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              Jouer
+              <span data-i18n="gal.play">Jouer</span>
             </div>
           </div>
           <div class="tile-info">
-            <h3>Sky Runner</h3>
-            <p>Plateforme · par Léo</p>
+            <h3 data-i18n="gal.g1t">Sky Runner</h3>
+            <p data-i18n="gal.g1s">Plateforme · par Léo</p>
           </div>
         </article>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/neon-drift.jpg" alt="Neon Drift — jeu de course" loading="lazy"></div>
+            <div class="tile-imgwrap"><img src="assets/showcase/neon-drift.jpg" alt="Neon Drift" loading="lazy"></div>
             <div class="tile-play">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              Jouer
+              <span data-i18n="gal.play">Jouer</span>
             </div>
           </div>
           <div class="tile-info">
-            <h3>Neon Drift</h3>
-            <p>Course · par Maya</p>
+            <h3 data-i18n="gal.g2t">Neon Drift</h3>
+            <p data-i18n="gal.g2s">Course · par Maya</p>
           </div>
         </article>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/nova-strike.jpg" alt="Nova Strike — shooter spatial" loading="lazy"></div>
+            <div class="tile-imgwrap"><img src="assets/showcase/nova-strike.jpg" alt="Nova Strike" loading="lazy"></div>
             <div class="tile-play">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              Jouer
+              <span data-i18n="gal.play">Jouer</span>
             </div>
           </div>
           <div class="tile-info">
-            <h3>Nova Strike</h3>
-            <p>Arcade · par Samir</p>
+            <h3 data-i18n="gal.g3t">Nova Strike</h3>
+            <p data-i18n="gal.g3s">Arcade · par Samir</p>
           </div>
         </article>
         <article class="tile" data-reveal-item>
           <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux — puzzle" loading="lazy"></div>
+            <div class="tile-imgwrap"><img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux" loading="lazy"></div>
             <div class="tile-play">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              Jouer
+              <span data-i18n="gal.play">Jouer</span>
             </div>
           </div>
           <div class="tile-info">
-            <h3>L'Île aux Cristaux</h3>
-            <p>Réflexion · par Chloé</p>
+            <h3 data-i18n="gal.g4t">L'Île aux Cristaux</h3>
+            <p data-i18n="gal.g4s">Réflexion · par Chloé</p>
           </div>
         </article>
       </div>
       <div class="showcase-foot" data-reveal>
-        <a class="link" href="#start">Crée le tien
+        <a class="link" href="editor/"><span data-i18n="gal.more">Crée le tien</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </a>
       </div>
@@ -325,24 +331,24 @@
   <section id="steps">
     <div class="container">
       <div class="section-head" data-reveal>
-        <span class="eyebrow">Comment ça marche</span>
-        <h2>Trois gestes,<br>et c'est en ligne.</h2>
+        <span class="eyebrow" data-i18n="steps.eyebrow">Comment ça marche</span>
+        <h2 data-i18n-html="steps.title">Trois gestes,<br>et c'est en ligne.</h2>
       </div>
       <div class="steps" data-reveal-group>
         <div class="step" data-reveal-item>
           <div class="step-num">01</div>
-          <h3>Crée</h3>
-          <p>Ouvre l'éditeur dans ton navigateur. Aucune installation, aucune attente.</p>
+          <h3 data-i18n="steps.1t">Crée</h3>
+          <p data-i18n="steps.1d">Ouvre l'éditeur dans ton navigateur. Aucune installation, aucune attente.</p>
         </div>
         <div class="step" data-reveal-item>
           <div class="step-num">02</div>
-          <h3>Construis</h3>
-          <p>Dessine tes niveaux, glisse tes blocs, teste en temps réel.</p>
+          <h3 data-i18n="steps.2t">Construis</h3>
+          <p data-i18n="steps.2d">Dessine tes niveaux, glisse tes blocs ou écris ton code, teste en temps réel.</p>
         </div>
         <div class="step" data-reveal-item>
           <div class="step-num">03</div>
-          <h3>Publie</h3>
-          <p>Partage ton lien et reçois tes premiers joueurs.</p>
+          <h3 data-i18n="steps.3t">Publie</h3>
+          <p data-i18n="steps.3d">Partage ton lien et reçois tes premiers joueurs.</p>
         </div>
       </div>
     </div>
@@ -359,9 +365,9 @@
           <div class="avatar av-4">C</div>
           <div class="avatar av-5">+ toi</div>
         </div>
-        <h2>La communauté KREO.</h2>
-        <p class="lead">Défis créatifs, entraide et avant-premières. C'est là que les créateurs se retrouvent.</p>
-        <a class="btn btn-discord" href="#">Rejoindre le serveur Discord</a>
+        <h2 data-i18n="dis.title">La communauté KREO.</h2>
+        <p class="lead" data-i18n="dis.lead">Défis créatifs, entraide et avant-premières. C'est là que les créateurs se retrouvent.</p>
+        <a class="btn btn-discord" href="#" data-i18n="dis.cta">Rejoindre le serveur Discord</a>
       </div>
     </div>
   </section>
@@ -370,26 +376,26 @@
   <section id="pricing">
     <div class="container">
       <div class="section-head" data-reveal>
-        <span class="eyebrow">Prix</span>
-        <h2>Entièrement gratuit.</h2>
-        <p class="lead">Pas « gratuit pour commencer ». Gratuit, tout simplement — toutes les fonctionnalités, pour toujours.</p>
+        <span class="eyebrow" data-i18n="price.eyebrow">Prix</span>
+        <h2 data-i18n="price.title">Entièrement gratuit.</h2>
+        <p class="lead" data-i18n="price.lead">Pas « gratuit pour commencer ». Gratuit, tout simplement — toutes les fonctionnalités, pour toujours.</p>
       </div>
       <div class="free-wrap" data-reveal>
         <div class="free-card">
-          <div class="plan-name">KREO complet</div>
-          <div class="plan-price">0 €<small> / pour toujours</small></div>
-          <div class="plan-desc">Aucune carte bancaire. Aucune limite cachée.</div>
+          <div class="plan-name" data-i18n="price.name">KREO complet</div>
+          <div class="plan-price">0 €<small data-i18n="price.per"> / pour toujours</small></div>
+          <div class="plan-desc" data-i18n="price.desc">Aucune carte bancaire. Aucune limite cachée.</div>
           <ul class="free-list">
-            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Projets et jeux illimités</li>
-            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Programmation en blocs</li>
-            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Éditeur de niveaux complet</li>
-            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Assets inclus</li>
-            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Publication par lien</li>
-            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Multijoueur</li>
-            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> Accès à la communauté Discord</li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> <span data-i18n="price.i1">Projets et jeux illimités</span></li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> <span data-i18n="price.i2">Blocs visuels et code JavaScript</span></li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> <span data-i18n="price.i3">Éditeur de niveaux complet</span></li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> <span data-i18n="price.i4">Assets inclus</span></li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> <span data-i18n="price.i5">Publication par lien</span></li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> <span data-i18n="price.i6">Multijoueur</span></li>
+            <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg> <span data-i18n="price.i7">Accès à la communauté Discord</span></li>
           </ul>
-          <a class="btn btn-fill" href="#start">Commencer à créer</a>
-          <p class="free-note">KREO est entièrement gratuit, aujourd'hui et demain.</p>
+          <a class="btn btn-fill" href="editor/" data-i18n="price.cta">Commencer à créer</a>
+          <p class="free-note" data-i18n="price.note">KREO est entièrement gratuit, aujourd'hui et demain.</p>
         </div>
       </div>
     </div>
@@ -399,39 +405,39 @@
   <section id="faq" class="bg-alt">
     <div class="container">
       <div class="section-head" data-reveal>
-        <span class="eyebrow">FAQ</span>
-        <h2>Questions fréquentes.</h2>
+        <span class="eyebrow" data-i18n="faq.eyebrow">FAQ</span>
+        <h2 data-i18n="faq.title">Questions fréquentes.</h2>
       </div>
       <div class="faq-list" data-reveal-group>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Faut-il savoir coder ?
+          <button class="faq-q"><span data-i18n="faq.q1">Faut-il savoir coder ?</span>
             <span class="faq-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
           </button>
-          <div class="faq-a"><p>Non. KREO utilise une programmation visuelle en blocs : tu construis la logique de ton jeu en glissant-déposant, sans écrire une seule ligne de code.</p></div>
+          <div class="faq-a"><p data-i18n="faq.a1">Non pour commencer : la logique de ton jeu se construit par blocs, sans une ligne de code. Mais KREO n'est pas un cul-de-sac — quand tu veux aller plus loin, un vrai éditeur de code JavaScript est là pour t'ouvrir toutes les possibilités.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Ça marche sur mobile ?
+          <button class="faq-q"><span data-i18n="faq.q2">Ça marche sur mobile ?</span>
             <span class="faq-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
           </button>
-          <div class="faq-a"><p>Oui. KREO fonctionne directement dans le navigateur, sur ordinateur, tablette et mobile. Rien à installer.</p></div>
+          <div class="faq-a"><p data-i18n="faq.a2">Oui. KREO fonctionne directement dans le navigateur, sur ordinateur, tablette et mobile. Rien à installer.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">C'est vraiment gratuit ?
+          <button class="faq-q"><span data-i18n="faq.q3">C'est vraiment gratuit ?</span>
             <span class="faq-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
           </button>
-          <div class="faq-a"><p>Oui, entièrement. KREO est gratuit dans son intégralité — toutes les fonctionnalités, pour toujours. Aucune carte bancaire, aucune version payante cachée.</p></div>
+          <div class="faq-a"><p data-i18n="faq.a3">Oui, entièrement. KREO est gratuit dans son intégralité — toutes les fonctionnalités, pour toujours. Aucune carte bancaire, aucune version payante cachée.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Mes jeux m'appartiennent-ils ?
+          <button class="faq-q"><span data-i18n="faq.q4">Mes jeux m'appartiennent-ils ?</span>
             <span class="faq-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
           </button>
-          <div class="faq-a"><p>Oui, à 100%. Ce que tu crées avec KREO t'appartient entièrement.</p></div>
+          <div class="faq-a"><p data-i18n="faq.a4">Oui, à 100%. Ce que tu crées avec KREO t'appartient entièrement.</p></div>
         </div>
         <div class="faq-item" data-reveal-item>
-          <button class="faq-q">Comment rejoindre la communauté ?
+          <button class="faq-q"><span data-i18n="faq.q5">Comment rejoindre la communauté ?</span>
             <span class="faq-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
           </button>
-          <div class="faq-a"><p>Un clic sur le bouton Discord et c'est fait. Tu y trouveras de l'aide, des défis créatifs et des joueurs pour tester tes jeux.</p></div>
+          <div class="faq-a"><p data-i18n="faq.a5">Un clic sur le bouton Discord et c'est fait. Tu y trouveras de l'aide, des défis créatifs et des joueurs pour tester tes jeux.</p></div>
         </div>
       </div>
     </div>
@@ -441,15 +447,15 @@
   <section class="final-cta" id="start">
     <div class="container">
       <div class="final-logo" data-reveal><img src="assets/kreo-logo-web.png" alt="KREO"></div>
-      <h2 data-reveal>À toi de jouer.</h2>
-      <p class="lead" data-reveal>Ouvre KREO et crée ton premier jeu — gratuitement, sans rien installer.</p>
+      <h2 data-reveal data-i18n="fin.title">À toi de jouer.</h2>
+      <p class="lead" data-reveal data-i18n="fin.lead">Ouvre KREO et crée ton premier jeu — gratuitement, sans rien installer.</p>
       <div class="hero-cta" data-reveal>
-        <a class="btn btn-fill" href="#">Commencer à créer</a>
-        <a class="link" href="#discord">Rejoindre le Discord
+        <a class="btn btn-fill" href="editor/" data-i18n="fin.cta1">Commencer à créer</a>
+        <a class="link" href="#discord"><span data-i18n="fin.cta2">Rejoindre le Discord</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </a>
       </div>
-      <p class="final-note" data-reveal>Entièrement gratuit · Aucune installation · Bientôt disponible</p>
+      <p class="final-note" data-reveal data-i18n="fin.note">Entièrement gratuit · Aucune installation · Bientôt disponible</p>
     </div>
   </section>
 
@@ -461,36 +467,37 @@
     <div class="footer-grid">
       <div class="footer-brand-col">
         <div class="footer-brand"><img src="assets/kreo-logo-web.png" alt="KREO">KREO</div>
-        <p class="footer-tag">L'éditeur de jeux qui vit dans ton navigateur. Entièrement gratuit.</p>
+        <p class="footer-tag" data-i18n="foot.tag">L'éditeur de jeux qui vit dans ton navigateur. Entièrement gratuit.</p>
       </div>
       <div class="footer-col">
-        <h4>Produit</h4>
-        <a href="#features">Fonctionnalités</a>
-        <a href="#showcase">Jeux</a>
-        <a href="#steps">Comment ça marche</a>
-        <a href="#pricing">Prix</a>
+        <h4 data-i18n="foot.product">Produit</h4>
+        <a href="#features" data-i18n="foot.f1">Fonctionnalités</a>
+        <a href="#showcase" data-i18n="foot.f2">Jeux</a>
+        <a href="#steps" data-i18n="foot.f3">Comment ça marche</a>
+        <a href="#pricing" data-i18n="foot.f4">Prix</a>
       </div>
       <div class="footer-col">
-        <h4>Communauté</h4>
-        <a href="#discord">Discord</a>
-        <a href="#faq">FAQ</a>
+        <h4 data-i18n="foot.community">Communauté</h4>
+        <a href="#discord" data-i18n="foot.l1">Discord</a>
+        <a href="#faq" data-i18n="foot.l2">FAQ</a>
       </div>
       <div class="footer-col">
-        <h4>Légal</h4>
-        <a href="#">Confidentialité</a>
-        <a href="#">Conditions</a>
-        <a href="#">Mentions légales</a>
+        <h4 data-i18n="foot.legal">Légal</h4>
+        <a href="#" data-i18n="foot.legal1">Confidentialité</a>
+        <a href="#" data-i18n="foot.legal2">Conditions</a>
+        <a href="#" data-i18n="foot.legal3">Mentions légales</a>
       </div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-note">© 2026 KREO. Tous droits réservés.</div>
-      <div class="footer-note">Fait avec ❤️ pour les créateurs</div>
+      <div class="footer-note" data-i18n="foot.rights">© 2026 KREO. Tous droits réservés.</div>
+      <div class="footer-note" data-i18n="foot.made">Fait avec ❤️ pour les créateurs</div>
     </div>
   </div>
 </footer>
 
 <script src="assets/vendor/gsap.min.js"></script>
 <script src="assets/vendor/ScrollTrigger.min.js"></script>
-<script src="assets/main.js?v=5"></script>
+<script src="assets/i18n.js"></script>
+<script src="assets/main.js?v=6"></script>
 </body>
 </html>

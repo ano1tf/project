@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Éditeur KREO</title>
+<meta name="description" content="L'éditeur de jeux KREO — crée ton jeu dans le navigateur.">
+<link rel="icon" href="../assets/kreo-logo-web.png">
+<meta name="theme-color" id="themeColor" content="#0C0C11">
+<link rel="stylesheet" href="editor.css?v=1">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ TOPBAR ============ -->
+  <div class="ed-top">
+    <a class="ed-brand" href="../"><img src="../assets/kreo-logo-web.png" alt="KREO">KREO</a>
+    <a class="ed-back" href="../" data-i18n="ed.back">Retour au site</a>
+    <input id="projectName" type="text" value="Mon jeu" data-i18n-attr-placeholder="ed.projectName" placeholder="Mon jeu">
+    <div class="ed-spacer"></div>
+    <button class="btn btn-primary" id="btnPlay">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
+      <span id="playLabel" data-i18n="ed.play">Jouer</span>
+    </button>
+    <button class="btn" id="btnSave"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span data-i18n="ed.save">Sauver</span></button>
+    <button class="btn" id="btnLoad"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg><span data-i18n="ed.load">Charger</span></button>
+    <button class="btn" id="btnExport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg><span data-i18n="ed.export">Exporter</span></button>
+    <button class="btn" id="btnImport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/></svg><span data-i18n="ed.import">Importer</span></button>
+    <input type="file" id="fileInput" accept=".json,application/json" hidden>
+    <button class="lang-toggle" id="langToggle" aria-label="Changer de langue">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
+      <span id="langLabel">FR</span>
+    </button>
+  </div>
+
+  <div class="ed-mobile" data-i18n="ed.mobile">L'éditeur est plus confortable sur grand écran.</div>
+
+  <!-- ============ MAIN ============ -->
+  <div class="ed-main">
+
+    <!-- Left: add objects + scene tree -->
+    <aside class="ed-left">
+      <div class="ed-h" data-i18n="ed.add">Ajouter un objet</div>
+      <div class="add-grid">
+        <button class="add-btn" data-type="rect"><span class="add-dot" style="background:#7F7CFF"></span><span data-i18n="ed.trect">Rectangle</span></button>
+        <button class="add-btn" data-type="circle"><span class="add-dot" style="background:#22D3EE;border-radius:50%"></span><span data-i18n="ed.tcircle">Cercle</span></button>
+        <button class="add-btn" data-type="platform"><span class="add-dot" style="background:#8B5CF6"></span><span data-i18n="ed.tplatform">Plateforme</span></button>
+        <button class="add-btn" data-type="player"><span class="add-dot" style="background:#3B82F6"></span><span data-i18n="ed.tplayer">Joueur</span></button>
+        <button class="add-btn" data-type="coin"><span class="add-dot" style="background:#F59E0B;border-radius:50%"></span><span data-i18n="ed.tcoin">Pièce</span></button>
+        <button class="add-btn" data-type="enemy"><span class="add-dot" style="background:#EF4444;border-radius:50%"></span><span data-i18n="ed.tenemy">Ennemi</span></button>
+        <button class="add-btn" data-type="flag"><span class="add-dot" style="background:#4ADE80"></span><span data-i18n="ed.tflag">Drapeau</span></button>
+      </div>
+      <div class="ed-h" data-i18n="ed.scene">Scène</div>
+      <ul id="sceneTree"></ul>
+    </aside>
+
+    <!-- Center: viewport -->
+    <div class="ed-viewport">
+      <canvas id="viewport"></canvas>
+      <div class="ed-hud">
+        <div class="hud-chip"><span data-i18n="ed.score">Score</span> : <span id="hudScore">0</span></div>
+      </div>
+      <div class="ed-hint" data-i18n="ed.hint">Clique pour sélectionner · Glisse pour déplacer · Suppr pour supprimer</div>
+      <div class="overlay" id="overlay">
+        <h2 id="overlayTitle"></h2>
+        <p id="overlayText"></p>
+        <button class="btn btn-primary" id="btnRetry"><span data-i18n="ed.retry">Rejouer</span></button>
+      </div>
+    </div>
+
+    <!-- Right: inspector -->
+    <aside class="ed-right">
+      <div class="ed-h" data-i18n="ed.inspector">Inspecteur</div>
+      <div id="inspector">
+        <div class="insp-empty" id="inspEmpty" data-i18n="ed.empty">Sélectionne un objet pour modifier ses propriétés.</div>
+        <div id="inspForm" style="display:none">
+          <div class="field">
+            <label data-i18n="ed.name">Nom</label>
+            <input type="text" id="pName">
+          </div>
+          <div class="field">
+            <label data-i18n="ed.pos">Position</label>
+            <div class="field-row">
+              <input type="number" id="pX" step="1"><input type="number" id="pY" step="1">
+            </div>
+          </div>
+          <div class="field">
+            <label data-i18n="ed.size">Taille</label>
+            <div class="field-row">
+              <input type="number" id="pW" step="1" min="16"><input type="number" id="pH" step="1" min="16">
+            </div>
+          </div>
+          <div class="field">
+            <label data-i18n="ed.rot">Rotation</label>
+            <input type="number" id="pRot" step="5">
+          </div>
+          <div class="field">
+            <label data-i18n="ed.color">Couleur</label>
+            <input type="color" id="pColor">
+          </div>
+          <div class="field">
+            <label data-i18n="ed.behavior">Comportement</label>
+            <select id="pBehavior">
+              <option value="none" data-i18n="ed.bnone">Aucun</option>
+              <option value="player" data-i18n="ed.bplayer">Joueur</option>
+              <option value="enemy" data-i18n="ed.benemy">Ennemi (patrouille)</option>
+              <option value="coin" data-i18n="ed.bcoin">Pièce (à collecter)</option>
+              <option value="flag" data-i18n="ed.bflag">Arrivée (drapeau)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label data-i18n="ed.speed">Vitesse</label>
+            <input type="number" id="pSpeed" step="0.5" min="0.5" max="6">
+          </div>
+          <div class="field check">
+            <input type="checkbox" id="pSolid"><label for="pSolid" data-i18n="ed.solid">Solide (bloque les autres)</label>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ============ BOTTOM: code / help ============ -->
+  <div class="ed-bottom">
+    <div class="ed-tabs">
+      <button class="ed-tab active" data-panel="codePanel" data-i18n="ed.codeTab">Code du jeu</button>
+      <button class="ed-tab" data-panel="helpPanel" data-i18n="ed.helpTab">Aide</button>
+    </div>
+    <div class="ed-panel active" id="codePanel">
+      <div class="code-intro" data-i18n="ed.codeIntro">JavaScript — s'exécute pendant le jeu. Les erreurs s'affichent ici.</div>
+      <textarea id="codeBox" spellcheck="false"></textarea>
+      <div id="codeError"></div>
+    </div>
+    <div class="ed-panel" id="helpPanel">
+      <div id="helpText" data-i18n="ed.helpText">• Clique un objet pour le sélectionner, glisse pour le déplacer, tire le coin pour le redimensionner.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../assets/i18n.js"></script>
+<script src="editor.js?v=1"></script>
+</body>
+</html>

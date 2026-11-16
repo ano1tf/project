@@ -1,0 +1,454 @@
+/* ============ KREO — i18n (FR / EN) ============ */
+window.KREO_I18N = {
+  fr: {
+    'meta.title': 'KREO — Crée ton jeu directement dans ton navigateur',
+    'meta.desc': "KREO, l'éditeur de jeux 100% web et entièrement gratuit. Dessine tes niveaux, programme par blocs ou en code, publie et partage ton jeu en quelques minutes.",
+    'nav.features': 'Fonctionnalités',
+    'nav.showcase': 'Jeux',
+    'nav.steps': 'Comment ça marche',
+    'nav.pricing': 'Prix',
+    'nav.faq': 'FAQ',
+    'nav.start': 'Commencer',
+    'ui.theme': 'Changer de thème (clair / sombre)',
+    'ui.lang': 'Changer de langue',
+    'ui.menu': 'Ouvrir le menu',
+
+    'hero.eyebrow': 'Bientôt disponible',
+    'hero.title': '<span class="line"><span class="word"><i>Crée</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>jeu.</i></span></span><span class="line"><span class="word"><i>Dans</i></span> <span class="word"><i>ton</i></span> <span class="word"><i>navigateur.</i></span></span>',
+    'hero.lead': 'KREO transforme ton navigateur en studio de jeu. Dessine tes niveaux, programme par blocs ou en code, publie en un clic — ton premier jeu est jouable en quelques minutes.',
+    'hero.cta1': 'Commencer à créer',
+    'hero.cta2': 'Rejoindre le Discord',
+    'hero.p1': 'Entièrement gratuit',
+    'hero.p2': 'Aucune installation',
+    'hero.p3': '100% navigateur',
+
+    'mock.tab': 'space-run.kro — KREO',
+    'mock.online': 'En ligne',
+    'mock.vie': 'Vie',
+    'mock.vitesse': 'Vitesse',
+    'mock.score': 'Score',
+    'mock.niveau': 'Niveau',
+    'mock.test': 'Tester',
+
+    'stats.n1': '<span class="count" data-count="100">100</span>%',
+    'stats.n2': '<span class="count" data-count="5">5</span> min',
+    'stats.n3': '<span class="count" data-count="1">1</span> clic',
+    'stats.n4': '<span class="count" data-count="0">0</span> €',
+    'stats.l1': 'dans ton navigateur',
+    'stats.l2': 'pour ton premier jeu',
+    'stats.l3': 'pour le publier',
+    'stats.l4': 'pour toujours',
+
+    'feat.eyebrow': 'Fonctionnalités',
+    'feat.title': 'Tout ce qu\'il faut.<br>Rien de superflu.',
+    'feat.lead': 'Un éditeur pensé pour créer vite et bien, du tout premier jeu jusqu\'à la publication.',
+
+    'f1.title': 'Commence sans code.<br>Va plus loin avec du vrai code.',
+    'f1.lead': 'La logique de ton jeu se construit par blocs, en glissant-déposant. Et quand tu veux toute la puissance, un vrai éditeur de code JavaScript s\'ouvre à toi — sans limite.',
+    'f1.link': 'Découvrir les blocs',
+    'f1.b1': 'Quand le joueur appuie sur Espace',
+    'f1.b2': 'Ajouter 100 au score',
+    'f1.b3': 'Jouer un son de pièce',
+    'f1.ev': 'Événement',
+    'f1.act': 'Action',
+
+    'f2.title': 'Publie. Partage.<br>Joue.',
+    'f2.lead': 'Ton jeu obtient un lien jouable instantanément — sur mobile, tablette ou ordinateur. Un clic, et tes amis sont dedans.',
+    'f2.link': 'Voir des exemples',
+    'f2.copy': 'Copier',
+    'f2.c1': 'Jouable partout',
+    'f2.c2': 'Multijoueur',
+    'f2.c3': 'Gratuit',
+
+    'f3.title': 'Des centaines d\'assets.<br>Zéro page blanche.',
+    'f3.lead': 'Sprites, sons, effets et décors prêts à l\'emploi — pour démarrer instantanément et te concentrer sur le jeu.',
+    'f3.link': 'Explorer la bibliothèque',
+    'f3.c1': 'Sprites',
+    'f3.c2': 'Sons',
+    'f3.c3': 'Effets',
+    'f3.c4': 'Décors',
+
+    'st.eyebrow': 'La promesse',
+    'st.text': '<span class="s-word">Si</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">l\'imaginer,</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">le</span> <span class="s-word">créer.</span>',
+
+    'gal.eyebrow': 'Galerie',
+    'gal.title': 'Des jeux qui ont<br>du style.',
+    'gal.lead': 'Créés avec KREO par des joueurs comme toi.',
+    'gal.play': 'Jouer',
+    'gal.more': 'Crée le tien',
+    'gal.g1t': 'Sky Runner',
+    'gal.g1s': 'Plateforme · par Léo',
+    'gal.g2t': 'Neon Drift',
+    'gal.g2s': 'Course · par Maya',
+    'gal.g3t': 'Nova Strike',
+    'gal.g3s': 'Arcade · par Samir',
+    'gal.g4t': "L'Île aux Cristaux",
+    'gal.g4s': 'Réflexion · par Chloé',
+
+    'steps.eyebrow': 'Comment ça marche',
+    'steps.title': 'Trois gestes,<br>et c\'est en ligne.',
+    'steps.1t': 'Crée',
+    'steps.1d': 'Ouvre l\'éditeur dans ton navigateur. Aucune installation, aucune attente.',
+    'steps.2t': 'Construis',
+    'steps.2d': 'Dessine tes niveaux, glisse tes blocs ou écris ton code, teste en temps réel.',
+    'steps.3t': 'Publie',
+    'steps.3d': 'Partage ton lien et reçois tes premiers joueurs.',
+
+    'dis.title': 'La communauté KREO.',
+    'dis.lead': 'Défis créatifs, entraide et avant-premières. C\'est là que les créateurs se retrouvent.',
+    'dis.cta': 'Rejoindre le serveur Discord',
+
+    'price.eyebrow': 'Prix',
+    'price.title': 'Entièrement gratuit.',
+    'price.lead': 'Pas « gratuit pour commencer ». Gratuit, tout simplement — toutes les fonctionnalités, pour toujours.',
+    'price.name': 'KREO complet',
+    'price.per': ' / pour toujours',
+    'price.desc': 'Aucune carte bancaire. Aucune limite cachée.',
+    'price.i1': 'Projets et jeux illimités',
+    'price.i2': 'Blocs visuels et code JavaScript',
+    'price.i3': 'Éditeur de niveaux complet',
+    'price.i4': 'Assets inclus',
+    'price.i5': 'Publication par lien',
+    'price.i6': 'Multijoueur',
+    'price.i7': 'Accès à la communauté Discord',
+    'price.cta': 'Commencer à créer',
+    'price.note': 'KREO est entièrement gratuit, aujourd\'hui et demain.',
+
+    'faq.eyebrow': 'FAQ',
+    'faq.title': 'Questions fréquentes.',
+    'faq.q1': 'Faut-il savoir coder ?',
+    'faq.a1': 'Non pour commencer : la logique de ton jeu se construit par blocs, sans une ligne de code. Mais KREO n\'est pas un cul-de-sac — quand tu veux aller plus loin, un vrai éditeur de code JavaScript est là pour t\'ouvrir toutes les possibilités.',
+    'faq.q2': 'Ça marche sur mobile ?',
+    'faq.a2': 'Oui. KREO fonctionne directement dans le navigateur, sur ordinateur, tablette et mobile. Rien à installer.',
+    'faq.q3': 'C\'est vraiment gratuit ?',
+    'faq.a3': 'Oui, entièrement. KREO est gratuit dans son intégralité — toutes les fonctionnalités, pour toujours. Aucune carte bancaire, aucune version payante cachée.',
+    'faq.q4': 'Mes jeux m\'appartiennent-ils ?',
+    'faq.a4': 'Oui, à 100%. Ce que tu crées avec KREO t\'appartient entièrement.',
+    'faq.q5': 'Comment rejoindre la communauté ?',
+    'faq.a5': 'Un clic sur le bouton Discord et c\'est fait. Tu y trouveras de l\'aide, des défis créatifs et des joueurs pour tester tes jeux.',
+
+    'fin.title': 'À toi de jouer.',
+    'fin.lead': 'Ouvre KREO et crée ton premier jeu — gratuitement, sans rien installer.',
+    'fin.cta1': 'Commencer à créer',
+    'fin.cta2': 'Rejoindre le Discord',
+    'fin.note': 'Entièrement gratuit · Aucune installation · Bientôt disponible',
+
+    'foot.tag': "L'éditeur de jeux qui vit dans ton navigateur. Entièrement gratuit.",
+    'foot.product': 'Produit',
+    'foot.community': 'Communauté',
+    'foot.legal': 'Légal',
+    'foot.f1': 'Fonctionnalités',
+    'foot.f2': 'Jeux',
+    'foot.f3': 'Comment ça marche',
+    'foot.f4': 'Prix',
+    'foot.l1': 'Discord',
+    'foot.l2': 'FAQ',
+    'foot.legal1': 'Confidentialité',
+    'foot.legal2': 'Conditions',
+    'foot.legal3': 'Mentions légales',
+    'foot.rights': '© 2026 KREO. Tous droits réservés.',
+    'foot.made': 'Fait avec ❤️ pour les créateurs',
+
+    /* ---------- Éditeur ---------- */
+    'ed.title': 'Éditeur KREO',
+    'ed.back': 'Retour au site',
+    'ed.play': 'Jouer',
+    'ed.stop': 'Arrêter',
+    'ed.save': 'Sauver',
+    'ed.load': 'Charger',
+    'ed.export': 'Exporter',
+    'ed.import': 'Importer',
+    'ed.projectName': 'Mon jeu',
+    'ed.add': 'Ajouter un objet',
+    'ed.scene': 'Scène',
+    'ed.inspector': 'Inspecteur',
+    'ed.empty': 'Sélectionne un objet pour modifier ses propriétés.',
+    'ed.name': 'Nom',
+    'ed.pos': 'Position',
+    'ed.size': 'Taille',
+    'ed.rot': 'Rotation',
+    'ed.color': 'Couleur',
+    'ed.behavior': 'Comportement',
+    'ed.speed': 'Vitesse',
+    'ed.solid': 'Solide (bloque les autres)',
+    'ed.bnone': 'Aucun',
+    'ed.bplayer': 'Joueur',
+    'ed.benemy': 'Ennemi (patrouille)',
+    'ed.bcoin': 'Pièce (à collecter)',
+    'ed.bflag': 'Arrivée (drapeau)',
+    'ed.trect': 'Rectangle',
+    'ed.tcircle': 'Cercle',
+    'ed.tplatform': 'Plateforme',
+    'ed.tplayer': 'Joueur',
+    'ed.tcoin': 'Pièce',
+    'ed.tenemy': 'Ennemi',
+    'ed.tflag': 'Drapeau',
+    'ed.codeTab': 'Code du jeu',
+    'ed.helpTab': 'Aide',
+    'ed.codeIntro': 'JavaScript — s\'exécute pendant le jeu. Les erreurs s\'affichent ici.',
+    'ed.codeTemplate': '// Ton code de jeu (JavaScript)\nfunction onStart(scene) {\n  // appelé une fois au démarrage\n}\n\nfunction onUpdate(scene, dt) {\n  // appelé à chaque image — dt en secondes\n}\n\nfunction onCollide(a, b) {\n  // appelé quand deux objets se touchent\n}',
+    'ed.helpText': '• Clique un objet pour le sélectionner, glisse pour le déplacer, tire le coin pour le redimensionner.\n• Suppr : supprimer · Flèches : déplacer · Alt : ignorer la grille.\n• Comportements : Joueur (contrôlé au clavier), Ennemi (patrouille), Pièce (score), Arrivée (gagné).\n• Le code JavaScript permet tout le reste : scene.get("nom"), scene.message("txt"), scene.win(), scene.score.',
+    'ed.score': 'Score',
+    'ed.win': 'Gagné !',
+    'ed.lose': 'Touché ! Réessaie.',
+    'ed.retry': 'Rejouer',
+    'ed.hint': 'Clique pour sélectionner · Glisse pour déplacer · Suppr pour supprimer',
+    'ed.mobile': "L'éditeur est plus confortable sur grand écran.",
+    'ed.saved': 'Projet sauvegardé ✓',
+    'ed.loaded': 'Projet chargé ✓',
+    'ed.error': 'Erreur de code'
+  },
+
+  en: {
+    'meta.title': 'KREO — Create your game right in your browser',
+    'meta.desc': 'KREO, the 100% web game editor, entirely free. Draw your levels, code with blocks or real code, publish and share your game in minutes.',
+    'nav.features': 'Features',
+    'nav.showcase': 'Games',
+    'nav.steps': 'How it works',
+    'nav.pricing': 'Pricing',
+    'nav.faq': 'FAQ',
+    'nav.start': 'Get started',
+    'ui.theme': 'Toggle theme (light / dark)',
+    'ui.lang': 'Change language',
+    'ui.menu': 'Open menu',
+
+    'hero.eyebrow': 'Coming soon',
+    'hero.title': '<span class="line"><span class="word"><i>Create</i></span> <span class="word"><i>your</i></span> <span class="word"><i>game.</i></span></span><span class="line"><span class="word"><i>In</i></span> <span class="word"><i>your</i></span> <span class="word"><i>browser.</i></span></span>',
+    'hero.lead': 'KREO turns your browser into a game studio. Draw your levels, code with blocks or real code, publish in one click — your first game is playable in minutes.',
+    'hero.cta1': 'Start creating',
+    'hero.cta2': 'Join the Discord',
+    'hero.p1': 'Entirely free',
+    'hero.p2': 'No install',
+    'hero.p3': '100% browser',
+
+    'mock.tab': 'space-run.kro — KREO',
+    'mock.online': 'Online',
+    'mock.vie': 'Lives',
+    'mock.vitesse': 'Speed',
+    'mock.score': 'Score',
+    'mock.niveau': 'Level',
+    'mock.test': 'Test',
+
+    'stats.n1': '<span class="count" data-count="100">100</span>%',
+    'stats.n2': '<span class="count" data-count="5">5</span> min',
+    'stats.n3': '<span class="count" data-count="1">1</span> click',
+    'stats.n4': '<span class="count" data-count="0">0</span> $',
+    'stats.l1': 'in your browser',
+    'stats.l2': 'to your first game',
+    'stats.l3': 'to publish it',
+    'stats.l4': 'forever',
+
+    'feat.eyebrow': 'Features',
+    'feat.title': 'Everything you need.<br>Nothing you don\'t.',
+    'feat.lead': 'An editor made to create fast and well, from your very first game to publishing.',
+
+    'f1.title': 'Start with no code.<br>Go further with real code.',
+    'f1.lead': 'Your game logic is built with blocks, drag and drop. And when you want full power, a real JavaScript code editor opens up to you — no limits.',
+    'f1.link': 'Discover the blocks',
+    'f1.b1': 'When the player presses Space',
+    'f1.b2': 'Add 100 to score',
+    'f1.b3': 'Play a coin sound',
+    'f1.ev': 'Event',
+    'f1.act': 'Action',
+
+    'f2.title': 'Publish. Share.<br>Play.',
+    'f2.lead': 'Your game gets an instantly playable link — on mobile, tablet or computer. One click, and your friends are in.',
+    'f2.link': 'See examples',
+    'f2.copy': 'Copy',
+    'f2.c1': 'Playable anywhere',
+    'f2.c2': 'Multiplayer',
+    'f2.c3': 'Free',
+
+    'f3.title': 'Hundreds of assets.<br>Zero blank page.',
+    'f3.lead': 'Sprites, sounds, effects and backgrounds ready to go — start instantly and focus on the game.',
+    'f3.link': 'Browse the library',
+    'f3.c1': 'Sprites',
+    'f3.c2': 'Sounds',
+    'f3.c3': 'Effects',
+    'f3.c4': 'Backgrounds',
+
+    'st.eyebrow': 'The promise',
+    'st.text': '<span class="s-word">If</span> <span class="s-word">you</span> <span class="s-word">can</span> <span class="s-word">imagine</span> <span class="s-word">it,</span> <span class="s-word">you</span> <span class="s-word">can</span> <span class="s-word">build</span> <span class="s-word">it.</span>',
+
+    'gal.eyebrow': 'Gallery',
+    'gal.title': 'Games with<br>real style.',
+    'gal.lead': 'Made with KREO by players like you.',
+    'gal.play': 'Play',
+    'gal.more': 'Create yours',
+    'gal.g1t': 'Sky Runner',
+    'gal.g1s': 'Platformer · by Léo',
+    'gal.g2t': 'Neon Drift',
+    'gal.g2s': 'Racing · by Maya',
+    'gal.g3t': 'Nova Strike',
+    'gal.g3s': 'Arcade · by Samir',
+    'gal.g4t': 'Crystal Island',
+    'gal.g4s': 'Puzzle · by Chloé',
+
+    'steps.eyebrow': 'How it works',
+    'steps.title': 'Three steps,<br>and it\'s live.',
+    'steps.1t': 'Create',
+    'steps.1d': 'Open the editor in your browser. No install, no waiting.',
+    'steps.2t': 'Build',
+    'steps.2d': 'Draw your levels, drag your blocks or write your code, test in real time.',
+    'steps.3t': 'Publish',
+    'steps.3d': 'Share your link and get your first players.',
+
+    'dis.title': 'The KREO community.',
+    'dis.lead': 'Creative challenges, mutual help and early previews. This is where creators meet.',
+    'dis.cta': 'Join the Discord server',
+
+    'price.eyebrow': 'Pricing',
+    'price.title': 'Entirely free.',
+    'price.lead': 'Not "free to start". Simply free — every feature, forever.',
+    'price.name': 'Full KREO',
+    'price.per': ' / forever',
+    'price.desc': 'No credit card. No hidden limits.',
+    'price.i1': 'Unlimited projects and games',
+    'price.i2': 'Visual blocks and JavaScript code',
+    'price.i3': 'Full level editor',
+    'price.i4': 'Assets included',
+    'price.i5': 'Publish with a link',
+    'price.i6': 'Multiplayer',
+    'price.i7': 'Access to the Discord community',
+    'price.cta': 'Start creating',
+    'price.note': 'KREO is entirely free, today and tomorrow.',
+
+    'faq.eyebrow': 'FAQ',
+    'faq.title': 'Frequently asked questions.',
+    'faq.q1': 'Do I need to know how to code?',
+    'faq.a1': 'Not to start: your game logic is built with blocks, without a single line of code. But KREO is not a dead end — when you want to go further, a real JavaScript code editor opens up every possibility.',
+    'faq.q2': 'Does it work on mobile?',
+    'faq.a2': 'Yes. KREO runs right in the browser, on computer, tablet and mobile. Nothing to install.',
+    'faq.q3': 'Is it really free?',
+    'faq.a3': 'Yes, entirely. KREO is completely free — every feature, forever. No credit card, no hidden paid version.',
+    'faq.q4': 'Do I own my games?',
+    'faq.a4': 'Yes, 100%. What you create with KREO is entirely yours.',
+    'faq.q5': 'How do I join the community?',
+    'faq.a5': 'One click on the Discord button and you\'re in. You\'ll find help, creative challenges and players to test your games.',
+
+    'fin.title': 'Your turn to play.',
+    'fin.lead': 'Open KREO and create your first game — free, with nothing to install.',
+    'fin.cta1': 'Start creating',
+    'fin.cta2': 'Join the Discord',
+    'fin.note': 'Entirely free · No install · Coming soon',
+
+    'foot.tag': 'The game editor that lives in your browser. Entirely free.',
+    'foot.product': 'Product',
+    'foot.community': 'Community',
+    'foot.legal': 'Legal',
+    'foot.f1': 'Features',
+    'foot.f2': 'Games',
+    'foot.f3': 'How it works',
+    'foot.f4': 'Pricing',
+    'foot.l1': 'Discord',
+    'foot.l2': 'FAQ',
+    'foot.legal1': 'Privacy',
+    'foot.legal2': 'Terms',
+    'foot.legal3': 'Legal notice',
+    'foot.rights': '© 2026 KREO. All rights reserved.',
+    'foot.made': 'Made with ❤️ for creators',
+
+    /* ---------- Editor ---------- */
+    'ed.title': 'KREO Editor',
+    'ed.back': 'Back to site',
+    'ed.play': 'Play',
+    'ed.stop': 'Stop',
+    'ed.save': 'Save',
+    'ed.load': 'Load',
+    'ed.export': 'Export',
+    'ed.import': 'Import',
+    'ed.projectName': 'My game',
+    'ed.add': 'Add an object',
+    'ed.scene': 'Scene',
+    'ed.inspector': 'Inspector',
+    'ed.empty': 'Select an object to edit its properties.',
+    'ed.name': 'Name',
+    'ed.pos': 'Position',
+    'ed.size': 'Size',
+    'ed.rot': 'Rotation',
+    'ed.color': 'Color',
+    'ed.behavior': 'Behavior',
+    'ed.speed': 'Speed',
+    'ed.solid': 'Solid (blocks others)',
+    'ed.bnone': 'None',
+    'ed.bplayer': 'Player',
+    'ed.benemy': 'Enemy (patrol)',
+    'ed.bcoin': 'Coin (collectible)',
+    'ed.bflag': 'Goal (flag)',
+    'ed.trect': 'Rectangle',
+    'ed.tcircle': 'Circle',
+    'ed.tplatform': 'Platform',
+    'ed.tplayer': 'Player',
+    'ed.tcoin': 'Coin',
+    'ed.tenemy': 'Enemy',
+    'ed.tflag': 'Flag',
+    'ed.codeTab': 'Game code',
+    'ed.helpTab': 'Help',
+    'ed.codeIntro': 'JavaScript — runs during the game. Errors show up here.',
+    'ed.codeTemplate': '// Your game code (JavaScript)\nfunction onStart(scene) {\n  // called once at start\n}\n\nfunction onUpdate(scene, dt) {\n  // called every frame — dt in seconds\n}\n\nfunction onCollide(a, b) {\n  // called when two objects touch\n}',
+    'ed.helpText': '• Click an object to select it, drag to move, drag the corner to resize.\n• Del: delete · Arrows: move · Alt: ignore grid.\n• Behaviors: Player (keyboard), Enemy (patrol), Coin (score), Goal (win).\n• JavaScript code does the rest: scene.get("name"), scene.message("txt"), scene.win(), scene.score.',
+    'ed.score': 'Score',
+    'ed.win': 'You win!',
+    'ed.lose': 'Hit! Try again.',
+    'ed.retry': 'Play again',
+    'ed.hint': 'Click to select · Drag to move · Del to delete',
+    'ed.mobile': 'The editor is more comfortable on a large screen.',
+    'ed.saved': 'Project saved ✓',
+    'ed.loaded': 'Project loaded ✓',
+    'ed.error': 'Code error'
+  }
+};
+
+(function () {
+  'use strict';
+  var dict = window.KREO_I18N;
+
+  function current() {
+    return document.documentElement.getAttribute('data-lang') === 'en' ? 'en' : 'fr';
+  }
+  window.kreoCurrentLang = current;
+
+  window.kreoT = function (key) {
+    var lang = current();
+    return (dict[lang] && dict[lang][key]) || dict.fr[key] || key;
+  };
+
+  window.kreoApplyLang = function (lang) {
+    if (!dict[lang]) lang = 'fr';
+    document.documentElement.setAttribute('lang', lang);
+    document.documentElement.setAttribute('data-lang', lang);
+
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var v = dict[lang][el.getAttribute('data-i18n')];
+      if (v != null) el.textContent = v;
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(function (el) {
+      var v = dict[lang][el.getAttribute('data-i18n-html')];
+      if (v != null) el.innerHTML = v;
+    });
+
+    var t = dict[lang];
+    if (t['meta.title']) document.title = t['meta.title'];
+    var metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc && t['meta.desc']) metaDesc.setAttribute('content', t['meta.desc']);
+
+    var label = document.getElementById('langLabel');
+    if (label) label.textContent = lang.toUpperCase();
+
+    try { localStorage.setItem('kreo-lang', lang); } catch (e) {}
+    document.dispatchEvent(new CustomEvent('kreo:langchange', { detail: lang }));
+  };
+
+  // Apply immediately (script sits at end of body → DOM is ready)
+  var stored = null;
+  try { stored = localStorage.getItem('kreo-lang'); } catch (e) {}
+  var initial = stored || ((navigator.language || '').toLowerCase().indexOf('fr') === 0 ? 'fr' : 'en');
+  window.kreoApplyLang(initial);
+
+  var toggle = document.getElementById('langToggle');
+  if (toggle) {
+    toggle.addEventListener('click', function () {
+      window.kreoApplyLang(current() === 'fr' ? 'en' : 'fr');
+    });
+  }
+})();
