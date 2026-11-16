@@ -15,6 +15,31 @@ export class CarSlot {
     this.body = new THREE.Group();        // sous-transform = animations (roulis, tangage)
     this.group.add(this.body);
 
+    // Ombre de contact : ancre la voiture au sol
+    {
+      const sc = document.createElement('canvas');
+      sc.width = sc.height = 128;
+      const sg = sc.getContext('2d');
+      const grad = sg.createRadialGradient(64, 64, 6, 64, 64, 62);
+      grad.addColorStop(0, 'rgba(8,10,14,0.45)');
+      grad.addColorStop(0.55, 'rgba(8,10,14,0.22)');
+      grad.addColorStop(1, 'rgba(8,10,14,0)');
+      sg.fillStyle = grad;
+      sg.fillRect(0, 0, 128, 128);
+      const sh = new THREE.Mesh(
+        new THREE.PlaneGeometry(5.6, 3.1),
+        new THREE.MeshBasicMaterial({
+          map: new THREE.CanvasTexture(sc),
+          transparent: true,
+          depthWrite: false
+        })
+      );
+      sh.rotation.x = -Math.PI / 2;
+      sh.position.y = 0.018;
+      sh.renderOrder = 2;
+      this.group.add(sh);
+    }
+
     const paint = new THREE.MeshPhysicalMaterial({
       color,
       metalness: 0.72,
@@ -148,7 +173,7 @@ export class CarSlot {
     for (const w of this.wheels) {
       w.spin += spinDelta;
       w.group.rotation.x = w.spin;
-      if (w.front) w.group.rotation.y = steer * 0.5;
+      if (w.front) w.group.rotation.y = -steer * 0.5;
     }
 
     // Roulis en virage + glisse

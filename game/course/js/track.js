@@ -126,7 +126,8 @@ export class TrackSlot {
       const ahead = positions[(i + 14) % (N + 1)];
       const behind = positions[(i - 14 + N + 1) % (N + 1)];
       const t2 = ahead.clone().sub(behind).normalize();
-      const curvature = tangent.angleTo(t2);
+      const turnSign = Math.sign(tangent.x * t2.z - tangent.z * t2.x) || 1;
+      const curvature = tangent.angleTo(t2) * turnSign;
       this.samples.push({ pos, tangent, left, cum, curvature, halfWidth: 6.2 });
     }
     this.totalLength = cum;

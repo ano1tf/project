@@ -75,6 +75,7 @@ export class CameraSlot {
       this.camera.position.lerp(pos, Math.min(1, dt * 18));
       this._look.lerp(look, Math.min(1, dt * 12));
       this.camera.lookAt(this._look);
+      this._applyShake(dt, speedNorm * 0.55);
       this._setFov(66 + speedNorm * 14);
       return;
     }
@@ -90,6 +91,7 @@ export class CameraSlot {
       this.camera.position.lerp(camPos, Math.min(1, dt * 2.2));
       this._look.lerp(new THREE.Vector3(carPos.x, carPos.y + 1.2, carPos.z), Math.min(1, dt * 6));
       this.camera.lookAt(this._look);
+      this._applyShake(dt, speedNorm * 0.4);
       this._setFov(52 + speedNorm * 6);
       return;
     }
@@ -102,7 +104,21 @@ export class CameraSlot {
     const lookTarget = new THREE.Vector3(0, 1.5, 8).applyQuaternion(q).add(carPos);
     this._look.lerp(lookTarget, Math.min(1, dt * 10));
     this.camera.lookAt(this._look);
+    this._applyShake(dt, speedNorm);
     this._setFov(58 + speedNorm * 16);
+  }
+
+  /* Micro-secousses : vibration de vitesse */
+  _applyShake(dt, speedNorm) {
+    const amp = speedNorm * speedNorm * 0.11;
+    if (amp < 0.004) return;
+    const t = performance.now() * 0.001;
+    const n1 = Math.sin(t * 23.7) * Math.sin(t * 11.3 + 1.7);
+    const n2 = Math.sin(t * 19.1 + 2.3) * Math.sin(t * 7.9);
+    const n3 = Math.sin(t * 27.3 + 0.6) * Math.sin(t * 13.1 + 4.2);
+    this.camera.position.x += n1 * amp;
+    this.camera.position.y += n2 * amp * 0.75;
+    this.camera.position.z += n3 * amp * 0.6;
   }
 
   _setFov(v) {

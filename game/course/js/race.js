@@ -136,13 +136,13 @@ export class RaceGame {
     // Direction : angle effectif réduit à haute vitesse
     const speedKmh = this.speed * 3.6;
     const steerMax = THREE.MathUtils.lerp(0.62, 0.16, Math.min(1, speedKmh / 240));
-    const targetAngle = inp.steer * steerMax * (this.speed < -1 ? -1 : 1);
+    const targetAngle = inp.steer * steerMax;
     this.steerAngle += (targetAngle - this.steerAngle) * Math.min(1, dt * 9);
 
     // Lacet (modèle bicyclette)
     const wheelbase = 2.9;
     const yawRate = (this.speed / wheelbase) * Math.tan(this.steerAngle);
-    this.yaw += yawRate * dt;
+    this.yaw -= yawRate * dt;
 
     // Longitudinal
     const maxSpeed = 74;
@@ -303,7 +303,7 @@ export class RaceGame {
       // Vitesse cible selon la courbure à venir
       const aheadIdx = (idx + 26) % N;
       const curv = this.track.samples[aheadIdx].curvature;
-      const target = clamp(Math.sqrt(34 / Math.max(0.012, curv * 14)), 19, 68) * ai.skill;
+      const target = clamp(Math.sqrt(34 / Math.max(0.012, Math.abs(curv) * 14)), 19, 68) * ai.skill;
       ai.speed += (target - ai.speed) * Math.min(1, dt * 1.35);
 
       // Ligne de course légèrement décalée
