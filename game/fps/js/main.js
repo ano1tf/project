@@ -532,9 +532,9 @@ el('btnLang').addEventListener('click', () => {
   applyLang();
 });
 
-/* ================= Viewmodel (maintenant rendu à part) ================= */
+/* ================= Viewmodel (rendu en calque dans le pipeline HDR) ================= */
 const vmScene = new THREE.Scene();
-const vmCam = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.01, 6);
+const vmCam = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.01, 6);
 vmScene.add(new THREE.HemisphereLight(0xB8CCE8, 0x1A1E28, 1.15));
 const vmKey = new THREE.DirectionalLight(0xFFE8CE, 2.1);
 vmKey.position.set(0.6, 1.2, 0.9);
@@ -553,22 +553,26 @@ vmFlash.position.set(0.12, 0.02, -0.5);
 vmScene.add(vmFlash);
 let vmFlashT = 0;
 
-function renderViewModel(damage) {
-  // on masque les particules/décalques du monde et l'arme elle-même
-  // via un rendu de scène séparé : rien à cacher, le vmScene ne contient que l'arme.
-  const prevAutoClear = renderer.autoClear;
-  renderer.autoClear = false;
-  renderer.clearDepth();
-  vmCam.projectionMatrix.copy(camera.projectionMatrix);
-  vmCam.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
-  vmCam.matrixWorld.copy(camera.matrixWorld);
-  vmCam.matrixWorldInverse.copy(vmCam.matrixWorld).invert();
-  // tremblement d'arme lié aux dégâts
+// La caméra du viewmodel suit celle du joueur (mêmes matrices, FOV 76 comme le jeu)
+function updateVmCamera() {
+  vmCam.position.copy(camera.position);
+  vmCam.quaternion.copy(camera.quaternion);
+  // même champ de vision que le jeu : l'arme reste collée à l'écran
+  if (vmCam.fov !== camera.fov) {
+    vmCam.fov = camera.fov;
+    vmCam.updateProjectionMatrix();
+  }
+  vmCam.updateMatrixWorld(true);
+}
+
+// Le viewmodel est ajouté au composer : il profite du HDR, du bloom et du
+// grading, et son depth est nettoyé pour rester devant le décor.
+post.setLayerRenderer(function (r) {
+  const damage = post.grade.uniforms.damage.value;
   weapons.vm.position.x = (Math.random() - 0.5) * damage * 0.05;
   weapons.vm.position.y = (Math.random() - 0.5) * damage * 0.05;
-  renderer.render(vmScene, vmCam);
-  renderer.autoClear = prevAutoClear;
-}
+  r.render(vmScene, vmCam);
+});
 
 /* ================= Qualité adaptative ================= */
 // Si la machine peine (< 40 fps pendant 2 s), on coupe AO puis on baisse la résolution.
@@ -689,9 +693,7 @@ function loop(now) {
     if (vmFlashT <= 0) vmFlash.intensity = 0;
   }
 
-  // Viewmodel toujours visible par-dessus le décor (rendu séparé)
-  renderViewModel(gd.damage.value);
-
+  updateVmCamera();
   post.render(rawDt, time);
 }
 

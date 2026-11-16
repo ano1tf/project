@@ -11,11 +11,33 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+
+/* ---------- Pass « calque » : rendu additionnel dans le buffer HDR ---------- */
+// Sert au viewmodel d'arme : il doit passer par le tonemapping et le grading,
+// et rester devant le décor (clearDepth) — impossible en rendu final direct.
+class LayerPass extends Pass {
+  constructor(renderFn) {
+    super();
+    this.needsSwap = false;
+    this.renderFn = renderFn;
+  }
+  render(renderer, writeBuffer) {
+    const prevTarget = renderer.getRenderTarget();
+    const prevAutoClear = renderer.autoClear;
+    renderer.setRenderTarget(writeBuffer);
+    renderer.autoClear = false;
+    renderer.clearDepth();
+    this.renderFn(renderer);
+    renderer.autoClear = prevAutoClear;
+    renderer.setRenderTarget(prevTarget);
+  }
+}
 
 /* ---------- Grading cinéma ---------- */
 const GradeShader = {
@@ -181,6 +203,7 @@ export class PostFX {
       this.smaa = new SMAAPass();
       this.composer.addPass(this.smaa);
     }
+    if (this.layerPass) this.composer.addPass(this.layerPass);
 
     // ACES + sRGB — doit rester le dernier pass
     this.composer.addPass(new OutputPass());
@@ -192,6 +215,20 @@ export class PostFX {
   shake(amount) { this._shakeAmt = Math.max(this._shakeAmt, amount); }
   setDamage(v) { this.grade.uniforms.damage.value = v; }
   setHitFlash(v) { this.grade.uniforms.hitFlash.value = v; }
+
+  /**
+   * Ajoute un rendu « en calque » (ex. viewmodel) avant le bloom et le grading.
+   * @param {(renderer: WebGLRenderer) => void} fn
+   */
+  setLayerRenderer(fn) {
+    if (this.layerPass) {
+      this.layerPass.renderFn = fn;
+      return;
+    }
+    this.layerPass = new LayerPass(fn);
+    // inséré juste après le rendu de la scène principale (avant AO, bloom, grading)
+    this.composer.insertPass(this.layerPass, 1);
+  }
 
   resize() {
     const size = this.renderer.getSize(new THREE.Vector2());
