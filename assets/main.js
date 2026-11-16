@@ -1,6 +1,24 @@
-/* ============ KREO — Motion (GSAP, Apple-like: slow, subtle) ============ */
+/* ============ KREO — Theme + Motion (GSAP, Apple-like) ============ */
 (function () {
   'use strict';
+
+  /* ---------- Theme (light / dark) ---------- */
+  const root = document.documentElement;
+  const themeMeta = document.getElementById('themeColor');
+  const syncMeta = (t) => {
+    if (themeMeta) themeMeta.setAttribute('content', t === 'dark' ? '#000000' : '#ffffff');
+  };
+  syncMeta(root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
+  const toggle = document.getElementById('themeToggle');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      syncMeta(next);
+      try { localStorage.setItem('kreo-theme', next); } catch (e) {}
+    });
+  }
 
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -31,7 +49,7 @@
     .from('.hero-proof', { y: 14, opacity: 0, duration: 0.8 }, 1.15)
     .from('#mockup', { y: 80, opacity: 0, scale: 0.965, duration: 1.6, ease: 'power2.out' }, 0.85);
 
-  /* ---------- Hero mockup: scroll-zoom settle (Apple product-shot style) ---------- */
+  /* ---------- Hero mockup: scroll-zoom settle ---------- */
   gsap.fromTo('.hero-visual', { scale: 1.045 }, {
     scale: 0.98, yPercent: -3, ease: 'none',
     scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: 0.8 }
