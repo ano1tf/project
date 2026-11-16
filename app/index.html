@@ -6,8 +6,8 @@
 <title>Espace créateur — KREO</title>
 <meta name="description" content="L'espace créateur KREO — aperçu de l'application après connexion.">
 <link rel="icon" href="../assets/kreo-logo-web.png">
-<meta name="theme-color" content="#0B0B12">
-<link rel="stylesheet" href="app.css?v=1">
+<meta name="theme-color" content="#0A0A12">
+<link rel="stylesheet" href="app.css?v=2">
 </head>
 <body>
 
@@ -15,34 +15,34 @@
 
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar">
-    <a class="brand" href="../"><img src="../assets/kreo-logo-web.png" alt="KREO">KREO</a>
+    <a class="brand" href="../"><img src="../assets/kreo-logo-web.png" alt="KREO">KRE<em>O</em></a>
 
-    <a class="nav-item active" href="#">
+    <a class="nav-item active" data-view="home" href="#home">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11v-9.5"/></svg>
       <span data-i18n="app.home">Accueil</span>
     </a>
-    <a class="nav-item" href="#">
+    <a class="nav-item" data-view="games" href="#games">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 12h2.5M9.25 10.75v2.5"/><circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/><circle cx="17.5" cy="13.5" r=".6" fill="currentColor"/></svg>
       <span data-i18n="app.mygames">Mes jeux</span>
     </a>
-    <a class="nav-item" href="#">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M15.2 8.8 13 13l-4.2 2.2L11 11z"/></svg>
-      <span data-i18n="app.discover">Découvrir</span>
+    <a class="nav-item" data-view="models" href="#models">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
+      <span data-i18n="app.models">Modèles</span>
     </a>
-    <a class="nav-item" href="#">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.8 20a5 5 0 0 1 4.7-4.7"/></svg>
-      <span data-i18n="app.communityNav">Communauté</span>
+    <a class="nav-item" data-view="settings" href="#settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 0 0-.14-1.4l2-1.55-2-3.46-2.35.95a7 7 0 0 0-2.42-1.4L13.7 2.5h-4l-.4 2.64a7 7 0 0 0-2.4 1.4l-2.36-.95-2 3.46 2 1.55a7 7 0 0 0 0 2.8l-2 1.55 2 3.46 2.35-.95a7 7 0 0 0 2.42 1.4l.39 2.64h4l.4-2.64a7 7 0 0 0 2.4-1.4l2.36.95 2-3.46-2-1.55c.09-.46.14-.93.14-1.4z"/></svg>
+      <span data-i18n="app.settings">Réglages</span>
     </a>
 
     <div class="side-spacer"></div>
 
     <div class="discord-mini">
       <b>Discord KREO</b>
-      <p data-i18n="app.communitySub">Défis créatifs, entraide et avant-premières — sur Discord.</p>
-      <a href="#"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg><span data-i18n="app.discord">Rejoindre le Discord</span></a>
+      <p data-i18n="app.discordSub">Entraide, défis créatifs et annonces de la team KREO.</p>
+      <a class="js-discord"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span data-i18n="app.discord">Rejoindre le Discord</span></a>
     </div>
 
-    <div class="user-chip">
+    <div class="user-chip" id="userChip" title="Réglages">
       <div class="avatar">L</div>
       <div>
         <div class="u-name">Léo</div>
@@ -54,156 +54,302 @@
   <!-- ============ MAIN ============ -->
   <main class="main">
 
-    <!-- Greeting -->
-    <div class="top-row">
-      <div class="greeting">
-        <h1 data-i18n="app.hi">Salut, Léo 👋</h1>
-        <p data-i18n="app.sub">Que veux-tu créer aujourd'hui ?</p>
-        <div class="greet-actions">
-          <a class="btn btn-primary" href="../editor/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-            <span data-i18n="app.new">Nouveau projet</span>
-          </a>
-          <button class="btn btn-ghost">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/></svg>
-            <span data-i18n="app.import">Importer</span>
-          </button>
-        </div>
-      </div>
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="spacer"></div>
+      <button class="icon-btn" id="bellBtn" title="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.5 1.5 5 2 5.5H4c.5-.5 2-2 2-5.5z"/><path d="M10 19a2.2 2.2 0 0 0 4 0"/></svg>
+        <span class="dot"></span>
+      </button>
+      <button class="icon-btn" id="themeToggle" title="Thème">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 1 0 11 11z"/></svg>
+      </button>
       <button class="lang-toggle" id="langToggle" aria-label="Changer de langue">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
         <span id="langLabel">FR</span>
       </button>
     </div>
 
-    <!-- Stats -->
-    <div class="stats">
-      <div class="stat">
-        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 12h2.5M9.25 10.75v2.5"/><circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/></svg></div>
-        <div class="s-num">6</div>
-        <div class="s-label" data-i18n="app.s1">Mes jeux</div>
-      </div>
-      <div class="stat">
-        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg></div>
-        <div class="s-num">1 284</div>
-        <div class="s-label" data-i18n="app.s2">Parties jouées</div>
-      </div>
-      <div class="stat">
-        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.8 20a5 5 0 0 1 4.7-4.7"/></svg></div>
-        <div class="s-num">3 420</div>
-        <div class="s-label" data-i18n="app.s3">Joueurs ce mois</div>
-      </div>
-      <div class="stat">
-        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 8 2.8 4.8 6.2 4.8c2 0 3.3 1.2 4.1 2.4l1.7 2 1.7-2c.8-1.2 2.1-2.4 4.1-2.4 3.4 0 4.9 3.2 3.4 6.2C19 15.4 12 20 12 20z"/></svg></div>
-        <div class="s-num">487</div>
-        <div class="s-label" data-i18n="app.s4">J'aime</div>
-      </div>
+    <!-- Notifications -->
+    <div class="notif-panel" id="notifPanel">
+      <h4 data-i18n="app.notifications">Notifications</h4>
+      <div class="notif-item"><div class="n-ico">🎉</div><div data-i18n="app.notif1">Sky Runner a atteint 100 joueurs</div></div>
+      <div class="notif-item"><div class="n-ico">💬</div><div data-i18n="app.notif2">Neon Drift a reçu un nouveau commentaire</div></div>
+      <div class="notif-item"><div class="n-ico">🎮</div><div data-i18n="app.notif3">3 nouvelles parties sur Nova Strike aujourd'hui</div></div>
     </div>
 
-    <!-- Projects -->
-    <div class="sec-head">
-      <h2 data-i18n="app.projects">Mes projets</h2>
-      <a href="#"><span data-i18n="app.seeAll">Tout voir</span> ›</a>
-    </div>
-    <div class="projects">
-      <div class="p-card">
-        <div class="p-media">
-          <img src="../assets/showcase/sky-runner.jpg" alt="Sky Runner">
-          <span class="chip pub" data-i18n="app.published">Publié</span>
+    <!-- ============ VUE : ACCUEIL ============ -->
+    <section class="view active" id="view-home">
+      <div class="top-row">
+        <div class="greeting">
+          <h1 data-i18n="app.hi">Salut, Léo 👋</h1>
+          <p data-i18n="app.sub">Que veux-tu créer aujourd'hui ?</p>
+          <div class="greet-actions">
+            <button class="btn btn-primary js-new">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              <span data-i18n="app.new">Nouveau projet</span>
+            </button>
+            <button class="btn btn-ghost js-import">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/></svg>
+              <span data-i18n="app.import">Importer</span>
+            </button>
+          </div>
         </div>
-        <div class="p-info">
+      </div>
+
+      <div class="continue-card" id="continueCard">
+        <img src="../assets/showcase/sky-runner.jpg" alt="Sky Runner">
+        <div class="c-meta">
+          <div class="c-label" data-i18n="app.continue">Reprendre</div>
           <h3>Sky Runner</h3>
-          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 842 <span data-i18n="app.plays">parties</span></span>
+          <p><span data-i18n="app.continueSub">Dernière modification</span> · <span data-i18n="app.t1">il y a 2 h</span></p>
         </div>
+        <span class="btn btn-primary btn-sm"><span data-i18n="app.openEditor">Ouvrir l'éditeur</span></span>
       </div>
-      <div class="p-card">
-        <div class="p-media">
-          <img src="../assets/showcase/neon-drift.jpg" alt="Neon Drift">
-          <span class="chip pub" data-i18n="app.published">Publié</span>
-        </div>
-        <div class="p-info">
-          <h3>Neon Drift</h3>
-          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 531 <span data-i18n="app.plays">parties</span></span>
-        </div>
-      </div>
-      <div class="p-card">
-        <div class="p-media">
-          <img src="../assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux">
-          <span class="chip pub" data-i18n="app.published">Publié</span>
-        </div>
-        <div class="p-info">
-          <h3>L'Île aux Cristaux</h3>
-          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 1 204 <span data-i18n="app.plays">parties</span></span>
-        </div>
-      </div>
-      <div class="p-card">
-        <div class="p-media">
-          <img src="../assets/showcase/nova-strike.jpg" alt="Nova Strike">
-          <span class="chip draft" data-i18n="app.draft">Brouillon</span>
-        </div>
-        <div class="p-info">
-          <h3>Nova Strike</h3>
-          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 128 <span data-i18n="app.plays">parties</span></span>
-        </div>
-      </div>
-      <a class="p-new" href="../editor/">
-        <div class="plus">+</div>
-        <b data-i18n="app.newCard">Nouveau projet</b>
-        <span data-i18n="app.newCardSub">Commence de zéro</span>
-      </a>
-    </div>
 
-    <!-- Activity + community -->
-    <div class="bottom-row">
-      <div class="panel">
-        <h2 data-i18n="app.activity">Activité récente</h2>
-        <div class="act-list">
-          <div class="act">
-            <div class="act-ico i1">🎉</div>
-            <div class="act-text" data-i18n="app.a1">Sky Runner a atteint 100 joueurs</div>
-            <div class="act-time" data-i18n="app.t1">il y a 2 h</div>
-          </div>
-          <div class="act">
-            <div class="act-ico i2">💬</div>
-            <div class="act-text" data-i18n="app.a2">Maya a commenté Neon Drift</div>
-            <div class="act-time" data-i18n="app.t2">il y a 5 h</div>
-          </div>
-          <div class="act">
-            <div class="act-ico i3">🏆</div>
-            <div class="act-text" data-i18n="app.a3">Défi hebdo : jeux de plateforme</div>
-            <div class="act-time" data-i18n="app.t3">hier</div>
-          </div>
-          <div class="act">
-            <div class="act-ico i4">🎮</div>
-            <div class="act-text" data-i18n="app.a4">Nova Strike a été joué 12 fois aujourd'hui</div>
-            <div class="act-time" data-i18n="app.t4">il y a 2 jours</div>
-          </div>
+      <div class="stats">
+        <div class="stat">
+          <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 12h2.5M9.25 10.75v2.5"/><circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/></svg></div>
+          <div class="s-num">6</div>
+          <div class="s-label" data-i18n="app.s1">Mes jeux</div>
+        </div>
+        <div class="stat">
+          <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg></div>
+          <div class="s-num">1 284</div>
+          <div class="s-label" data-i18n="app.s2">Parties jouées</div>
+        </div>
+        <div class="stat">
+          <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.8 20a5 5 0 0 1 4.7-4.7"/></svg></div>
+          <div class="s-num">3 420</div>
+          <div class="s-label" data-i18n="app.s3">Joueurs ce mois</div>
+        </div>
+        <div class="stat">
+          <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 8 2.8 4.8 6.2 4.8c2 0 3.3 1.2 4.1 2.4l1.7 2 1.7-2c.8-1.2 2.1-2.4 4.1-2.4 3.4 0 4.9 3.2 3.4 6.2C19 15.4 12 20 12 20z"/></svg></div>
+          <div class="s-num">487</div>
+          <div class="s-label" data-i18n="app.s4">J'aime</div>
         </div>
       </div>
 
-      <div class="community-card">
-        <h2 data-i18n="app.communityTitle">La communauté</h2>
-        <p data-i18n="app.communitySub">Défis créatifs, entraide et avant-premières — sur Discord.</p>
-        <div class="avatars">
-          <div class="avatar" style="background:linear-gradient(135deg,#8B5CF6,#6366F1)">L</div>
-          <div class="avatar" style="background:linear-gradient(135deg,#22D3EE,#3B82F6)">M</div>
-          <div class="avatar" style="background:linear-gradient(135deg,#F472B6,#8B5CF6)">S</div>
-          <div class="avatar" style="background:linear-gradient(135deg,#34D399,#06B6D4)">C</div>
-          <div class="avatar" style="background:var(--card-2);color:var(--muted);font-size:10px">+ toi</div>
-        </div>
-        <a class="btn btn-discord" href="#">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-          <span data-i18n="app.discord">Rejoindre le Discord</span>
-        </a>
+      <div class="sec-head">
+        <h2 data-i18n="app.projects">Mes projets</h2>
+        <a id="seeAllBtn"><span data-i18n="app.seeAll">Tout voir</span> ›</a>
       </div>
-    </div>
+      <div class="projects" id="homeProjects"></div>
 
-    <p class="preview-note" data-i18n="app.previewNote">Aperçu visuel — le système de connexion arrive bientôt.</p>
+      <div class="bottom-row">
+        <div class="panel">
+          <h2 data-i18n="app.activity">Activité récente</h2>
+          <div class="act"><div class="act-ico i1">🎉</div><div class="act-text" data-i18n="app.a1">Sky Runner a atteint 100 joueurs</div><div class="act-time" data-i18n="app.t1">il y a 2 h</div></div>
+          <div class="act"><div class="act-ico i2">💬</div><div class="act-text" data-i18n="app.a2">Neon Drift a reçu un nouveau commentaire</div><div class="act-time" data-i18n="app.t2">il y a 5 h</div></div>
+          <div class="act"><div class="act-ico i3">🎮</div><div class="act-text" data-i18n="app.a3">L'Île aux Cristaux a dépassé 1 200 parties</div><div class="act-time" data-i18n="app.t3">hier</div></div>
+          <div class="act"><div class="act-ico i4">❤️</div><div class="act-text" data-i18n="app.a4">Nova Strike a été aimé 8 fois aujourd'hui</div><div class="act-time" data-i18n="app.t4">il y a 2 jours</div></div>
+        </div>
+
+        <div class="community-card">
+          <h2 data-i18n="app.discordTitle">La communauté KREO sur Discord</h2>
+          <p data-i18n="app.discordSub">Entraide, défis créatifs et annonces de la team KREO.</p>
+          <button class="btn btn-discord js-discord">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            <span data-i18n="app.discord">Rejoindre le Discord</span>
+          </button>
+        </div>
+      </div>
+
+      <p class="preview-note" data-i18n="app.previewNote">Aperçu visuel — le système de connexion arrive bientôt.</p>
+    </section>
+
+    <!-- ============ VUE : MES JEUX ============ -->
+    <section class="view" id="view-games">
+      <div class="sec-head">
+        <h2 data-i18n="app.mygames">Mes jeux</h2>
+      </div>
+      <p class="sec-sub" data-i18n="app.allGamesSub">Tous tes jeux, rien qu'à toi.</p>
+
+      <div class="games-toolbar">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+          <input type="text" id="searchInput" data-i18n-placeholder="app.search" placeholder="Rechercher un de tes jeux…">
+        </div>
+        <div class="filter-chips">
+          <button class="filter-chip active" data-filter="all" data-i18n="app.filterAll">Tous</button>
+          <button class="filter-chip" data-filter="published" data-i18n="app.filterPub">Publiés</button>
+          <button class="filter-chip" data-filter="draft" data-i18n="app.filterDraft">Brouillons</button>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary btn-sm js-new">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span data-i18n="app.new">Nouveau projet</span>
+        </button>
+      </div>
+
+      <div class="projects" id="gamesGrid"></div>
+    </section>
+
+    <!-- ============ VUE : MODÈLES ============ -->
+    <section class="view" id="view-models">
+      <div class="sec-head">
+        <h2 data-i18n="app.templatesTitle">Modèles de départ</h2>
+      </div>
+      <p class="sec-sub" data-i18n="app.templatesSub">Choisis un point de départ — tout est modifiable.</p>
+
+      <div class="tpl-grid">
+        <div class="tpl-card">
+          <div class="tpl-art">🏃</div>
+          <div class="tpl-body">
+            <h3 data-i18n="app.tpl1t">Aventure plateforme</h3>
+            <p data-i18n="app.tpl1d">Un héros, des plateformes et des pièces à collecter.</p>
+            <button class="btn btn-ghost btn-sm js-use-tpl" data-tpl="platform"><span data-i18n="app.useTemplate">Utiliser ce modèle</span></button>
+          </div>
+        </div>
+        <div class="tpl-card">
+          <div class="tpl-art">👾</div>
+          <div class="tpl-body">
+            <h3 data-i18n="app.tpl2t">Rétro arcade</h3>
+            <p data-i18n="app.tpl2d">Des ennemis, du rythme et un score à battre.</p>
+            <button class="btn btn-ghost btn-sm js-use-tpl" data-tpl="arcade"><span data-i18n="app.useTemplate">Utiliser ce modèle</span></button>
+          </div>
+        </div>
+        <div class="tpl-card">
+          <div class="tpl-art">💎</div>
+          <div class="tpl-body">
+            <h3 data-i18n="app.tpl3t">Chasse aux trésors</h3>
+            <p data-i18n="app.tpl3d">Explore, collecte et trouve le drapeau.</p>
+            <button class="btn btn-ghost btn-sm js-use-tpl" data-tpl="treasure"><span data-i18n="app.useTemplate">Utiliser ce modèle</span></button>
+          </div>
+        </div>
+        <div class="tpl-card">
+          <div class="tpl-art">🏁</div>
+          <div class="tpl-body">
+            <h3 data-i18n="app.tpl4t">Course folle</h3>
+            <p data-i18n="app.tpl4d">Évite les obstacles jusqu'à la ligne d'arrivée.</p>
+            <button class="btn btn-ghost btn-sm js-use-tpl" data-tpl="race"><span data-i18n="app.useTemplate">Utiliser ce modèle</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VUE : RÉGLAGES ============ -->
+    <section class="view" id="view-settings">
+      <div class="sec-head">
+        <h2 data-i18n="app.settings">Réglages</h2>
+      </div>
+      <p class="sec-sub" data-i18n="app.settingsSub">Ton compte, ta langue, ton thème.</p>
+
+      <div class="settings-grid">
+        <div class="settings-card wide">
+          <div class="profile-row">
+            <div class="avatar">L</div>
+            <div>
+              <div class="p-name">Léo</div>
+              <div class="p-mail">leo@kreo.app</div>
+            </div>
+            <div style="flex:1"></div>
+            <span class="plan-badge">✦ <span data-i18n="app.planFree">Gratuit — pour toujours</span></span>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3 data-i18n="app.language">Langue</h3>
+          <p class="hint">KREO / Français / English</p>
+          <div class="set-row">
+            <div class="lbl" data-i18n="app.language">Langue</div>
+            <div class="seg" id="segLang">
+              <button data-lang="fr" class="active">Français</button>
+              <button data-lang="en">English</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3 data-i18n="app.appearance">Apparence</h3>
+          <p class="hint">KREO s'adapte à tes yeux.</p>
+          <div class="set-row">
+            <div class="lbl" data-i18n="app.theme">Thème</div>
+            <div class="seg" id="segTheme">
+              <button data-theme-set="light"><span data-i18n="app.light">Clair</span></button>
+              <button data-theme-set="dark" class="active"><span data-i18n="app.dark">Sombre</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card wide">
+          <h3 data-i18n="app.exportData">Exporter mes données</h3>
+          <p class="hint">Tous tes projets, dans un seul fichier .json — à toi pour toujours.</p>
+          <div class="set-row">
+            <div class="val">kreo-mes-donnees.json</div>
+            <button class="btn btn-ghost btn-sm" id="btnExport"><span data-i18n="app.exportData">Exporter mes données</span></button>
+          </div>
+        </div>
+      </div>
+
+      <p class="preview-note" data-i18n="app.previewNote">Aperçu visuel — le système de connexion arrive bientôt.</p>
+    </section>
 
   </main>
 </div>
 
+<!-- ============ MODALE : NOUVEAU PROJET ============ -->
+<div class="modal-backdrop" id="modalNew">
+  <div class="modal">
+    <h2 data-i18n="app.new">Nouveau projet</h2>
+    <p class="m-sub" data-i18n="app.templatesSub">Choisis un point de départ — tout est modifiable.</p>
+    <label class="field-label" data-i18n="app.projectName">Nom du projet</label>
+    <input class="text-input" id="newName" type="text" placeholder="Sans titre" maxlength="40">
+    <label class="field-label" data-i18n="app.template">Point de départ</label>
+    <div class="tpl-chips" id="newTplChips">
+      <button class="tpl-chip active" data-tpl="blank" data-i18n="app.tplBlank">Page blanche</button>
+      <button class="tpl-chip" data-tpl="platform" data-i18n="app.tplPlatform">Plateforme</button>
+      <button class="tpl-chip" data-tpl="arcade" data-i18n="app.tplArcade">Arcade rétro</button>
+      <button class="tpl-chip" data-tpl="puzzle" data-i18n="app.tplPuzzle">Puzzle</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" data-close data-i18n="app.cancel">Annuler</button>
+      <button class="btn btn-primary" id="btnCreate" data-i18n="app.create">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODALE : IMPORTER ============ -->
+<div class="modal-backdrop" id="modalImport">
+  <div class="modal">
+    <h2 data-i18n="app.importTitle">Importer un projet</h2>
+    <p class="m-sub" data-i18n="app.importHint">Glisse un fichier .kreo.json ici, ou choisis-le sur ton ordinateur.</p>
+    <div class="drop-zone" id="dropZone">
+      <div class="dz-ico">📂</div>
+      <div id="dzText" data-i18n="app.importHint">Glisse un fichier .kreo.json ici, ou choisis-le sur ton ordinateur.</div>
+    </div>
+    <input type="file" id="fileInput" accept=".json,.kreo.json" style="display:none">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" data-close data-i18n="app.cancel">Annuler</button>
+      <button class="btn btn-primary" id="btnChooseFile" data-i18n="app.chooseFile">Choisir un fichier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODALE : PROJET ============ -->
+<div class="modal-backdrop" id="modalProject">
+  <div class="modal">
+    <div class="pj-media"><img id="pjImg" src="" alt=""></div>
+    <h2 id="pjTitle">—</h2>
+    <p class="m-sub"><span id="pjStatus"></span> · <span data-i18n="app.updated">Modifié</span> <span id="pjUpdated"></span></p>
+    <div class="pj-stats">
+      <div class="pj-stat"><div class="n" id="pjPlays">0</div><div class="l" data-i18n="app.plays">parties</div></div>
+      <div class="pj-stat"><div class="n" id="pjLikes">0</div><div class="l" data-i18n="app.likesLabel">j'aime</div></div>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <button class="btn btn-danger" id="pjDelete"><span data-i18n="app.delete">Supprimer</span></button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" id="pjShare"><span data-i18n="app.share">Partager</span></button>
+        <button class="btn btn-primary" id="pjOpen"><span data-i18n="app.openEditor">Ouvrir l'éditeur</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
 <script src="../assets/i18n.js"></script>
 <script src="i18n-app.js"></script>
+<script src="app.js?v=1"></script>
 </body>
 </html>
