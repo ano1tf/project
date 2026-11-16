@@ -23,7 +23,8 @@ const STR = {
     finish: 'ARRIVÉE !', finishWin: 'VICTOIRE !', sub: 'Circuit des Coteaux · 3 tours · 4 pilotes',
     sound: '\uD83D\uDD0A Son', muted: '\uD83D\uDD07 Muet', cam: 'Caméra : ',
     load: 'Chargement du circuit…', best: 'MEILLEUR TOUR', total: 'TOTAL', drift: 'SCORE DRIFT',
-    pause: 'PAUSE', p1: '1er', pN: (n) => n + 'e'
+    pause: 'PAUSE', p1: '1er', pN: (n) => n + 'e',
+    perfectStart: 'Départ parfait !', lastLap: 'Dernier tour !'
   },
   en: {
     start: '\u25B6\u00A0\u00A0START THE RACE', resume: 'RESUME', restart: 'RESTART',
@@ -31,7 +32,8 @@ const STR = {
     finish: 'FINISH!', finishWin: 'VICTORY!', sub: 'Hillside Circuit · 3 laps · 4 drivers',
     sound: '\uD83D\uDD0A Sound', muted: '\uD83D\uDD07 Muted', cam: 'Camera: ',
     load: 'Loading the circuit…', best: 'BEST LAP', total: 'TOTAL', drift: 'DRIFT SCORE',
-    pause: 'PAUSE', p1: '1st', pN: (n) => n + 'th'
+    pause: 'PAUSE', p1: '1st', pN: (n) => n + 'th',
+    perfectStart: 'Perfect start!', lastLap: 'Last lap!'
   }
 };
 const T = () => STR[LANG];
@@ -163,11 +165,21 @@ const hud = {
   setLapTime(v) { el('hudLapTime').textContent = v; },
   setBest(v) { el('hudBest').textContent = v; },
   setTotal(v) { el('hudTotal').textContent = v; },
-  setDrift(pts) {
+  setDrift(pts, mult) {
     const b = el('hudDrift');
     if (pts == null) { b.hidden = true; return; }
     b.hidden = false;
     el('hudDriftPts').textContent = pts;
+    const mEl = el('hudDriftMult');
+    if (mEl) mEl.textContent = '×' + (Math.round((mult || 1) * 10) / 10).toFixed(1);
+  },
+  banner(key) {
+    const b = el('hudBanner');
+    if (!b) return;
+    b.textContent = (T()[key] || key).toUpperCase();
+    b.hidden = false;
+    clearTimeout(this._bannerT);
+    this._bannerT = setTimeout(() => { b.hidden = true; }, 1600);
   },
   setWrongWay(b) { el('wrongWay').hidden = !b; },
   setCam(s) { el('hudCam').textContent = s; }

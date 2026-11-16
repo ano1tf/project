@@ -47,6 +47,11 @@ export class RaceGame {
     this._wrongWayTimer = 0;
     this._impactCooldown = 0;
     this._countdown = 0;
+    this.driftChain = 0;
+    this.driftChainTimer = 0;
+    this._boostTimer = 0;
+    this._launchHold = 0;
+    this._gear = null;
   }
 
   /* ---------- États ---------- */
@@ -69,6 +74,11 @@ export class RaceGame {
     this._wrongWayTimer = 0;
     this.prevT = 0;
     this.hint = null;
+    this.driftChain = 0;
+    this.driftChainTimer = 0;
+    this._boostTimer = 0;
+    this._launchHold = 0;
+    this._gear = null;
 
     this.playerCar.reset(this.pos, this.yaw);
     this.aiCars.forEach((ai, i) => {
@@ -78,6 +88,7 @@ export class RaceGame {
       ai.speed = 0;
       ai.lap = 1;
       ai.prevT = ai.t;
+      ai.phase = i * 2.31;
     });
 
     this.state = 'countdown';
@@ -105,10 +116,16 @@ export class RaceGame {
         this.track.setStartLights('green');
         this.sound.countdownBeep(true);
         this._beats = 0;
+        if (this._launchHold > 0.55) {
+          this._boostTimer = 1.5;
+          this.hud.banner('perfectStart');
+          this.sound.gearShift();
+        }
       }
-      // Voitures figées, mais moteur qui ronronne
+      // Voitures figées, mais moteur qui ronronne (et qui monte si gaz enfoncé)
+      if (this.input.throttle > 0.85) this._launchHold += dt; else this._launchHold = 0;
       this._syncPlayerCar(0, dt);
-      this.sound.setEngine(0.12, 0.12, 0);
+      this.sound.setEngine(0.12 + Math.min(0.55, this._launchHold * 0.9), 0.12 + this.input.throttle * 0.5, 0);
       this._updateHUD();
       return;
     }
@@ -135,7 +152,7 @@ export class RaceGame {
 
     // Direction : angle effectif réduit à haute vitesse
     const speedKmh = this.speed * 3.6;
-    const steerMax = THREE.MathUtils.lerp(0.62, 0.16, Math.min(1, speedKmh / 240));
+    const steerMax = THREE.MathUtils.lerp(0.64, 0.22, Math.min(1, speedKmh / 240));
     const targetAngle = inp.steer * steerMax;
     this.steerAngle += (targetAngle - this.steerAngle) * Math.min(1, dt * 9);
 
@@ -146,19 +163,23 @@ export class RaceGame {
 
     // Longitudinal
     const maxSpeed = 74;
-    const accelBase = 13.5;
+    const accelBase = 15.5;
     let accel = 0;
     if (inp.throttle > 0) {
       accel = accelBase * inp.throttle * Math.max(0.12, 1 - this.speed / maxSpeed);
     }
     if (inp.brake > 0) {
-      if (this.speed > 0.5) accel -= 26 * inp.brake;
+      if (this.speed > 0.5) accel -= 24 * inp.brake;
       else accel -= 9 * inp.brake; // marche arrière
     }
     // Traînée + roulement
-    accel -= this.speed * 0.021 + 0.55;
+    accel -= this.speed * 0.019 + 0.55;
     if (inp.handbrake) accel -= 7.5;
 
+    if (this._boostTimer > 0) {
+      accel *= 1.22;
+      this._boostTimer -= dt;
+    }
     this.speed += accel * dt;
     this.speed = clamp(this.speed, -14, maxSpeed);
     if (Math.abs(this.speed) < 0.65 && inp.throttle === 0 && inp.brake === 0) this.speed = 0;
@@ -173,8 +194,8 @@ export class RaceGame {
     // Adhérence latérale → dérive
     const centrifugal = -yawRate * this.speed;
     this.lateralVel += centrifugal * dt;
-    let grip = offTrack ? 3.4 : 7.6;
-    if (inp.handbrake && Math.abs(this.speed) > 7) grip = 1.7;
+    let grip = offTrack ? 3.4 : 6.9;
+    if (inp.handbrake && Math.abs(this.speed) > 7) grip = 1.35;
     this.lateralVel *= Math.exp(-grip * dt);
 
     // Hors-piste : résistance
@@ -223,7 +244,10 @@ export class RaceGame {
     const slip = Math.abs(this.lateralVel);
     const drifting = slip > 2.6 && Math.abs(this.speed) > 9;
     if (drifting) {
-      this._driftNow = slip * Math.abs(this.speed) * dt * 0.55;
+      this.driftChainTimer = 1.15;
+      this.driftChain = Math.min(2.2, this.driftChain + dt * 0.5);
+      const mult = 1 + this.driftChain;
+      this._driftNow = slip * Math.abs(this.speed) * dt * 0.55 * mult;
       this.driftScore += this._driftNow;
       this.fx.smokeAt(this.pos, Math.min(1, slip / 12), dt);
       this.fx.skidAt(this.pos, this.yaw, Math.min(0.5, slip / 16));
@@ -233,6 +257,10 @@ export class RaceGame {
       this.sound.tireScreech(0.32);
     } else {
       this.sound.tireScreech(0);
+    }
+    if (!drifting) {
+      this.driftChainTimer -= dt;
+      if (this.driftChainTimer <= 0) this.driftChain = 0;
     }
 
     // Sens inverse
@@ -248,8 +276,10 @@ export class RaceGame {
     for (let g = 1; g < GEAR_KMH.length; g++) if (kmh > GEAR_KMH[g - 1]) gear = g;
     const lo = GEAR_KMH[gear - 1], hi = GEAR_KMH[gear] || 272;
     const rpm = 0.16 + 0.84 * clamp((kmh - lo) / Math.max(24, hi - lo), 0, 1);
+    if (this._gear != null && gear > this._gear) this.sound.gearShift();
     this._gear = gear;
-    this.sound.setEngine(rpm, inp.throttle * 0.85 + 0.15, Math.max(0, accel) / 13.5);
+    this.sound.setEngine(rpm, inp.throttle * 0.85 + 0.15, Math.max(0, accel) / 15.5);
+    this.sound.speedNoise(Math.min(1, Math.abs(this.speed) / 72), offTrack);
   }
 
   _syncPlayerCar(speed, dt, accel, steer, drift, offTrack, braking) {
@@ -277,6 +307,7 @@ export class RaceGame {
       this.lapTimes.push(this.lapTime);
       if (this.bestLap == null || this.lapTime < this.bestLap) this.bestLap = this.lapTime;
       this.lapTime = 0;
+      if (this.lap === this.totalLaps) this.hud.banner('lastLap');
       if (this.lap > this.totalLaps) {
         this.state = 'finished';
         this.sound.stopEngine();
@@ -307,7 +338,7 @@ export class RaceGame {
       ai.speed += (target - ai.speed) * Math.min(1, dt * 1.35);
 
       // Ligne de course légèrement décalée
-      const lineTarget = Math.sin(ai.t * Math.PI * 6) * 2.1;
+      const lineTarget = Math.sin(ai.t * Math.PI * 6 + (ai.phase || 0)) * 2.1;
       ai.lateral += (lineTarget - ai.lateral) * Math.min(1, dt * 1.1);
 
       const dist = ai.speed * dt;
@@ -365,7 +396,7 @@ export class RaceGame {
     const st = this.standings();
     const mePos = st.findIndex((x) => x.me) + 1;
     this.hud.setPos(mePos, st.length);
-    this.hud.setDrift(this._driftNow > 0.2 ? Math.round(this.driftScore) : null);
+    this.hud.setDrift(this._driftNow > 0.2 ? Math.round(this.driftScore) : null, 1 + this.driftChain);
     this.hud.setWrongWay(this._wrongWayTimer > 1.1);
   }
 }

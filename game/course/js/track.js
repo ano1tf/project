@@ -105,6 +105,7 @@ export class TrackSlot {
     this._buildGrandstand();
     this._buildDecor();
     this._buildFlags();
+    this._buildBrakeBoards();
     this._buildBuckets();
     return this;
   }
@@ -157,6 +158,18 @@ export class TrackSlot {
 
   _key(x, z) {
     return Math.floor(x / this._bucketSize) + ',' + Math.floor(z / this._bucketSize);
+  }
+
+  /* Dégagement global : un point doit rester à au moins minDist de
+     TOUTE la piste (y compris les sections voisines du circuit en étoile). */
+  clearOfTrack(x, z, minDist) {
+    const md2 = minDist * minDist;
+    for (let i = 0; i < this.samples.length; i += 2) {
+      const p = this.samples[i].pos;
+      const dx = p.x - x, dz = p.z - z;
+      if (dx * dx + dz * dz < md2) return false;
+    }
+    return true;
   }
 
   /* Échantillon le plus proche — avec cache (hint d'index) */
@@ -437,28 +450,38 @@ export class TrackSlot {
     const leafMat = new THREE.MeshStandardMaterial({ color: 0x2E5D34, roughness: 0.9 });
     const count = 150;
     const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
-    const leaves = new THREE.InstancedMesh(leafGeo, leafMat, count);
-    trunks.castShadow = leaves.castShadow = true;
-    leaves.receiveShadow = true;
+    const leaves = new THREE.InstancedMesh(leafGeo, leafMat, 100);
+    const roundGeo = new THREE.IcosahedronGeometry(2.6, 1);
+    const roundMat = new THREE.MeshStandardMaterial({ color: 0x3A6B3F, roughness: 0.92, flatShading: true });
+    const rounds = new THREE.InstancedMesh(roundGeo, roundMat, 50);
+    trunks.castShadow = leaves.castShadow = rounds.castShadow = true;
+    leaves.receiveShadow = rounds.receiveShadow = true;
     const m = new THREE.Matrix4();
-    let placed = 0, guard = 0;
+    let placed = 0, guard = 0, coneN = 0, roundN = 0;
     while (placed < count && guard++ < 4000) {
       const i = Math.floor(Math.random() * this.samples.length);
       const s = this.samples[i];
       const side = Math.random() > 0.5 ? 1 : -1;
       const dist = 16 + Math.random() * 58;
       const p = s.pos.clone().addScaledVector(s.left, side * dist);
+      if (!this.clearOfTrack(p.x, p.z, 13)) continue; // jamais sur une autre section
       p.y = this.terrainHeight(p.x, p.z);
       const scale = 0.8 + Math.random() * 0.9;
       m.compose(new THREE.Vector3(p.x, p.y + 1.6 * scale, p.z), new THREE.Quaternion(), new THREE.Vector3(scale, scale, scale));
       trunks.setMatrixAt(placed, m);
-      m.compose(new THREE.Vector3(p.x, p.y + (3.2 + 2.6) * scale * 0.72, p.z), new THREE.Quaternion(), new THREE.Vector3(scale, scale, scale));
-      leaves.setMatrixAt(placed, m);
+      if (placed % 3 === 2 && roundN < 50) {
+        m.compose(new THREE.Vector3(p.x, p.y + 5.1 * scale, p.z), new THREE.Quaternion(), new THREE.Vector3(scale * 1.15, scale, scale * 1.15));
+        rounds.setMatrixAt(roundN++, m);
+      } else if (coneN < 100) {
+        m.compose(new THREE.Vector3(p.x, p.y + (3.2 + 2.6) * scale * 0.72, p.z), new THREE.Quaternion(), new THREE.Vector3(scale, scale, scale));
+        leaves.setMatrixAt(coneN++, m);
+      }
       placed++;
     }
     trunks.instanceMatrix.needsUpdate = true;
     leaves.instanceMatrix.needsUpdate = true;
-    this.group.add(trunks, leaves);
+    rounds.instanceMatrix.needsUpdate = true;
+    this.group.add(trunks, leaves, rounds);
   }
 
   _buildMountains() {
@@ -475,8 +498,14 @@ export class TrackSlot {
   }
 
   _buildGrandstand() {
-    const s = this.samples[30];
-    const base = s.pos.clone().addScaledVector(s.left, 22);
+    // Emplacement où le gradin reste loin de TOUTE la piste
+    let s = this.samples[30];
+    for (let k = 0; k < this.samples.length; k += 12) {
+      const cand = this.samples[k];
+      const cx = cand.pos.x + cand.left.x * 31, cz = cand.pos.z + cand.left.z * 31;
+      if (this.clearOfTrack(cx, cz, 30)) { s = cand; break; }
+    }
+    const base = s.pos.clone().addScaledVector(s.left, 31);
     base.y = this.terrainHeight(base.x, base.z);
     const g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: 0x9BA6B8, roughness: 0.8 });
@@ -517,6 +546,7 @@ export class TrackSlot {
       const s = this.samples[i % this.samples.length];
       const side = k % 2 ? 1 : -1;
       const p = s.pos.clone().addScaledVector(s.left, side * (s.halfWidth + 6.6));
+      if (!this.clearOfTrack(p.x, p.z, 12)) continue;
       p.y = this.terrainHeight(p.x, p.z);
       for (let j = 0; j < 3; j++) {
         const tire = new THREE.Mesh(tireGeo, tireMat);
@@ -537,16 +567,23 @@ export class TrackSlot {
       return new THREE.CanvasTexture(c);
     })();
     const bMat = new THREE.MeshStandardMaterial({ map: winTex, roughness: 0.8 });
-    const s30 = this.samples[30];
-    for (let i = 0; i < 6; i++) {
+    // Village : groupé près du circuit, mais JAMAIS sur la piste
+    let bPlaced = 0, bTries = 0;
+    while (bPlaced < 9 && bTries++ < 500) {
+      const si = Math.floor(Math.random() * this.samples.length);
+      const s0 = this.samples[si];
+      const side = Math.random() > 0.5 ? 1 : -1;
       const w = 8 + Math.random() * 12, h = 7 + Math.random() * 12;
-      const p = s30.pos.clone().addScaledVector(s30.left, 36 + Math.random() * 30)
-        .addScaledVector(s30.tangent, (i - 3) * 16);
+      const p = s0.pos.clone().addScaledVector(s0.left, side * (44 + Math.random() * 55))
+        .addScaledVector(s0.tangent, (Math.random() - 0.5) * 60);
+      if (!this.clearOfTrack(p.x, p.z, 30 + w * 0.6)) continue;
       p.y = this.terrainHeight(p.x, p.z);
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w * 0.8), bMat);
       b.position.set(p.x, p.y + h / 2, p.z);
+      b.rotation.y = Math.random() * Math.PI;
       b.castShadow = b.receiveShadow = true;
       this.group.add(b);
+      bPlaced++;
     }
   }
 
@@ -558,6 +595,7 @@ export class TrackSlot {
       const s = this.samples[i];
       const side = k % 2 ? 1 : -1;
       const p = s.pos.clone().addScaledVector(s.left, side * (s.halfWidth + 4.4));
+      if (!this.clearOfTrack(p.x, p.z, 9.5)) continue;
       p.y = this.terrainHeight(p.x, p.z);
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 6.4, 8), poleMat);
       pole.position.set(p.x, p.y + 3.2, p.z);
@@ -604,6 +642,63 @@ export class TrackSlot {
         }
       }
     });
+  }
+
+  _buildBrakeBoards() {
+    // Panneaux de freinage « 150 / 100 / 50 » avant les virages serrés
+    const mkTex = (txt) => {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 96;
+      const g = c.getContext('2d');
+      g.fillStyle = '#F2F4F8'; g.fillRect(0, 0, 128, 96);
+      g.strokeStyle = '#14161C'; g.lineWidth = 8; g.strokeRect(5, 5, 118, 86);
+      g.fillStyle = '#14161C';
+      g.font = 'bold 56px sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(txt, 64, 54);
+      return new THREE.CanvasTexture(c);
+    };
+    const mats = ['150', '100', '50'].map((t) => new THREE.MeshStandardMaterial({
+      map: mkTex(t), roughness: 0.65, side: THREE.DoubleSide
+    }));
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x2A2F3C, roughness: 0.6 });
+
+    // Les 6 virages les plus serrés, espacés d'au moins 120 échantillons
+    const cand = [];
+    for (let i = 0; i < this.samples.length; i += 4) {
+      cand.push([i, Math.abs(this.samples[i].curvature)]);
+    }
+    cand.sort((a, b) => b[1] - a[1]);
+    const picked = [];
+    for (const [i, curv] of cand) {
+      if (curv < 0.012) break;
+      const far = picked.every((j) => Math.min(Math.abs(i - j), this.samples.length - Math.abs(i - j)) > 120);
+      if (far) picked.push(i);
+      if (picked.length >= 6) break;
+    }
+    for (const idx of picked) {
+      const curvSign = Math.sign(this.samples[idx].curvature) || 1;
+      for (let b = 0; b < 3; b++) {
+        const si = (idx - 58 + b * 20 + this.samples.length) % this.samples.length;
+        const s = this.samples[si];
+        // côté extérieur du virage
+        const p = s.pos.clone().addScaledVector(s.left, -curvSign * (s.halfWidth + 3.4));
+        if (!this.clearOfTrack(p.x, p.z, 8.5)) continue;
+        p.y = this.terrainHeight(p.x, p.z);
+        const grp = new THREE.Group();
+        const board = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.35), mats[b]);
+        board.position.y = 1.75;
+        board.castShadow = true;
+        const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.85, 6), postMat);
+        const post2 = post1.clone();
+        post1.position.set(-0.6, 0.925, 0);
+        post2.position.set(0.6, 0.925, 0);
+        grp.add(board, post1, post2);
+        grp.position.copy(p);
+        grp.rotation.y = Math.atan2(s.tangent.x, s.tangent.z);
+        this.group.add(grp);
+      }
+    }
   }
 
   animateFlags(time) {

@@ -7,7 +7,7 @@
 <meta name="description" content="KREO RACING — jeu de course 3D réaliste créé avec KREO.">
 <link rel="icon" href="../../assets/kreo-logo-web.png">
 <meta name="theme-color" content="#0B0D12">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 <script type="importmap">
 {
   "imports": {
@@ -49,13 +49,16 @@
     <div class="speed-num" id="hudSpeed">0</div>
     <div class="speed-unit">KM/H</div>
     <div class="speed-bar"><div class="speed-fill" id="hudSpeedFill"></div></div>
-    <div class="drift-badge" id="hudDrift" hidden>DRIFT +<span id="hudDriftPts">0</span></div>
+    <div class="drift-badge" id="hudDrift" hidden>DRIFT <span id="hudDriftMult">×1.0</span> +<span id="hudDriftPts">0</span></div>
   </div>
 
   <!-- bas gauche : caméra -->
   <div class="hud-block hud-cam">
     <span class="cam-dot"></span><span id="hudCam">CAMÉRA : POURSUITE</span>
   </div>
+
+  <!-- bannières d'événement -->
+  <div id="hudBanner" hidden></div>
 
   <!-- sens inverse -->
   <div class="wrong-way" id="wrongWay" hidden>⚠ SENS INVERSE ⚠</div>
@@ -134,6 +137,6 @@
   <div class="load-txt">Chargement du circuit…</div>
 </div>
 
-<script type="module" src="js/main.js?v=2"></script>
+<script type="module" src="js/main.js?v=3"></script>
 </body>
 </html>
