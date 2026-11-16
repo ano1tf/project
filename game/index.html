@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KREO — Démos jouables</title>
+<link rel="icon" href="../assets/kreo-logo-web.png">
+<meta name="theme-color" content="#0B0D12">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    background: #0B0D12;
+    color: #EAF0FF;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8vh 22px 60px;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .logo img { height: 42px; border-radius: 10px; }
+  .kicker { font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: #57E8FF; }
+  h1 {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: clamp(28px, 5vw, 42px);
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .sub { color: #97A3BC; font-size: 15px; margin-bottom: 42px; text-align: center; }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 22px;
+    width: min(880px, 100%);
+  }
+  .card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: rgba(15, 19, 28, 0.88);
+    border: 1px solid rgba(120, 140, 180, 0.16);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: transform 0.16s ease, border-color 0.16s ease;
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(87, 232, 255, 0.55); }
+  .card img { width: 100%; height: 172px; object-fit: cover; display: block; }
+  .body { padding: 20px 22px 24px; }
+  .tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #57E8FF;
+    border: 1px solid rgba(87, 232, 255, 0.35);
+    border-radius: 99px;
+    padding: 4px 11px;
+    margin-bottom: 11px;
+  }
+  h2 { font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 22px; margin-bottom: 7px; }
+  p { color: #97A3BC; font-size: 13.5px; line-height: 1.55; margin-bottom: 16px; }
+  .play {
+    display: inline-block;
+    padding: 11px 22px;
+    border-radius: 11px;
+    background: linear-gradient(135deg, #2FD8FF, #4E7BFF);
+    color: #041018;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+  }
+  .back {
+    margin-top: 40px;
+    color: #97A3BC;
+    font-size: 13px;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(151, 163, 188, 0.4);
+    padding-bottom: 2px;
+  }
+  .back:hover { color: #EAF0FF; }
+</style>
+</head>
+<body>
+
+<div class="logo">
+  <img src="../assets/kreo-logo-web.png" alt="KREO">
+  <div class="kicker">CRÉÉ AVEC KREO</div>
+</div>
+<h1>Choisis ta démo 🎮</h1>
+<p class="sub">Deux jeux 3D complets, jouables directement dans le navigateur.</p>
+
+<div class="cards">
+  <a class="card" href="course/">
+    <img src="../assets/showcase/neon-drift.jpg" alt="KREO Racing">
+    <div class="body">
+      <span class="tag">Course 3D</span>
+      <h2>KREO Racing 🏁</h2>
+      <p>Circuit des Coteaux : 3 tours, 4 pilotes, drift, caméras dynamiques, moteur sonore.</p>
+      <span class="play">▶ JOUER</span>
+    </div>
+  </a>
+  <a class="card" href="fps/">
+    <img src="../assets/showcase/nova-strike.jpg" alt="KREO ARENA">
+    <div class="body">
+      <span class="tag">FPS</span>
+      <h2>KREO ARENA 🎯</h2>
+      <p>Arène nocturne : 10 vagues d'ennemis, 3 armes, IA, explosions, score et précision.</p>
+      <span class="play">▶ JOUER</span>
+    </div>
+  </a>
+</div>
+
+<a class="back" href="../">← Retour à KREO</a>
+
+</body>
+</html>

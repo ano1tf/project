@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KREO ARENA — FPS</title>
+<meta name="description" content="KREO ARENA — FPS 3D créé avec KREO. Survivez aux 10 vagues.">
+<link rel="icon" href="../../assets/kreo-logo-web.png">
+<meta name="theme-color" content="#0B0D12">
+<link rel="stylesheet" href="style.css?v=1">
+<script type="importmap">
+{
+  "imports": {
+    "three": "../../assets/vendor/three/three.module.js",
+    "three/addons/": "../../assets/vendor/three/addons/"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<!-- ================= HUD ================= -->
+<div id="hud" hidden>
+  <!-- viseur -->
+  <div id="crosshair">
+    <span class="ch ch-t"></span>
+    <span class="ch ch-b"></span>
+    <span class="ch ch-l"></span>
+    <span class="ch ch-r"></span>
+    <span class="ch ch-dot"></span>
+  </div>
+
+  <!-- hitmarker -->
+  <div id="hitmarker" hidden>
+    <span></span><span></span>
+  </div>
+
+  <!-- direction des dégâts -->
+  <div id="dmgDir"><span></span></div>
+
+  <!-- bandeau haut -->
+  <div class="hud-top-left">
+    <div class="hud-chip"><span class="hud-label" id="hudWaveLabel">Vague</span><span class="hud-big" id="hudWave">1</span></div>
+    <div class="hud-chip"><span class="hud-label" id="hudScoreLabel">Score</span><span class="hud-big" id="hudScore">0</span></div>
+    <div class="hud-chip"><span class="hud-label" id="hudKillsLabel">Éliminations</span><span class="hud-big" id="hudKills">0</span></div>
+    <div class="hud-chip"><span class="hud-label" id="hudAccLabel">Précision</span><span class="hud-big" id="hudAcc">0%</span></div>
+    <div class="hud-low" id="hudLow" hidden>⚠ VIE FAIBLE</div>
+  </div>
+
+  <!-- killfeed -->
+  <div id="killfeed"></div>
+
+  <!-- bannière centrale -->
+  <div id="banner" hidden></div>
+
+  <!-- bas gauche : vie / blindage -->
+  <div class="hud-bottom-left">
+    <div class="bar-row">
+      <span class="bar-ico hp">♥</span>
+      <div class="bar"><div class="bar-fill hp" id="hudHealthFill"></div></div>
+      <span class="bar-val" id="hudHealthVal">100</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-ico ap">◆</span>
+      <div class="bar"><div class="bar-fill ap" id="hudArmorFill"></div></div>
+      <span class="bar-val" id="hudArmorVal">25</span>
+    </div>
+  </div>
+
+  <!-- bas droite : arme / munitions -->
+  <div class="hud-bottom-right">
+    <div id="hudWeapon">Pistolet</div>
+    <div id="hudAmmo">12 <span class="dim">/ 96</span></div>
+  </div>
+</div>
+
+<!-- vignette de dégâts -->
+<div id="damageVignette"></div>
+
+<!-- ================= MENU ================= -->
+<div class="overlay" id="menuOverlay" hidden>
+  <div class="menu-card">
+    <div class="menu-logo">
+      <img src="../../assets/kreo-logo-web.png" alt="KREO">
+      <div>
+        <div class="menu-kicker">UN JEU CRÉÉ AVEC KREO</div>
+        <h1 id="mTitle">KREO ARENA</h1>
+      </div>
+    </div>
+    <p class="menu-sub" id="mSub">FPS · Survivez aux 10 vagues</p>
+
+    <button class="btn-main" id="btnPlay">▶&nbsp;&nbsp;JOUER</button>
+
+    <div class="controls-grid" id="ctlGrid">
+      <h3 id="ctlTitle">Commandes</h3>
+      <div><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>WASD</kbd> / <kbd>↑←↓→</kbd><span id="ctlMove">Se déplacer</span></div>
+      <div><kbd>Souris</kbd><span id="ctlLook">Regarder</span></div>
+      <div><kbd>Clic gauche</kbd><span id="ctlShoot">Tirer</span></div>
+      <div><kbd>R</kbd><span id="ctlReload">Recharger</span></div>
+      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><span id="ctlSwitch">Changer d'arme</span></div>
+      <div><kbd>Maj</kbd><span id="ctlSprint">Courir</span></div>
+      <div><kbd>Espace</kbd><span id="ctlJump">Sauter</span></div>
+      <div><kbd>C</kbd><span id="ctlCrouch">S'accroupir</span></div>
+    </div>
+
+    <div class="menu-row">
+      <button class="btn-ghost" id="btnSound"><span id="soundLabel">🔊 Son</span></button>
+      <button class="btn-ghost" id="btnLang">FR / EN</button>
+    </div>
+
+    <div class="menu-footer">
+      <span class="pill">Slot Sons</span><span class="pill">FX</span><span class="pill">Slot Armes</span>
+      <span class="pill">IA</span><span class="pill">Mapping</span><span class="pill">Code</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PAUSE ================= -->
+<div class="overlay" id="pauseOverlay" hidden>
+  <div class="menu-card small">
+    <h2 id="pauseTitle">PAUSE</h2>
+    <button class="btn-main" id="btnResume">REPRENDRE</button>
+    <button class="btn-ghost wide" id="btnRestart">RECOMMENCER</button>
+    <button class="btn-ghost wide" id="btnQuit">MENU PRINCIPAL</button>
+  </div>
+</div>
+
+<!-- ================= FIN DE PARTIE ================= -->
+<div class="overlay" id="overlayGameOver" hidden>
+  <div class="menu-card">
+    <h2 id="overTitle">VICTOIRE !</h2>
+    <p class="menu-sub" id="overSub">—</p>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <span class="hud-label" id="statKills">Éliminations</span>
+        <div class="fs-val" id="overKills">0</div>
+      </div>
+      <div class="stat-box">
+        <span class="hud-label" id="statAcc">Précision</span>
+        <div class="fs-val" id="overAcc">0%</div>
+      </div>
+      <div class="stat-box">
+        <span class="hud-label" id="statWaves">Vagues survécues</span>
+        <div class="fs-val" id="overWaves">0</div>
+      </div>
+      <div class="stat-box">
+        <span class="hud-label">SCORE</span>
+        <div class="fs-val" id="overScore">0</div>
+      </div>
+    </div>
+    <button class="btn-main" id="btnAgain">REJOUER</button>
+    <button class="btn-ghost wide" id="btnMenu">MENU PRINCIPAL</button>
+  </div>
+</div>
+
+<!-- ================= CHARGEMENT ================= -->
+<div class="overlay" id="loading">
+  <div class="load-spin"></div>
+  <div class="load-txt" id="loadingTxt">Chargement de l'arène…</div>
+</div>
+
+<script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
