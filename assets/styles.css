@@ -164,7 +164,7 @@ header{
 .stat-label{color:var(--gray);font-size:13.5px;margin-top:6px;letter-spacing:-.005em}
 
 /* ============ Sections ============ */
-section{position:relative;padding:110px 0}
+section{position:relative;padding:110px 0;scroll-margin-top:72px}
 .section-head{max-width:660px;margin:0 auto 64px;text-align:center}
 .section-head .lead{margin-top:16px}
 .bg-alt{background:var(--bg-alt)}
