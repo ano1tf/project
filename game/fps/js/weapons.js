@@ -47,6 +47,7 @@ export class WeaponSystem {
     this._recoilRot = 0;
     this._reloadAnim = 0;
     this._bobT = 0;
+    this._sprintT = 0;
 
     // Groupe viewmodel attaché à la caméra
     this.vm = new THREE.Group();
@@ -171,14 +172,19 @@ export class WeaponSystem {
     this._recoilKick += (0 - this._recoilKick) * Math.min(1, dt * 11);
     this._recoilRot += (0 - this._recoilRot) * Math.min(1, dt * 9);
     const hSpeed = Math.hypot(this.player.vel.x, this.player.vel.z);
+    this._sprintT += ((input.sprint && hSpeed > 5 && this.player.grounded ? 1 : 0) - this._sprintT) * Math.min(1, dt * 6);
     this._bobT += dt * (3 + hSpeed * 1.1);
-    const bobAmt = Math.min(1, hSpeed / 8) * 0.012;
+    const bobAmt = Math.min(1, hSpeed / 8) * 0.012 * (1 + this._sprintT * 1.6);
     this.vm.position.set(
-      0.3 + Math.cos(this._bobT) * bobAmt,
-      -0.28 + Math.sin(this._bobT * 2) * bobAmt - this._reloadAnim * 0.16,
+      0.3 + Math.cos(this._bobT) * bobAmt + this._sprintT * 0.045,
+      -0.28 + Math.sin(this._bobT * 2) * bobAmt - this._reloadAnim * 0.16 - this._sprintT * 0.075,
       -0.62 + this._recoilKick
     );
-    this.vm.rotation.set(-this._recoilRot - this._reloadAnim * 0.9, this._reloadAnim * 0.35, 0);
+    this.vm.rotation.set(
+      -this._recoilRot - this._reloadAnim * 0.9 - this._sprintT * 0.32,
+      this._reloadAnim * 0.35 + this._sprintT * 0.28,
+      -this._sprintT * 0.22
+    );
   }
 
   _tryFire(input) {

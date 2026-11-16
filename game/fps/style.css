@@ -66,6 +66,18 @@ html, body {
 .ch-dot { width: 3px; height: 3px; left: -1.5px; top: -1.5px; border-radius: 50%; }
 
 /* Hitmarker */
+#dmgDir {
+  position: absolute; left: 50%; top: 50%;
+  width: 320px; height: 320px; margin: -160px 0 0 -160px;
+  opacity: 0;
+}
+#dmgDir span {
+  position: absolute; left: 50%; top: -4px;
+  width: 58px; height: 27px; margin-left: -29px;
+  background: linear-gradient(180deg, rgba(255, 52, 64, 0.9), rgba(255, 52, 64, 0));
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
 #hitmarker { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 #hitmarker span {
   position: absolute;

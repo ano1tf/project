@@ -119,6 +119,15 @@ const enemies = new EnemyManager({
     damagePlayer: (dmg, fromPos) => {
       player.damage(dmg, fromPos);
       damageFlash = 1;
+      dmgDirT = 1.25;
+      if (fromPos) {
+        const dx = fromPos.x - player.pos.x;
+        const dz = fromPos.z - player.pos.z;
+        // angle relatif à l'orientation du joueur (0 = devant, + = droite)
+        const fwdX = -Math.sin(player.yaw), fwdZ = -Math.cos(player.yaw);
+        const rgtX = -fwdZ, rgtZ = fwdX;
+        dmgDirAngle = Math.atan2(dx * rgtX + dz * rgtZ, dx * fwdX + dz * fwdZ);
+      }
       if (!player.alive && (game.state === 'playing' || game.state === 'intermission')) gameOver(false);
     },
     onKill: (type, score) => {
@@ -181,6 +190,8 @@ const game = {
 };
 let muted = false;
 let damageFlash = 0;
+let dmgDirT = 0;
+let dmgDirAngle = 0;
 let hitmarkerT = 0;
 let bannerT = 0;
 let feed = [];
@@ -545,6 +556,11 @@ function loop(now) {
   const hSpeedNow = Math.hypot(player.vel.x, player.vel.z);
   el('crosshair').classList.toggle('wide', hSpeedNow > 4.6 || !player.grounded);
   damageFlash = Math.max(0, damageFlash - dt * 1.6);
+  if (dmgDirT > 0) {
+    dmgDirT -= dt * 1.15;
+    el('dmgDir').style.opacity = Math.min(1, dmgDirT);
+    el('dmgDir').style.transform = 'rotate(' + (dmgDirAngle * 180 / Math.PI) + 'deg)';
+  }
   const lowPulse = player.alive && player.health <= 30 ? (0.14 + Math.sin(time * 5) * 0.07) : 0;
   el('damageVignette').style.opacity = Math.min(0.75, damageFlash * 0.7 + lowPulse);
   if (feed.length && feed[0].t > 0) {
