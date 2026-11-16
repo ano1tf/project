@@ -7,7 +7,7 @@
 <meta name="description" content="KREO — l'éditeur de jeux 3D qui commence sans code et va plus loin avec du vrai code JavaScript.">
 <link rel="icon" href="../assets/kreo-logo-web.png">
 <meta name="theme-color" content="#17181D">
-<link rel="stylesheet" href="editor.css?v=3">
+<link rel="stylesheet" href="editor.css?v=4">
 <script type="importmap">
 {
   "imports": {
@@ -104,6 +104,8 @@
       <div class="viewport" id="viewport">
         <canvas id="gl"></canvas>
 
+        <div class="play-hint" id="playHint" hidden><span data-i18n="ed.playHint">ZQSD/WASD : se déplacer · Flèches : tourner · Espace : sauter · Glisser : regarder</span></div>
+
         <div class="vp-top">
           <span class="vp-badge" data-i18n="ed.perspective">Perspective</span>
           <span class="vp-badge" id="vpFps">— FPS</span>
@@ -119,6 +121,7 @@
             <div class="go-emoji">🏆</div>
             <h2 data-i18n="ed.winTitle">Gagné ! 🏆</h2>
             <p id="winScore">Score : 0</p>
+            <p id="winCoins"></p>
             <div class="go-actions">
               <button class="ghost-btn" id="btnBackEdit"><span data-i18n="ed.backToEdit">Retour à l'éditeur</span></button>
               <button class="primary-btn" id="btnReplay"><span data-i18n="ed.replay">Rejouer</span></button>
@@ -293,6 +296,6 @@
 
 <script src="../assets/i18n.js"></script>
 <script src="i18n-editor.js"></script>
-<script type="module" src="editor3d.js?v=1"></script>
+<script type="module" src="editor3d.js?v=2"></script>
 </body>
 </html>

@@ -843,9 +843,10 @@ canvas.addEventListener('pointerdown', function (e) {
   downPos = { x: e.clientX, y: e.clientY, button: e.button };
 });
 canvas.addEventListener('pointerup', function (e) {
-  if (!downPos || state.play) return;
+  if (!downPos) return;
   const moved = Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y);
   downPos = null;
+  if (state.play) return;
   if (moved > 6) return;
   if (transform.dragging) return;
   if (e.button !== 0) return;
@@ -863,7 +864,16 @@ canvas.addEventListener('pointerup', function (e) {
   select(null);
 });
 
+canvas.addEventListener('dblclick', function () {
+  if (!state.play) focusSelection();
+});
+
 canvas.addEventListener('pointermove', function (e) {
+  // En jeu : glisser = regard autour du joueur
+  if (state.play && downPos) {
+    play.camYaw -= (e.movementX || 0) * 0.0045;
+    play.camPitch = clamp(play.camPitch + (e.movementY || 0) * 0.0032, -0.15, 1.15);
+  }
   const r = canvas.getBoundingClientRect();
   pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
   pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
@@ -913,6 +923,14 @@ function startPlay() {
   state.won = false;
   state.lost = false;
   state.score = 0;
+  state.keys = {};
+
+  // Astuce de jeu (auto-masquée)
+  const hintEl = $('#playHint');
+  hintEl.hidden = false;
+  hintEl.classList.remove('fade-out');
+  clearTimeout(play.hintTimer);
+  play.hintTimer = setTimeout(function () { hintEl.classList.add('fade-out'); }, 5200);
 
   play.playerRec = playerRec;
   play.pos.copy(playerRec.obj3d.position);
@@ -969,6 +987,7 @@ function stopPlay() {
   $('#hud').hidden = true;
   $('#winOverlay').hidden = true;
   $('#loseOverlay').hidden = true;
+  $('#playHint').hidden = true;
   $('#btnPlay').classList.remove('playing');
   $('#playLabel').textContent = t('ed.play');
   $('#playIcon').innerHTML = '<path d="M8 5.5v13l10-6.5z"/>';
@@ -991,7 +1010,10 @@ function winGame(msg) {
   if (state.won || state.lost) return;
   state.won = true;
   SFX.win();
+  const total = play.coins.length;
+  const got = play.coins.filter(function (c) { return c.got; }).length;
   $('#winScore').textContent = t('ed.scoreLabel') + ' : ' + state.score;
+  $('#winCoins').textContent = t('ed.coinsLabel') + ' : ' + got + ' / ' + total;
   $('#winOverlay').hidden = false;
   log('🏆 ' + t('ed.winTitle'), 'ok');
 }
@@ -1009,20 +1031,23 @@ function updatePlay(dt) {
   if (!rec) return;
   const keys = state.keys;
 
-  // Entrées caméra (glisser = orbiter autour du joueur)
+  // Flèches = tourner la caméra · glisser la souris = regard
   let turn = 0;
-  if (keys['a'] || keys['q'] || keys['arrowleft']) turn += 1;
-  if (keys['d'] || keys['arrowright']) turn -= 1;
+  if (keys['arrowleft']) turn += 1;
+  if (keys['arrowright']) turn -= 1;
   p.camYaw += turn * dt * 2.1;
 
-  let fwd = 0;
+  // ZQSD / WASD = se déplacer par rapport à la caméra
+  let fwd = 0, strafe = 0;
   if (keys['w'] || keys['z'] || keys['arrowup']) fwd += 1;
   if (keys['s'] || keys['arrowdown']) fwd -= 1;
+  if (keys['a'] || keys['q']) strafe -= 1;
+  if (keys['d']) strafe += 1;
 
   const speed = rec.speed || 6;
   const sin = Math.sin(p.camYaw), cos = Math.cos(p.camYaw);
-  // Avant = direction caméra → joueur
-  const dirX = -sin * fwd, dirZ = -cos * fwd;
+  const dirX = -sin * fwd + cos * strafe;
+  const dirZ = -cos * fwd - sin * strafe;
   const targetVx = dirX * speed;
   const targetVz = dirZ * speed;
   p.vel.x += (targetVx - p.vel.x) * Math.min(1, dt * 12);
@@ -1106,6 +1131,7 @@ function updatePlay(dt) {
   // Objectif
   reg.forEach(function (r2) {
     if (r2.type === 'goal' && r2.obj3d.visible) {
+      r2.obj3d.rotation.y += dt * 0.9;
       const gp = r2.obj3d.position;
       if (Math.abs(p.pos.x - gp.x) < 1.8 && Math.abs(p.pos.z - gp.z) < 1.8 && Math.abs(p.pos.y - gp.y) < 3.2) {
         winGame(r2.name);
@@ -1120,11 +1146,12 @@ function updatePlay(dt) {
     if (hitsBox(p.pos, r, h, b.box)) runHooks('onCollide', b.rec, rec, dt);
   }
 
-  // Caméra de suivi
-  const camDist = 9.5, camH = 4.6;
+  // Caméra de suivi (souris = regard)
+  const camDist = 9.5;
+  const camH = 2.1 + p.camPitch * 7;
   const tx = p.pos.x + Math.sin(p.camYaw) * camDist;
   const tz = p.pos.z + Math.cos(p.camYaw) * camDist;
-  const ty = p.pos.y + camH + p.camPitch * 4;
+  const ty = p.pos.y + camH;
   camera.position.lerp(new THREE.Vector3(tx, ty, tz), Math.min(1, dt * 5));
   camera.lookAt(p.pos.x, p.pos.y + 1.7, p.pos.z);
 }

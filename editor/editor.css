@@ -39,6 +39,7 @@ body {
   background: var(--bg); color: var(--txt);
   overflow: hidden; -webkit-font-smoothing: antialiased;
 }
+[hidden] { display: none !important; }
 ::selection { background: rgba(124, 92, 255, 0.35); }
 button { font-family: 'Inter'; cursor: pointer; color: inherit; }
 input, select, textarea { font-family: 'Inter'; color: var(--txt); }
@@ -268,6 +269,26 @@ input, select, textarea { font-family: 'Inter'; color: var(--txt); }
   backdrop-filter: blur(8px); border: 1px solid var(--line);
 }
 .hud-pill svg { width: 14px; height: 14px; opacity: 0.85; }
+
+/* Vignette cinématique */
+.viewport::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 58%, rgba(10, 12, 18, 0.38) 100%);
+  z-index: 4;
+}
+
+/* Astuce de jeu */
+.play-hint {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: rgba(20, 22, 28, 0.82); backdrop-filter: blur(8px);
+  border: 1px solid var(--line-2); color: var(--muted);
+  padding: 9px 18px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; white-space: nowrap;
+  z-index: 6; transition: opacity 0.6s ease;
+  animation: hintIn 0.4s ease;
+}
+.play-hint.fade-out { opacity: 0; pointer-events: none; }
+@keyframes hintIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* Overlays fin de partie */
 .game-overlay {
