@@ -373,11 +373,11 @@ export class Arena {
     this.openingSpots = [0, 0.4, -0.4].map((off, i) => {
       const a = this.playerSpawn.yaw + off;
       const from = this.playerSpawn.pos;
-      for (let r = 22 + i * 2.5; r <= 34; r += 3) {
+      for (let r = 17 + i * 2.2; r <= 27; r += 2.5) {
         const p = new THREE.Vector3(from.x - Math.sin(a) * r, 0, from.z - Math.cos(a) * r);
         if (!this._blockedAt(p)) return p;
       }
-      return new THREE.Vector3(from.x - Math.sin(a) * 24, 0, from.z - Math.cos(a) * 24);
+      return new THREE.Vector3(from.x - Math.sin(a) * 18, 0, from.z - Math.cos(a) * 18);
     });
     // accès (rampes) pour monter sur les zones surélevées
     this.climbAccess = [

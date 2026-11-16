@@ -106,13 +106,13 @@ class Enemy {
     // teinte par type + visière émissive (repérée sur la tête)
     for (const m of inst.mats) {
       if (!m.color) continue;
-      m.color.setHex(0x3C4557).lerp(new THREE.Color(this.def.accent), 0.30);
+      m.color.setHex(0x4E5A70).lerp(new THREE.Color(this.def.accent), 0.26);
       m.metalness = Math.min(1, (m.metalness || 0.2) + 0.25);
       m.roughness = 0.6;
       // Légère auto-illumination : les robots se détachent du sol la nuit, où
       // ils n'étaient que des silhouettes noires impossibles à viser.
       m.emissive.setHex(this.def.accent);
-      m.emissiveIntensity = 0.16;
+      m.emissiveIntensity = 0.34;
     }
     root.traverse((o) => {
       if (!o.isMesh || !o.material || !/head/i.test(o.name)) return;
@@ -299,7 +299,9 @@ export class EnemyManager {
       en.onDeath = () => this.killEnemy(en);
       en.onHurtSound = () => this.sound.enemyHurt();
       this.enemies.push(en);
-      this.fx.explosion(pos.clone().setY(1), true);
+      // Pas de gerbe de fumée à l'apparition : au premier spawn elle masquait
+      // complètement les robots pendant les deux premières secondes.
+      if (n > 1) this.fx.explosion(pos.clone().setY(1), true);
     }
   }
 
