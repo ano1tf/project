@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connexion — KREO</title>
+<meta name="description" content="Connecte-toi à KREO pour retrouver tes projets.">
+<link rel="icon" href="../assets/kreo-logo-web.png">
+<meta name="theme-color" content="#0B0D12">
+<link rel="stylesheet" href="../assets/styles.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body.auth-page {
+    min-height: 100vh;
+    background: var(--bg, #0B0D12);
+    color: var(--ink, #EAF0FF);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 7vh 20px 50px;
+  }
+  .auth-top {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 26px;
+  }
+  .auth-top img { height: 42px; border-radius: 10px; }
+  .auth-kicker { font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: #57E8FF; }
+  .auth-card {
+    width: min(420px, 94vw);
+    background: rgba(15, 19, 28, 0.92);
+    border: 1px solid rgba(120, 140, 180, 0.16);
+    border-radius: 22px;
+    padding: 34px 34px 30px;
+    backdrop-filter: blur(14px);
+  }
+  .auth-card h1 {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 25px;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+  }
+  .auth-sub { color: #97A3BC; font-size: 13.5px; margin-bottom: 22px; }
+  .tabs {
+    display: flex; gap: 6px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(120, 140, 180, 0.14);
+    border-radius: 12px;
+    padding: 5px;
+    margin-bottom: 20px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 8px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #97A3BC;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .tab.active { background: rgba(87, 232, 255, 0.16); color: #EAF0FF; }
+  .field { margin-bottom: 13px; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #97A3BC;
+    margin-bottom: 6px;
+  }
+  .field input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 11px;
+    border: 1px solid rgba(120, 140, 180, 0.22);
+    background: rgba(255, 255, 255, 0.045);
+    color: #EAF0FF;
+    font-size: 14.5px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .field input:focus { border-color: rgba(87, 232, 255, 0.65); }
+  .auth-error {
+    display: none;
+    background: rgba(255, 77, 94, 0.12);
+    border: 1px solid rgba(255, 77, 94, 0.4);
+    color: #FF8D98;
+    border-radius: 11px;
+    padding: 10px 13px;
+    font-size: 13px;
+    margin-bottom: 13px;
+  }
+  .auth-error.show { display: block; }
+  .btn-submit {
+    width: 100%;
+    padding: 14px 20px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #2FD8FF, #4E7BFF);
+    color: #041018;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: transform 0.14s ease, filter 0.14s ease;
+    margin-top: 5px;
+  }
+  .btn-submit:hover { transform: translateY(-2px); filter: brightness(1.1); }
+  .btn-submit:disabled { opacity: 0.6; cursor: wait; transform: none; }
+  .auth-foot {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 13px;
+    color: #97A3BC;
+  }
+  .auth-foot a { color: #57E8FF; text-decoration: none; }
+  .auth-foot a:hover { text-decoration: underline; }
+  .auth-free {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #2FE07C;
+  }
+  .auth-back {
+    margin-top: 26px;
+    color: #97A3BC;
+    font-size: 13px;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(151, 163, 188, 0.4);
+    padding-bottom: 2px;
+  }
+  .auth-back:hover { color: #EAF0FF; }
+  .lang-mini {
+    position: fixed; top: 18px; right: 20px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(120, 140, 180, 0.2);
+    color: #EAF0FF;
+    border-radius: 99px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body class="auth-page">
+
+<button class="lang-mini" id="langToggle">FR / EN</button>
+
+<div class="auth-top">
+  <img src="../assets/kreo-logo-web.png" alt="KREO">
+  <div class="auth-kicker">KREO</div>
+</div>
+
+<div class="auth-card">
+  <h1 id="authTitle" data-i18n="auth.login">Connexion</h1>
+  <p class="auth-sub" data-i18n="auth.sub">Connecte-toi pour retrouver tes projets.</p>
+
+  <div class="tabs">
+    <button class="tab active" id="tabLogin" data-i18n="auth.login">Connexion</button>
+    <button class="tab" id="tabRegister" data-i18n="auth.register">Inscription</button>
+  </div>
+
+  <div class="auth-error" id="authError"></div>
+
+  <form id="authForm" novalidate>
+    <div class="field" id="fieldName" hidden>
+      <label for="fName" data-i18n="auth.name">Nom</label>
+      <input type="text" id="fName" autocomplete="name" maxlength="60" placeholder="Léo">
+    </div>
+    <div class="field">
+      <label for="fEmail" data-i18n="auth.email">E-mail</label>
+      <input type="email" id="fEmail" autocomplete="email" maxlength="254" placeholder="toi@exemple.fr" required>
+    </div>
+    <div class="field">
+      <label for="fPassword" data-i18n="auth.password">Mot de passe</label>
+      <input type="password" id="fPassword" autocomplete="current-password" maxlength="200" placeholder="••••••••" required>
+    </div>
+    <div class="field" id="fieldConfirm" hidden>
+      <label for="fConfirm" data-i18n="auth.confirm">Confirme le mot de passe</label>
+      <input type="password" id="fConfirm" autocomplete="new-password" maxlength="200" placeholder="••••••••">
+    </div>
+    <button type="submit" class="btn-submit" id="authSubmit" data-i18n="auth.submitLogin">SE CONNECTER</button>
+  </form>
+
+  <div class="auth-foot">
+    <span id="footText" data-i18n="auth.noAccount">Pas encore de compte ?</span>
+    <a href="#" id="footLink" data-i18n="auth.register">Inscription</a>
+  </div>
+  <div class="auth-free" data-i18n="auth.free">Gratuit, pour toujours.</div>
+</div>
+
+<a class="auth-back" href="../" data-i18n="auth.backHome">← Retour à KREO</a>
+
+<script src="../assets/i18n.js"></script>
+<script src="login.js"></script>
+</body>
+</html>

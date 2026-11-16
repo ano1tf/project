@@ -143,6 +143,20 @@ html[data-theme="light"] .discord-mini a { color: #0E7490; }
   flex: none;
 }
 .u-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.u-logout {
+  margin-left: auto;
+  background: none;
+  border: 1px solid rgba(120, 140, 180, 0.25);
+  color: #97A3BC;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.u-logout:hover { color: #FF4D5E; border-color: rgba(255, 77, 94, 0.6); }
 .u-plan { font-size: 10.5px; color: var(--muted); }
 
 /* ---------- Main ---------- */

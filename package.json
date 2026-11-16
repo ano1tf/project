@@ -1,0 +1,18 @@
+{
+  "name": "kreo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "KREO — plateforme de création de jeux 3D, 100% web (landing, éditeur, espace créateur, démos)",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "express": "^5.3.0"
+  }
+}
