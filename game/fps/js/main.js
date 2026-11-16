@@ -375,6 +375,7 @@ function startGame() {
   feed = [];
   renderFeed();
   game.state = 'playing';
+  weapons.vm.visible = true;
   hideOverlays();
   el('hud').hidden = false;
   requestLock();
@@ -506,6 +507,7 @@ el('btnQuit').addEventListener('click', () => {
   hideOverlays();
   el('menuOverlay').hidden = false;
   el('hud').hidden = true;
+  weapons.vm.visible = false;
   enemies.clear();
   sound.ambientStop();
   document.exitPointerLock && document.exitPointerLock();
@@ -517,6 +519,7 @@ el('btnMenu').addEventListener('click', () => {
   hideOverlays();
   el('menuOverlay').hidden = false;
   el('hud').hidden = true;
+  weapons.vm.visible = false;
   enemies.clear();
   document.exitPointerLock && document.exitPointerLock();
 });
@@ -552,6 +555,8 @@ const vmFlash = new THREE.PointLight(0xFFC878, 0, 3, 2);
 vmFlash.position.set(0.12, 0.02, -0.5);
 vmScene.add(vmFlash);
 let vmFlashT = 0;
+// l'arme est masquée pendant les menus (la caméra d'intro est libre)
+weapons.vm.visible = false;
 
 // La caméra du viewmodel suit celle du joueur (mêmes matrices, FOV 76 comme le jeu)
 function updateVmCamera() {
