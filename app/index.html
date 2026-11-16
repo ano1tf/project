@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Espace créateur — KREO</title>
+<meta name="description" content="L'espace créateur KREO — aperçu de l'application après connexion.">
+<link rel="icon" href="../assets/kreo-logo-web.png">
+<meta name="theme-color" content="#0B0B12">
+<link rel="stylesheet" href="app.css?v=1">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <a class="brand" href="../"><img src="../assets/kreo-logo-web.png" alt="KREO">KREO</a>
+
+    <a class="nav-item active" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11v-9.5"/></svg>
+      <span data-i18n="app.home">Accueil</span>
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 12h2.5M9.25 10.75v2.5"/><circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/><circle cx="17.5" cy="13.5" r=".6" fill="currentColor"/></svg>
+      <span data-i18n="app.mygames">Mes jeux</span>
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M15.2 8.8 13 13l-4.2 2.2L11 11z"/></svg>
+      <span data-i18n="app.discover">Découvrir</span>
+    </a>
+    <a class="nav-item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.8 20a5 5 0 0 1 4.7-4.7"/></svg>
+      <span data-i18n="app.communityNav">Communauté</span>
+    </a>
+
+    <div class="side-spacer"></div>
+
+    <div class="discord-mini">
+      <b>Discord KREO</b>
+      <p data-i18n="app.communitySub">Défis créatifs, entraide et avant-premières — sur Discord.</p>
+      <a href="#"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg><span data-i18n="app.discord">Rejoindre le Discord</span></a>
+    </div>
+
+    <div class="user-chip">
+      <div class="avatar">L</div>
+      <div>
+        <div class="u-name">Léo</div>
+        <div class="u-plan" data-i18n="app.free">Compte gratuit</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+    <!-- Greeting -->
+    <div class="top-row">
+      <div class="greeting">
+        <h1 data-i18n="app.hi">Salut, Léo 👋</h1>
+        <p data-i18n="app.sub">Que veux-tu créer aujourd'hui ?</p>
+        <div class="greet-actions">
+          <a class="btn btn-primary" href="../editor/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            <span data-i18n="app.new">Nouveau projet</span>
+          </a>
+          <button class="btn btn-ghost">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/></svg>
+            <span data-i18n="app.import">Importer</span>
+          </button>
+        </div>
+      </div>
+      <button class="lang-toggle" id="langToggle" aria-label="Changer de langue">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
+        <span id="langLabel">FR</span>
+      </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 12h2.5M9.25 10.75v2.5"/><circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/></svg></div>
+        <div class="s-num">6</div>
+        <div class="s-label" data-i18n="app.s1">Mes jeux</div>
+      </div>
+      <div class="stat">
+        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg></div>
+        <div class="s-num">1 284</div>
+        <div class="s-label" data-i18n="app.s2">Parties jouées</div>
+      </div>
+      <div class="stat">
+        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.8 20a5 5 0 0 1 4.7-4.7"/></svg></div>
+        <div class="s-num">3 420</div>
+        <div class="s-label" data-i18n="app.s3">Joueurs ce mois</div>
+      </div>
+      <div class="stat">
+        <div class="s-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.6-9.2-9C1.3 8 2.8 4.8 6.2 4.8c2 0 3.3 1.2 4.1 2.4l1.7 2 1.7-2c.8-1.2 2.1-2.4 4.1-2.4 3.4 0 4.9 3.2 3.4 6.2C19 15.4 12 20 12 20z"/></svg></div>
+        <div class="s-num">487</div>
+        <div class="s-label" data-i18n="app.s4">J'aime</div>
+      </div>
+    </div>
+
+    <!-- Projects -->
+    <div class="sec-head">
+      <h2 data-i18n="app.projects">Mes projets</h2>
+      <a href="#"><span data-i18n="app.seeAll">Tout voir</span> ›</a>
+    </div>
+    <div class="projects">
+      <div class="p-card">
+        <div class="p-media">
+          <img src="../assets/showcase/sky-runner.jpg" alt="Sky Runner">
+          <span class="chip pub" data-i18n="app.published">Publié</span>
+        </div>
+        <div class="p-info">
+          <h3>Sky Runner</h3>
+          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 842 <span data-i18n="app.plays">parties</span></span>
+        </div>
+      </div>
+      <div class="p-card">
+        <div class="p-media">
+          <img src="../assets/showcase/neon-drift.jpg" alt="Neon Drift">
+          <span class="chip pub" data-i18n="app.published">Publié</span>
+        </div>
+        <div class="p-info">
+          <h3>Neon Drift</h3>
+          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 531 <span data-i18n="app.plays">parties</span></span>
+        </div>
+      </div>
+      <div class="p-card">
+        <div class="p-media">
+          <img src="../assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux">
+          <span class="chip pub" data-i18n="app.published">Publié</span>
+        </div>
+        <div class="p-info">
+          <h3>L'Île aux Cristaux</h3>
+          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 1 204 <span data-i18n="app.plays">parties</span></span>
+        </div>
+      </div>
+      <div class="p-card">
+        <div class="p-media">
+          <img src="../assets/showcase/nova-strike.jpg" alt="Nova Strike">
+          <span class="chip draft" data-i18n="app.draft">Brouillon</span>
+        </div>
+        <div class="p-info">
+          <h3>Nova Strike</h3>
+          <span class="p-plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5z"/></svg> 128 <span data-i18n="app.plays">parties</span></span>
+        </div>
+      </div>
+      <a class="p-new" href="../editor/">
+        <div class="plus">+</div>
+        <b data-i18n="app.newCard">Nouveau projet</b>
+        <span data-i18n="app.newCardSub">Commence de zéro</span>
+      </a>
+    </div>
+
+    <!-- Activity + community -->
+    <div class="bottom-row">
+      <div class="panel">
+        <h2 data-i18n="app.activity">Activité récente</h2>
+        <div class="act-list">
+          <div class="act">
+            <div class="act-ico i1">🎉</div>
+            <div class="act-text" data-i18n="app.a1">Sky Runner a atteint 100 joueurs</div>
+            <div class="act-time" data-i18n="app.t1">il y a 2 h</div>
+          </div>
+          <div class="act">
+            <div class="act-ico i2">💬</div>
+            <div class="act-text" data-i18n="app.a2">Maya a commenté Neon Drift</div>
+            <div class="act-time" data-i18n="app.t2">il y a 5 h</div>
+          </div>
+          <div class="act">
+            <div class="act-ico i3">🏆</div>
+            <div class="act-text" data-i18n="app.a3">Défi hebdo : jeux de plateforme</div>
+            <div class="act-time" data-i18n="app.t3">hier</div>
+          </div>
+          <div class="act">
+            <div class="act-ico i4">🎮</div>
+            <div class="act-text" data-i18n="app.a4">Nova Strike a été joué 12 fois aujourd'hui</div>
+            <div class="act-time" data-i18n="app.t4">il y a 2 jours</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="community-card">
+        <h2 data-i18n="app.communityTitle">La communauté</h2>
+        <p data-i18n="app.communitySub">Défis créatifs, entraide et avant-premières — sur Discord.</p>
+        <div class="avatars">
+          <div class="avatar" style="background:linear-gradient(135deg,#8B5CF6,#6366F1)">L</div>
+          <div class="avatar" style="background:linear-gradient(135deg,#22D3EE,#3B82F6)">M</div>
+          <div class="avatar" style="background:linear-gradient(135deg,#F472B6,#8B5CF6)">S</div>
+          <div class="avatar" style="background:linear-gradient(135deg,#34D399,#06B6D4)">C</div>
+          <div class="avatar" style="background:var(--card-2);color:var(--muted);font-size:10px">+ toi</div>
+        </div>
+        <a class="btn btn-discord" href="#">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span data-i18n="app.discord">Rejoindre le Discord</span>
+        </a>
+      </div>
+    </div>
+
+    <p class="preview-note" data-i18n="app.previewNote">Aperçu visuel — le système de connexion arrive bientôt.</p>
+
+  </main>
+</div>
+
+<script src="../assets/i18n.js"></script>
+<script src="i18n-app.js"></script>
+</body>
+</html>
