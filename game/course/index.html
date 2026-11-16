@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KREO RACING — Circuit des Coteaux</title>
+<meta name="description" content="KREO RACING — jeu de course 3D réaliste créé avec KREO.">
+<link rel="icon" href="../../assets/kreo-logo-web.png">
+<meta name="theme-color" content="#0B0D12">
+<link rel="stylesheet" href="style.css?v=2">
+<script type="importmap">
+{
+  "imports": {
+    "three": "../../assets/vendor/three/three.module.js",
+    "three/addons/": "../../assets/vendor/three/addons/"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<!-- ================= HUD ================= -->
+<div id="hud" hidden>
+  <!-- haut gauche : tour / position -->
+  <div class="hud-block hud-topleft">
+    <div class="hud-label">TOUR</div>
+    <div class="hud-big"><span id="hudLap">1</span><span class="dim">/3</span></div>
+    <div class="hud-pos" id="hudPos">P1<span class="dim">/4</span></div>
+  </div>
+
+  <!-- haut centre : chronos -->
+  <div class="hud-block hud-topcenter">
+    <div class="time-row"><span class="hud-label">TOUR</span><span class="time-val" id="hudLapTime">0:00.000</span></div>
+    <div class="time-row"><span class="hud-label">MEILLEUR</span><span class="time-val best" id="hudBest">--:--.---</span></div>
+    <div class="time-row"><span class="hud-label">TOTAL</span><span class="time-val dim" id="hudTotal">0:00.000</span></div>
+  </div>
+
+  <!-- haut droite : minimap -->
+  <div class="hud-block hud-minimap">
+    <canvas id="minimap" width="220" height="220"></canvas>
+  </div>
+
+  <!-- bas centre : vitesse -->
+  <div class="hud-speed">
+    <div class="gear" id="hudGear">1</div>
+    <div class="speed-num" id="hudSpeed">0</div>
+    <div class="speed-unit">KM/H</div>
+    <div class="speed-bar"><div class="speed-fill" id="hudSpeedFill"></div></div>
+    <div class="drift-badge" id="hudDrift" hidden>DRIFT +<span id="hudDriftPts">0</span></div>
+  </div>
+
+  <!-- bas gauche : caméra -->
+  <div class="hud-block hud-cam">
+    <span class="cam-dot"></span><span id="hudCam">CAMÉRA : POURSUITE</span>
+  </div>
+
+  <!-- sens inverse -->
+  <div class="wrong-way" id="wrongWay" hidden>⚠ SENS INVERSE ⚠</div>
+</div>
+
+<!-- ================= COMPTE À REBOURS ================= -->
+<div id="countdown" hidden>
+  <div class="lights">
+    <span class="light l1"></span><span class="light l2"></span><span class="light l3"></span>
+  </div>
+  <div class="count-num" id="countNum">3</div>
+</div>
+
+<!-- ================= MENU PRINCIPAL ================= -->
+<div id="menu" class="overlay">
+  <div class="menu-card">
+    <div class="menu-logo">
+      <img src="../../assets/kreo-logo-web.png" alt="KREO">
+      <div>
+        <div class="menu-kicker">UN JEU CRÉÉ AVEC KREO</div>
+        <h1>KREO RACING</h1>
+      </div>
+    </div>
+    <p class="menu-sub">Circuit des Coteaux · 3 tours · 4 pilotes</p>
+
+    <button class="btn-main" id="btnStart">▶&nbsp;&nbsp;LANCER LA COURSE</button>
+
+    <div class="menu-row">
+      <button class="btn-ghost" id="btnCamSelect"><span id="camSelectLabel">Caméra : Poursuite</span></button>
+      <button class="btn-ghost" id="btnSound"><span id="soundLabel">🔊 Son</span></button>
+      <button class="btn-ghost" id="btnLang">FR / EN</button>
+    </div>
+
+    <div class="controls-grid">
+      <div><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>WASD</kbd> / <kbd>↑←↓→</kbd><span>Conduire</span></div>
+      <div><kbd>Espace</kbd><span>Frein à main (drift)</span></div>
+      <div><kbd>C</kbd><span>Changer de caméra</span></div>
+      <div><kbd>Échap</kbd><span>Pause</span></div>
+    </div>
+
+    <div class="menu-footer">
+      <span class="pill">Slot 3D</span><span class="pill">Slot Animations</span><span class="pill">Slot Sons</span>
+      <span class="pill">FX</span><span class="pill">Caméras</span><span class="pill">Code</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PAUSE ================= -->
+<div id="pause" class="overlay" hidden>
+  <div class="menu-card small">
+    <h2>PAUSE</h2>
+    <button class="btn-main" id="btnResume">REPRENDRE</button>
+    <button class="btn-ghost wide" id="btnRestart">RECOMMENCER</button>
+    <button class="btn-ghost wide" id="btnQuit">MENU PRINCIPAL</button>
+  </div>
+</div>
+
+<!-- ================= ARRIVÉE ================= -->
+<div id="finish" class="overlay" hidden>
+  <div class="menu-card">
+    <div class="finish-emoji" id="finishEmoji">🏆</div>
+    <h2 id="finishTitle">ARRIVÉE !</h2>
+    <div class="results" id="resultsTable"></div>
+    <div class="finish-stats">
+      <div><span class="hud-label">MEILLEUR TOUR</span><div class="fs-val" id="fsBest">--</div></div>
+      <div><span class="hud-label">TOTAL</span><div class="fs-val" id="fsTotal">--</div></div>
+      <div><span class="hud-label">SCORE DRIFT</span><div class="fs-val" id="fsDrift">0</div></div>
+    </div>
+    <button class="btn-main" id="btnAgain">REJOUER</button>
+    <button class="btn-ghost wide" id="btnMenu">MENU PRINCIPAL</button>
+  </div>
+</div>
+
+<div id="loading" class="overlay">
+  <div class="load-spin"></div>
+  <div class="load-txt">Chargement du circuit…</div>
+</div>
+
+<script type="module" src="js/main.js?v=2"></script>
+</body>
+</html>
