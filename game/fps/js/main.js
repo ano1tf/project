@@ -380,7 +380,7 @@ function hideOverlays() {
 const input = {
   forward: false, back: false, left: false, right: false,
   jump: false, crouch: false, sprint: false,
-  fire: false, reload: false, _firePressed: false
+  fire: false, reload: false, ads: false, _firePressed: false
 };
 const KEYMAP = {
   z: 'forward', w: 'forward', arrowup: 'forward',
@@ -424,10 +424,13 @@ canvas.addEventListener('mousedown', (e) => {
       requestLock();
     }
   }
+  if (e.button === 2) input.ads = true;
 });
 document.addEventListener('mouseup', (e) => {
   if (e.button === 0) input.fire = false;
+  if (e.button === 2) input.ads = false;
 });
+document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement === canvas && (game.state === 'playing' || game.state === 'intermission')) {
     player.addLook(e.movementX, e.movementY);
@@ -555,6 +558,7 @@ function loop(now) {
   }
   const hSpeedNow = Math.hypot(player.vel.x, player.vel.z);
   el('crosshair').classList.toggle('wide', hSpeedNow > 4.6 || !player.grounded);
+  el('crosshair').style.opacity = input.ads ? 0.25 : 1;
   damageFlash = Math.max(0, damageFlash - dt * 1.6);
   if (dmgDirT > 0) {
     dmgDirT -= dt * 1.15;

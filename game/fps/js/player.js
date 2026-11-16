@@ -266,6 +266,7 @@ export class Player {
       this._bobAmp += (0 - this._bobAmp) * Math.min(1, dt * 6);
     }
 
+    this._ads = !!input.ads;
     this._applyCamera(dt, false);
   }
 
@@ -283,8 +284,9 @@ export class Player {
     } else {
       this.camera.rotation.set(this.pitch, this.yaw, bobX * 0.35);
     }
-    const targetFov = 76 + Math.min(1, Math.hypot(this.vel.x, this.vel.z) / SPRINT_SPEED) * 7;
-    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 5);
+    const adsFov = this._ads ? 17 : 0;
+    const targetFov = 76 + Math.min(1, Math.hypot(this.vel.x, this.vel.z) / SPRINT_SPEED) * 7 - adsFov;
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 6);
     this.camera.updateProjectionMatrix();
   }
 }

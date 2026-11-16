@@ -48,6 +48,7 @@ export class WeaponSystem {
     this._reloadAnim = 0;
     this._bobT = 0;
     this._sprintT = 0;
+    this._adsT = 0;
 
     // Groupe viewmodel attaché à la caméra
     this.vm = new THREE.Group();
@@ -141,6 +142,8 @@ export class WeaponSystem {
     const { def, st } = this.current();
 
     st.cooldown = Math.max(0, st.cooldown - dt);
+    const adsGoal = (input.ads && st.reloading <= 0 && this._sprintT < 0.4) ? 1 : 0;
+    this._adsT += (adsGoal - this._adsT) * Math.min(1, dt * 8);
 
     if (st.reloading > 0) {
       st.reloading -= dt;
@@ -174,11 +177,14 @@ export class WeaponSystem {
     const hSpeed = Math.hypot(this.player.vel.x, this.player.vel.z);
     this._sprintT += ((input.sprint && hSpeed > 5 && this.player.grounded ? 1 : 0) - this._sprintT) * Math.min(1, dt * 6);
     this._bobT += dt * (3 + hSpeed * 1.1);
-    const bobAmt = Math.min(1, hSpeed / 8) * 0.012 * (1 + this._sprintT * 1.6);
+    const bobAmt = Math.min(1, hSpeed / 8) * 0.012 * (1 + this._sprintT * 1.6) * (1 - this._adsT * 0.8);
+    const adsX = 0.3 * (1 - this._adsT);
+    const adsY = -0.188 + (-0.28 + 0.188) * (1 - this._adsT);
+    const adsZ = -0.5 + (-0.62 + 0.5) * (1 - this._adsT);
     this.vm.position.set(
-      0.3 + Math.cos(this._bobT) * bobAmt + this._sprintT * 0.045,
-      -0.28 + Math.sin(this._bobT * 2) * bobAmt - this._reloadAnim * 0.16 - this._sprintT * 0.075,
-      -0.62 + this._recoilKick
+      adsX + Math.cos(this._bobT) * bobAmt + this._sprintT * 0.045,
+      adsY + Math.sin(this._bobT * 2) * bobAmt - this._reloadAnim * 0.16 - this._sprintT * 0.075,
+      adsZ + this._recoilKick
     );
     this.vm.rotation.set(
       -this._recoilRot - this._reloadAnim * 0.9 - this._sprintT * 0.32,
@@ -206,7 +212,7 @@ export class WeaponSystem {
     const baseDir = this.player.forwardDir();
     const moveFactor = Math.min(1, Math.hypot(this.player.vel.x, this.player.vel.z) / 8);
     const airborne = this.player.grounded ? 0 : 0.05;
-    const spread = def.spread + def.moveSpread * moveFactor * moveFactor + airborne;
+    const spread = (def.spread + def.moveSpread * moveFactor * moveFactor + airborne) * (this._adsT > 0.6 ? 0.55 : 1);
 
     for (let p = 0; p < def.pellets; p++) {
       const dir = baseDir.clone();
