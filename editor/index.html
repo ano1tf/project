@@ -3,145 +3,303 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Éditeur KREO</title>
-<meta name="description" content="L'éditeur de jeux KREO — crée ton jeu dans le navigateur.">
+<title>Éditeur — KREO</title>
+<meta name="description" content="KREO — l'éditeur de jeux qui commence sans code et va plus loin avec du vrai code JavaScript.">
 <link rel="icon" href="../assets/kreo-logo-web.png">
-<meta name="theme-color" id="themeColor" content="#0C0C11">
-<link rel="stylesheet" href="editor.css?v=1">
+<meta name="theme-color" content="#F4F5F9">
+<link rel="stylesheet" href="editor.css?v=2">
 </head>
 <body>
 
-<div id="app">
+<div id="editor">
 
   <!-- ============ TOPBAR ============ -->
-  <div class="ed-top">
-    <a class="ed-brand" href="../"><img src="../assets/kreo-logo-web.png" alt="KREO">KREO</a>
-    <a class="ed-back" href="../" data-i18n="ed.back">Retour au site</a>
-    <input id="projectName" type="text" value="Mon jeu" data-i18n-attr-placeholder="ed.projectName" placeholder="Mon jeu">
-    <div class="ed-spacer"></div>
-    <button class="btn btn-primary" id="btnPlay">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-      <span id="playLabel" data-i18n="ed.play">Jouer</span>
-    </button>
-    <button class="btn" id="btnSave"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span data-i18n="ed.save">Sauver</span></button>
-    <button class="btn" id="btnLoad"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg><span data-i18n="ed.load">Charger</span></button>
-    <button class="btn" id="btnExport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg><span data-i18n="ed.export">Exporter</span></button>
-    <button class="btn" id="btnImport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/></svg><span data-i18n="ed.import">Importer</span></button>
-    <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  <header class="topbar">
+    <a class="brand" href="../"><img src="../assets/kreo-logo-web.png" alt=""><span>KREO</span></a>
+    <input id="projectName" value="Ma scène" spellcheck="false">
+    <div class="tb-sep"></div>
+
+    <div class="tb-group">
+      <button class="tb-btn" id="btnUndo" title="Annuler (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h11a5 5 0 0 1 0 10h-3"/><path d="M8 5 4 9l4 4"/></svg><span class="tb-label" data-i18n="ed.undo">Annuler</span></button>
+      <button class="tb-btn" id="btnRedo" title="Rétablir (Ctrl+Maj+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 9H9a5 5 0 0 0 0 10h3"/><path d="m16 5 4 4-4 4"/></svg><span class="tb-label" data-i18n="ed.redo">Rétablir</span></button>
+    </div>
+    <div class="tb-sep"></div>
+
+    <div class="tb-group">
+      <button class="tb-btn toggle active" id="btnGrid" title="Grille (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9.5h16M4 14.5h16M9.5 4v16M14.5 4v16"/><rect x="4" y="4" width="16" height="16" rx="3"/></svg><span class="tb-label" data-i18n="ed.grid">Grille</span></button>
+      <button class="tb-btn toggle active" id="btnSnap" title="Aimantation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 4h4M14 4h4M6 8h4M14 8h4"/></svg><span class="tb-label" data-i18n="ed.snap">Aimantation</span></button>
+      <select id="zoomSelect" class="tb-select" title="Zoom">
+        <option value="0.5">50 %</option>
+        <option value="0.75">75 %</option>
+        <option value="1" selected>100 %</option>
+        <option value="1.25">125 %</option>
+        <option value="1.5">150 %</option>
+      </select>
+    </div>
+    <div class="tb-sep"></div>
+
+    <div class="tb-group">
+      <button class="tb-btn" id="btnNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="tb-label" data-i18n="ed.new">Nouveau</span></button>
+      <button class="tb-btn" id="btnSave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l4 4v12H5z"/><path d="M8 4v5h7"/><rect x="8" y="13" width="8" height="7"/></svg><span class="tb-label" data-i18n="ed.save">Enregistrer</span></button>
+      <button class="tb-btn" id="btnExport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg><span class="tb-label" data-i18n="ed.export">Exporter</span></button>
+      <button class="tb-btn" id="btnImport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/></svg><span class="tb-label" data-i18n="ed.import">Importer</span></button>
+      <button class="tb-btn" id="btnDemo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.2 6.6H21l-5.4 4 2 6.4-5.6-4-5.6 4 2-6.4-5.4-4h6.8z"/></svg><span class="tb-label" data-i18n="ed.demo">Démo</span></button>
+      <button class="tb-btn" id="btnHelp" title="Aide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.6" r=".6" fill="currentColor"/></svg><span class="tb-label" data-i18n="ed.help">Aide</span></button>
+    </div>
+
+    <div class="tb-spacer"></div>
+
+    <button class="tb-btn toggle" id="btnMute" title="Son"><svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M17.8 6.8a7.5 7.5 0 0 1 0 10.4"/></svg></button>
+
     <button class="lang-toggle" id="langToggle" aria-label="Changer de langue">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>
       <span id="langLabel">FR</span>
     </button>
-  </div>
 
-  <div class="ed-mobile" data-i18n="ed.mobile">L'éditeur est plus confortable sur grand écran.</div>
+    <button class="play-btn" id="btnPlay">
+      <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
+      <span id="playLabel" data-i18n="ed.play">Lancer le jeu</span>
+    </button>
+  </header>
 
-  <!-- ============ MAIN ============ -->
-  <div class="ed-main">
+  <!-- ============ ZONE PRINCIPALE ============ -->
+  <div class="workspace">
 
-    <!-- Left: add objects + scene tree -->
-    <aside class="ed-left">
-      <div class="ed-h" data-i18n="ed.add">Ajouter un objet</div>
-      <div class="add-grid">
-        <button class="add-btn" data-type="rect"><span class="add-dot" style="background:#7F7CFF"></span><span data-i18n="ed.trect">Rectangle</span></button>
-        <button class="add-btn" data-type="circle"><span class="add-dot" style="background:#22D3EE;border-radius:50%"></span><span data-i18n="ed.tcircle">Cercle</span></button>
-        <button class="add-btn" data-type="platform"><span class="add-dot" style="background:#8B5CF6"></span><span data-i18n="ed.tplatform">Plateforme</span></button>
-        <button class="add-btn" data-type="player"><span class="add-dot" style="background:#3B82F6"></span><span data-i18n="ed.tplayer">Joueur</span></button>
-        <button class="add-btn" data-type="coin"><span class="add-dot" style="background:#F59E0B;border-radius:50%"></span><span data-i18n="ed.tcoin">Pièce</span></button>
-        <button class="add-btn" data-type="enemy"><span class="add-dot" style="background:#EF4444;border-radius:50%"></span><span data-i18n="ed.tenemy">Ennemi</span></button>
-        <button class="add-btn" data-type="flag"><span class="add-dot" style="background:#4ADE80"></span><span data-i18n="ed.tflag">Drapeau</span></button>
+    <!-- Sidebar gauche -->
+    <aside class="panel-left">
+      <div class="panel-head">
+        <span data-i18n="ed.objects">Objets</span>
+        <div class="obj-count" id="objCount">0</div>
       </div>
-      <div class="ed-h" data-i18n="ed.scene">Scène</div>
-      <ul id="sceneTree"></ul>
+      <div class="obj-toolbar">
+        <button class="obj-btn" data-type="player" data-tip="Joueur"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="7" r="3.2"/><path d="M6.5 20a5.5 5.5 0 0 1 11 0"/></svg></button>
+        <button class="obj-btn" data-type="platform" data-tip="Plateforme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="9.5" width="17" height="6" rx="1.6"/></svg></button>
+        <button class="obj-btn" data-type="ground" data-tip="Sol"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="13" width="17" height="6" rx="1.6"/><path d="M7 13V9.8M12 13V8.6M17 13V9.8"/></svg></button>
+        <button class="obj-btn" data-type="enemy" data-tip="Ennemi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="10" width="14" height="9" rx="4"/><circle cx="9.2" cy="14" r=".7" fill="currentColor"/><circle cx="14.8" cy="14" r=".7" fill="currentColor"/><path d="M8 10V7M16 10V7"/></svg></button>
+        <button class="obj-btn" data-type="coin" data-tip="Pièce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7.2"/><path d="M12 8.2v7.6M9.8 10.3c0-1 1-1.7 2.2-1.7s2.2.6 2.2 1.6-1 1.5-2.2 1.7-2.2.7-2.2 1.7 1 1.6 2.2 1.6 2.2-.7 2.2-1.7"/></svg></button>
+        <button class="obj-btn" data-type="flag" data-tip="Drapeau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6.5 4v16"/><path d="M6.5 5c3-1.8 6 1.8 9 0v8c-3 1.8-6-1.8-9 0z"/></svg></button>
+        <button class="obj-btn" data-type="text" data-tip="Texte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
+      </div>
+
+      <div class="hierarchy" id="hierarchy"></div>
+
+      <div class="panel-foot">
+        <button class="ghost-btn" id="btnDuplicate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 5H6a1 1 0 0 0-1 1v10"/></svg><span data-i18n="ed.duplicate">Dupliquer</span></button>
+        <button class="ghost-btn danger" id="btnDelete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M8 7V5h8v2"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v5M14 11v5"/></svg><span data-i18n="ed.delete">Supprimer</span></button>
+      </div>
     </aside>
 
-    <!-- Center: viewport -->
-    <div class="ed-viewport">
-      <canvas id="viewport"></canvas>
-      <div class="ed-hud">
-        <div class="hud-chip"><span data-i18n="ed.score">Score</span> : <span id="hudScore">0</span></div>
+    <!-- Scène -->
+    <div class="stage-area">
+      <div class="stage-wrap" id="stageWrap">
+        <div class="stage-scaler" id="stageScaler">
+          <div class="stage" id="stage">
+            <canvas id="scene" width="960" height="540"></canvas>
+            <div class="grid-overlay" id="gridOverlay"></div>
+            <div class="sel-box" id="selBox" hidden>
+              <div class="handle h-nw" data-corner="nw"></div>
+              <div class="handle h-ne" data-corner="ne"></div>
+              <div class="handle h-sw" data-corner="sw"></div>
+              <div class="handle h-se" data-corner="se"></div>
+            </div>
+
+            <!-- HUD de jeu -->
+            <div class="hud" id="hud" hidden>
+              <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.2"/><path d="M12 8.2v7.6"/></svg><span id="hudScore">0</span></div>
+              <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/></svg><span id="hudCoins">0 / 0</span></div>
+            </div>
+
+            <!-- Overlays fin de partie -->
+            <div class="game-overlay" id="winOverlay" hidden>
+              <div class="go-card">
+                <div class="go-emoji">🏆</div>
+                <h2 data-i18n="ed.winTitle">Gagné ! 🏆</h2>
+                <p id="winScore">Score : 0</p>
+                <div class="go-actions">
+                  <button class="ghost-btn" id="btnBackEdit"><span data-i18n="ed.backToEdit">Retour à l'éditeur</span></button>
+                  <button class="primary-btn" id="btnReplay"><span data-i18n="ed.replay">Rejouer</span></button>
+                </div>
+              </div>
+            </div>
+            <div class="game-overlay" id="loseOverlay" hidden>
+              <div class="go-card">
+                <div class="go-emoji">💥</div>
+                <h2 data-i18n="ed.loseTitle">Perdu… 💥</h2>
+                <p data-i18n="ed.tryAgain">Réessaie — tu peux le faire.</p>
+                <div class="go-actions">
+                  <button class="ghost-btn" id="btnBackEdit2"><span data-i18n="ed.backToEdit">Retour à l'éditeur</span></button>
+                  <button class="primary-btn" id="btnReplay2"><span data-i18n="ed.replay">Rejouer</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="ed-hint" data-i18n="ed.hint">Clique pour sélectionner · Glisse pour déplacer · Suppr pour supprimer</div>
-      <div class="overlay" id="overlay">
-        <h2 id="overlayTitle"></h2>
-        <p id="overlayText"></p>
-        <button class="btn btn-primary" id="btnRetry"><span data-i18n="ed.retry">Rejouer</span></button>
+
+      <!-- Barre d'état -->
+      <div class="statusbar">
+        <span id="statusPos">x 0 · y 0</span>
+        <span class="sb-sep"></span>
+        <span id="statusCount">0 objets</span>
+        <span class="sb-sep"></span>
+        <span id="statusHint" data-i18n="ed.renameHint">Double-cliquez pour renommer</span>
+        <div class="sb-spacer"></div>
+        <span id="statusSave" class="sb-save ok">Enregistré</span>
+        <span class="sb-sep"></span>
+        <span id="statusZoom">100 %</span>
       </div>
     </div>
 
-    <!-- Right: inspector -->
-    <aside class="ed-right">
-      <div class="ed-h" data-i18n="ed.inspector">Inspecteur</div>
-      <div id="inspector">
-        <div class="insp-empty" id="inspEmpty" data-i18n="ed.empty">Sélectionne un objet pour modifier ses propriétés.</div>
-        <div id="inspForm" style="display:none">
+    <!-- Inspecteur -->
+    <aside class="panel-right">
+      <div class="panel-head"><span data-i18n="ed.inspector">Inspecteur</span></div>
+
+      <!-- Rien de sélectionné : réglages de scène -->
+      <div id="inspectorEmpty" class="inspector-body">
+        <div class="inspector-title" data-i18n="ed.scene">Scène</div>
+        <p class="inspector-hint" data-i18n="ed.sceneSettings">Réglages de la scène — cliquez sur un objet pour l'inspecter.</p>
+        <div class="field">
+          <label data-i18n="ed.sceneName">Nom de la scène</label>
+          <input type="text" id="inSceneName" value="Ma scène">
+        </div>
+        <div class="field">
+          <label data-i18n="ed.bgColor">Couleur de fond</label>
+          <input type="color" id="inBg" value="#F1F3F8">
+        </div>
+        <div class="field">
+          <label data-i18n="ed.gravity">Gravité</label>
+          <div class="range-row">
+            <input type="range" id="inGravity" min="200" max="4000" step="50" value="2000">
+            <span id="gravityVal">2000</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Objet sélectionné -->
+      <div id="inspectorObj" class="inspector-body" hidden>
+        <div class="inspector-title" id="inspTitle">—</div>
+
+        <div class="field">
+          <label data-i18n="ed.name">Nom</label>
+          <input type="text" id="inName">
+        </div>
+        <div class="field-row">
           <div class="field">
-            <label data-i18n="ed.name">Nom</label>
-            <input type="text" id="pName">
+            <label>X</label>
+            <input type="number" id="inX" step="4">
           </div>
           <div class="field">
-            <label data-i18n="ed.pos">Position</label>
-            <div class="field-row">
-              <input type="number" id="pX" step="1"><input type="number" id="pY" step="1">
-            </div>
+            <label>Y</label>
+            <input type="number" id="inY" step="4">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>W</label>
+            <input type="number" id="inW" min="16" step="4">
           </div>
           <div class="field">
-            <label data-i18n="ed.size">Taille</label>
-            <div class="field-row">
-              <input type="number" id="pW" step="1" min="16"><input type="number" id="pH" step="1" min="16">
-            </div>
+            <label>H</label>
+            <input type="number" id="inH" min="16" step="4">
           </div>
-          <div class="field">
-            <label data-i18n="ed.rot">Rotation</label>
-            <input type="number" id="pRot" step="5">
+        </div>
+        <div class="field">
+          <label data-i18n="ed.opacity">Opacité</label>
+          <div class="range-row">
+            <input type="range" id="inOpacity" min="10" max="100" step="5" value="100">
+            <span id="opacityVal">100 %</span>
           </div>
-          <div class="field">
-            <label data-i18n="ed.color">Couleur</label>
-            <input type="color" id="pColor">
-          </div>
-          <div class="field">
-            <label data-i18n="ed.behavior">Comportement</label>
-            <select id="pBehavior">
-              <option value="none" data-i18n="ed.bnone">Aucun</option>
-              <option value="player" data-i18n="ed.bplayer">Joueur</option>
-              <option value="enemy" data-i18n="ed.benemy">Ennemi (patrouille)</option>
-              <option value="coin" data-i18n="ed.bcoin">Pièce (à collecter)</option>
-              <option value="flag" data-i18n="ed.bflag">Arrivée (drapeau)</option>
-            </select>
-          </div>
-          <div class="field">
+        </div>
+
+        <div class="type-fields">
+          <div class="field" data-only="player">
             <label data-i18n="ed.speed">Vitesse</label>
-            <input type="number" id="pSpeed" step="0.5" min="0.5" max="6">
+            <div class="range-row"><input type="range" id="inSpeed" min="80" max="420" step="10"><span id="speedVal"></span></div>
           </div>
-          <div class="field check">
-            <input type="checkbox" id="pSolid"><label for="pSolid" data-i18n="ed.solid">Solide (bloque les autres)</label>
+          <div class="field" data-only="player">
+            <label data-i18n="ed.jump">Saut</label>
+            <div class="range-row"><input type="range" id="inJump" min="300" max="1100" step="10"><span id="jumpVal"></span></div>
           </div>
+          <div class="field" data-only="enemy">
+            <label data-i18n="ed.speed">Vitesse</label>
+            <div class="range-row"><input type="range" id="inEnemySpeed" min="30" max="220" step="5"><span id="enemySpeedVal"></span></div>
+          </div>
+          <div class="field" data-only="coin">
+            <label data-i18n="ed.coinValue">Valeur</label>
+            <input type="number" id="inCoinValue" min="1" step="1">
+          </div>
+          <div class="field" data-only="flag">
+            <label data-i18n="ed.flagMsg">Message de victoire</label>
+            <input type="text" id="inFlagMsg">
+          </div>
+          <div class="field" data-only="text">
+            <label data-i18n="ed.content">Contenu</label>
+            <input type="text" id="inTextContent">
+          </div>
+          <div class="field" data-only="text">
+            <label data-i18n="ed.fontSize">Taille du texte</label>
+            <input type="number" id="inTextSize" min="8" max="120">
+          </div>
+          <div class="field" data-only="text">
+            <label data-i18n="ed.textColor">Couleur du texte</label>
+            <input type="color" id="inTextColor">
+          </div>
+          <div class="field" data-not="text">
+            <label data-i18n="ed.color">Couleur</label>
+            <input type="color" id="inColor">
+          </div>
+          <div class="field" data-only="platform">
+            <label data-i18n="ed.solid">Collision</label>
+            <label class="switch"><input type="checkbox" id="inSolid" checked><span></span></label>
+          </div>
+        </div>
+
+        <div class="z-row">
+          <button class="ghost-btn" id="btnBackward" title="Descendre"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg></button>
+          <button class="ghost-btn" id="btnForward" title="Monter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg></button>
+          <div class="sb-spacer"></div>
+          <button class="ghost-btn" id="btnDuplicate2"><span data-i18n="ed.duplicate">Dupliquer</span></button>
+          <button class="ghost-btn danger" id="btnDelete2"><span data-i18n="ed.delete">Supprimer</span></button>
+        </div>
+
+        <div class="code-block">
+          <div class="code-tabs">
+            <button class="code-tab active" data-code="onStart">onStart</button>
+            <button class="code-tab" data-code="onUpdate">onUpdate</button>
+            <button class="code-tab" data-code="onCollide">onCollide</button>
+          </div>
+          <textarea id="codeEditor" spellcheck="false"></textarea>
+          <button class="primary-btn wide" id="btnApplyCode"><span data-i18n="ed.apply">Appliquer le code</span></button>
+          <button class="ghost-btn wide" id="btnResetCode"><span data-i18n="ed.resetCode">Réinitialiser</span></button>
         </div>
       </div>
     </aside>
   </div>
-
-  <!-- ============ BOTTOM: code / help ============ -->
-  <div class="ed-bottom">
-    <div class="ed-tabs">
-      <button class="ed-tab active" data-panel="codePanel" data-i18n="ed.codeTab">Code du jeu</button>
-      <button class="ed-tab" data-panel="helpPanel" data-i18n="ed.helpTab">Aide</button>
-    </div>
-    <div class="ed-panel active" id="codePanel">
-      <div class="code-intro" data-i18n="ed.codeIntro">JavaScript — s'exécute pendant le jeu. Les erreurs s'affichent ici.</div>
-      <textarea id="codeBox" spellcheck="false"></textarea>
-      <div id="codeError"></div>
-    </div>
-    <div class="ed-panel" id="helpPanel">
-      <div id="helpText" data-i18n="ed.helpText">• Clique un objet pour le sélectionner, glisse pour le déplacer, tire le coin pour le redimensionner.</div>
-    </div>
-  </div>
-
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- ============ MODALE AIDE ============ -->
+<div class="modal-backdrop" id="modalHelp">
+  <div class="modal">
+    <h2 data-i18n="ed.shortcuts">Raccourcis clavier</h2>
+    <div class="shortcut-list">
+      <div class="sc-row"><span data-i18n="ed.sc1">Déplacer la sélection (flèches, + Maj = 8 px)</span></div>
+      <div class="sc-row"><span data-i18n="ed.sc2">Supprimer l'objet sélectionné</span><kbd>Suppr</kbd></div>
+      <div class="sc-row"><span data-i18n="ed.sc3">Dupliquer la sélection</span><kbd>Ctrl + D</kbd></div>
+      <div class="sc-row"><span data-i18n="ed.sc4">Lancer / arrêter le jeu</span><kbd>Espace</kbd></div>
+      <div class="sc-row"><span data-i18n="ed.sc5">Annuler / rétablir</span><kbd>Ctrl + Z / Ctrl + Maj + Z</kbd></div>
+      <div class="sc-row"><span data-i18n="ed.sc6">Souris : sélectionner, déplacer, redimensionner</span></div>
+      <div class="sc-row"><span data-i18n="ed.sc7">Molette + Ctrl : zoom</span><kbd>Ctrl + Molette</kbd></div>
+    </div>
+    <div class="modal-actions">
+      <button class="primary-btn" data-close data-i18n="ed.close">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
 
 <script src="../assets/i18n.js"></script>
-<script src="editor.js?v=1"></script>
+<script src="i18n-editor.js"></script>
+<script src="editor.js?v=2"></script>
 </body>
 </html>

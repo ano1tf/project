@@ -1,719 +1,1365 @@
-/* ============ KREO Editor v0 ============ */
+/* ============================================================
+   KREO — Éditeur v1 (editor.js)
+   Souris (drag/resize), undo/redo, grille + aimantation, zoom,
+   hiérarchie, inspecteur complet, code JS (onStart/onUpdate/
+   onCollide), play mode + HUD + sons + overlays, sauvegarde.
+   ============================================================ */
 (function () {
   'use strict';
 
-  const $ = (s) => document.querySelector(s);
+  const $ = (s, c) => (c || document).querySelector(s);
+  const $$ = (s, c) => Array.from((c || document).querySelectorAll(s));
   const t = (k) => (window.kreoT ? window.kreoT(k) : k);
 
-  /* ================= State ================= */
-  const state = {
-    project: { name: 'Mon jeu', objects: [], code: '' },
-    selection: null,
-    playing: false,
-    runtime: null,
-    score: 0,
-    hooks: { onStart: null, onUpdate: null, onCollide: null },
-    keys: {},
-    dragging: null, // {mode:'move'|'resize', ox, oy}
+  const canvas = $('#scene');
+  const ctx = canvas.getContext('2d');
+  const W = 960, H = 540;
+
+  /* ---------------- Modèle ---------------- */
+  const DEFAULTS = {
+    player:   { w: 40, h: 56, color: '#6D4AFF', speed: 240, jump: 700 },
+    platform: { w: 180, h: 24, color: '#6D4AFF', solid: true },
+    ground:   { w: 960, h: 64, color: '#2A2F45', solid: true },
+    enemy:    { w: 40, h: 40, color: '#E5484D', speed: 80 },
+    coin:     { w: 28, h: 28, color: '#F5A623', value: 10 },
+    flag:     { w: 30, h: 90, color: '#18A06B', message: '' },
+    text:     { w: 240, h: 42, text: 'Texte', textSize: 22, textColor: '#0D1022' }
+  };
+  const TYPE_COLORS = {
+    player: '#6D4AFF', platform: '#8B7CFF', ground: '#2A2F45',
+    enemy: '#E5484D', coin: '#F5A623', flag: '#18A06B', text: '#22B8CF'
   };
 
-  let idCounter = 1;
-  const uid = () => 'o' + (idCounter++);
-  const snap = (v, alt) => (alt ? Math.round(v) : Math.round(v / 4) * 4);
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const state = {
+    objects: [],
+    selectedId: null,
+    play: false,
+    keys: {},
+    score: 0,
+    won: false,
+    lost: false,
+    dirty: false,
+    scene: { name: 'Ma scène', bg: '#F1F3F8', gravity: 2000 }
+  };
 
-  /* ================= Canvas ================= */
-  const canvas = $('#viewport');
-  const ctx = canvas.getContext('2d');
-  let CW = 1200, CH = 640;
+  const view = { zoom: 1, grid: true, snap: true, muted: false, codeTarget: 'onStart' };
 
-  function resizeCanvas() {
-    const r = canvas.parentElement.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    CW = Math.max(600, r.width);
-    CH = Math.max(320, r.height - 0);
-    canvas.width = CW * dpr;
-    canvas.height = CH * dpr;
-    canvas.style.width = CW + 'px';
-    canvas.style.height = CH + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    render();
-  }
-  window.addEventListener('resize', resizeCanvas);
+  let nextId = 1;
+  function genId() { return 'obj-' + (nextId++); }
+  function findObj(id) { return state.objects.find((o) => o.id === id) || null; }
+  function snapVal(v) { return view.snap ? Math.round(v / 8) * 8 : Math.round(v); }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-  /* ================= Objects ================= */
-  function defaultsFor(type) {
-    const base = {
-      id: uid(), type, name: type + '-' + idCounter,
-      x: 120, y: 120, w: 90, h: 60, rot: 0,
-      color: '#7F7CFF', behavior: 'none', speed: 2, solid: false,
-    };
-    if (type === 'rect') return Object.assign(base, { w: 120, h: 80, color: '#7F7CFF' });
-    if (type === 'circle') return Object.assign(base, { w: 90, h: 90, color: '#22D3EE' });
-    if (type === 'platform') return Object.assign(base, { w: 220, h: 26, color: '#8B5CF6', solid: true, name: 'plateforme-' + idCounter });
-    if (type === 'player') return Object.assign(base, { w: 36, h: 46, color: '#3B82F6', behavior: 'player', solid: true, name: 'joueur' });
-    if (type === 'coin') return Object.assign(base, { w: 28, h: 28, color: '#F59E0B', behavior: 'coin', name: 'piece-' + idCounter });
-    if (type === 'enemy') return Object.assign(base, { w: 40, h: 40, color: '#EF4444', behavior: 'enemy', name: 'ennemi-' + idCounter });
-    if (type === 'flag') return Object.assign(base, { w: 60, h: 90, color: '#4ADE80', behavior: 'flag', name: 'arrivee' });
-    return base;
+  /* ---------------- Toasts ---------------- */
+  function toast(key, icon) {
+    const box = $('#toastContainer');
+    if (!box) return;
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.innerHTML = '<div class="t-ico">' + (icon || '✨') + '</div><span></span>';
+    el.querySelector('span').textContent = key.indexOf('ed.') === 0 ? t(key) : key;
+    box.appendChild(el);
+    setTimeout(function () {
+      el.classList.add('out');
+      setTimeout(function () { el.remove(); }, 240);
+    }, 2600);
   }
 
-  function addObject(type) {
-    const o = defaultsFor(type);
-    o.x = snap(CW / 2 - o.w / 2 + (Math.random() * 80 - 40), true);
-    o.y = snap(CH / 2 - o.h / 2 + (Math.random() * 60 - 30), true);
-    state.project.objects.push(o);
-    select(o.id);
-    refreshTree();
+  /* ---------------- Sons (WebAudio) ---------------- */
+  let AC = null;
+  function ac() {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    return AC;
+  }
+  function tone(freq, dur, type, vol, slideTo) {
+    if (view.muted) return;
+    try {
+      const a = ac();
+      const o = a.createOscillator();
+      const g = a.createGain();
+      o.type = type || 'triangle';
+      o.frequency.setValueAtTime(freq, a.currentTime);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, a.currentTime + dur);
+      g.gain.setValueAtTime(vol || 0.15, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+      o.connect(g).connect(a.destination);
+      o.start();
+      o.stop(a.currentTime + dur + 0.02);
+    } catch (e) { /* audio indisponible */ }
+  }
+  const SFX = {
+    jump: function () { tone(420, 0.13, 'square', 0.10, 780); },
+    coin: function () { tone(988, 0.08, 'triangle', 0.14); setTimeout(function () { tone(1319, 0.11, 'triangle', 0.14); }, 70); },
+    hit: function () { tone(190, 0.2, 'sawtooth', 0.13, 95); },
+    win: function () { [523, 659, 784, 1047].forEach(function (f, i) { setTimeout(function () { tone(f, 0.15, 'triangle', 0.16); }, i * 105); }); },
+    lose: function () { [392, 330, 262, 196].forEach(function (f, i) { setTimeout(function () { tone(f, 0.17, 'sawtooth', 0.12); }, i * 125); }); }
+  };
+
+  /* ---------------- Undo / Redo ---------------- */
+  const undoStack = [], redoStack = [];
+  function serialize() { return JSON.stringify({ objects: state.objects, scene: state.scene }); }
+  function snapshot() {
+    undoStack.push(serialize());
+    if (undoStack.length > 80) undoStack.shift();
+    redoStack.length = 0;
     markDirty();
   }
-
-  function removeObject(id) {
-    state.project.objects = state.project.objects.filter((o) => o.id !== id);
-    if (state.selection === id) select(null);
-    refreshTree();
-    markDirty();
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(serialize());
+    const s = JSON.parse(undoStack.pop());
+    state.objects = s.objects;
+    state.scene = s.scene;
+    if (!findObj(state.selectedId)) state.selectedId = null;
+    renderAll();
+  }
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(serialize());
+    const s = JSON.parse(redoStack.pop());
+    state.objects = s.objects;
+    state.scene = s.scene;
+    if (!findObj(state.selectedId)) state.selectedId = null;
+    renderAll();
   }
 
-  function getObj(id) { return state.project.objects.find((o) => o.id === id) || null; }
-  function selected() { return getObj(state.selection); }
+  /* ---------------- Statut ---------------- */
+  function markDirty() {
+    state.dirty = true;
+    updateStatusSave();
+  }
+  function updateStatusSave() {
+    const el = $('#statusSave');
+    if (!el) return;
+    el.textContent = state.dirty ? t('ed.modified') : t('ed.saved');
+    el.className = 'sb-save ' + (state.dirty ? 'dirty' : 'ok');
+  }
 
-  /* ================= Rendering ================= */
-  function roundRect(c, x, y, w, h, r) {
+  /* ---------------- Dessin ---------------- */
+  function roundRect(x, y, w, h, r) {
     r = Math.min(r, w / 2, h / 2);
-    c.beginPath();
-    c.moveTo(x + r, y);
-    c.arcTo(x + w, y, x + w, y + h, r);
-    c.arcTo(x + w, y + h, x, y + h, r);
-    c.arcTo(x, y + h, x, y, r);
-    c.arcTo(x, y, x + w, y, r);
-    c.closePath();
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
   }
 
-  function drawObject(o, isRuntime) {
+  function drawObj(o, x, y) {
+    x = x != null ? x : o.x;
+    y = y != null ? y : o.y;
     ctx.save();
-    ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
-    if (o.rot) ctx.rotate((o.rot * Math.PI) / 180);
-    const x = -o.w / 2, y = -o.h / 2;
+    ctx.globalAlpha = o.opacity != null ? o.opacity : 1;
 
-    if (o.hidden) { ctx.restore(); return; }
+    if (o.type === 'text') {
+      ctx.fillStyle = o.textColor || '#0D1022';
+      ctx.font = '600 ' + (o.textSize || 22) + 'px "Space Grotesk", Inter, sans-serif';
+      ctx.textBaseline = 'top';
+      ctx.fillText(o.text || '', x, y + 4);
+      ctx.restore();
+      return;
+    }
 
+    const w = o.w, h = o.h;
     switch (o.type) {
-      case 'circle': {
+      case 'player': {
+        roundRect(x, y, w, h, 10);
         ctx.fillStyle = o.color;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, o.w / 2, o.h / 2, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        roundRect(x, y, w, h * 0.32, 10);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(x + w * 0.32, y + h * 0.34, w * 0.13, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w * 0.68, y + h * 0.34, w * 0.13, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1A1D2E';
+        ctx.beginPath(); ctx.arc(x + w * 0.35, y + h * 0.36, w * 0.055, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w * 0.71, y + h * 0.36, w * 0.055, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        roundRect(x + w * 0.12, y + h - 7, w * 0.3, 7, 3); ctx.fill();
+        roundRect(x + w * 0.58, y + h - 7, w * 0.3, 7, 3); ctx.fill();
         break;
       }
       case 'platform': {
-        const g = ctx.createLinearGradient(0, y, 0, y + o.h);
-        g.addColorStop(0, o.color);
-        g.addColorStop(1, shade(o.color, -35));
-        ctx.fillStyle = g;
-        roundRect(ctx, x, y, o.w, o.h, 8);
+        roundRect(x, y, w, h, 7);
+        ctx.fillStyle = o.color;
         ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,.3)';
-        roundRect(ctx, x + 8, y + 4, o.w - 16, 4, 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.26)';
+        roundRect(x, y, w, Math.min(7, h * 0.35), 4);
         ctx.fill();
         break;
       }
-      case 'player': {
-        const g = ctx.createLinearGradient(x, y, x, y + o.h);
-        g.addColorStop(0, '#38BDF8');
-        g.addColorStop(1, o.color);
-        ctx.fillStyle = g;
-        roundRect(ctx, x, y, o.w, o.h, 9);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        const ey = y + o.h * 0.28, es = Math.max(3, o.w * 0.13);
-        ctx.beginPath(); ctx.ellipse(-o.w * 0.16, ey, es, es * 1.25, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(o.w * 0.16, ey, es, es * 1.25, 0, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'coin': {
-        const cx = 0, cy = 0, r = Math.min(o.w, o.h) / 2;
-        const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.2, 0, 0, r);
-        g.addColorStop(0, '#FDE68A');
-        g.addColorStop(1, o.color);
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'rgba(180,120,0,.5)';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(cx, cy, r * 0.62, 0, Math.PI * 2); ctx.stroke();
+      case 'ground': {
+        ctx.fillStyle = o.color;
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(x, y, w, 8);
+        ctx.fillStyle = 'rgba(0,0,0,0.16)';
+        for (let gx = x + 12; gx < x + w - 6; gx += 34) {
+          ctx.fillRect(gx, y + 20, 14, 4);
+          ctx.fillRect(gx + 10, y + 38, 10, 4);
+        }
         break;
       }
       case 'enemy': {
-        const r = Math.min(o.w, o.h) / 2;
-        ctx.fillStyle = shade(o.color, -20);
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2 + (isRuntime ? (performance.now() / 900) : 0);
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(a - 0.22) * r * 0.85, Math.sin(a - 0.22) * r * 0.85);
-          ctx.lineTo(Math.cos(a) * r * 1.32, Math.sin(a) * r * 1.32);
-          ctx.lineTo(Math.cos(a + 0.22) * r * 0.85, Math.sin(a + 0.22) * r * 0.85);
-          ctx.closePath(); ctx.fill();
-        }
+        roundRect(x, y, w, h, 9);
         ctx.fillStyle = o.color;
-        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.ellipse(-r * 0.32, -r * 0.12, r * 0.18, r * 0.26, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(r * 0.32, -r * 0.12, r * 0.18, r * 0.26, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#111';
-        ctx.beginPath(); ctx.arc(-r * 0.32, -r * 0.06, r * 0.09, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(r * 0.32, -r * 0.06, r * 0.09, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w * 0.32, y + h * 0.4, w * 0.15, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w * 0.68, y + h * 0.4, w * 0.15, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1A1D2E';
+        ctx.beginPath(); ctx.arc(x + w * 0.32, y + h * 0.44, w * 0.06, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w * 0.68, y + h * 0.44, w * 0.06, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(x + w * 0.24, y + h * 0.72);
+        ctx.lineTo(x + w * 0.42, y + h * 0.64);
+        ctx.lineTo(x + w * 0.58, y + h * 0.72);
+        ctx.lineTo(x + w * 0.76, y + h * 0.64);
+        ctx.stroke();
+        break;
+      }
+      case 'coin': {
+        const r = Math.min(w, h) / 2;
+        ctx.beginPath();
+        ctx.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2);
+        ctx.fillStyle = o.color;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + w / 2, y + h / 2, r * 0.62, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x + w / 2 - r * 0.28, y + h / 2 - r * 0.3, r * 0.16, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fill();
         break;
       }
       case 'flag': {
-        ctx.fillStyle = '#D4D4DE';
-        roundRect(ctx, x + o.w * 0.12, y, 5, o.h, 2.5);
+        ctx.fillStyle = '#3A3F58';
+        roundRect(x + 2, y, 5, h, 3);
         ctx.fill();
         ctx.fillStyle = o.color;
         ctx.beginPath();
-        ctx.moveTo(x + o.w * 0.12 + 5, y + 4);
-        ctx.lineTo(x + o.w * 0.95, y + o.h * 0.22);
-        ctx.lineTo(x + o.w * 0.12 + 5, y + o.h * 0.42);
-        ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#D4D4DE';
-        roundRect(ctx, x + o.w * 0.02, y + o.h - 8, o.w * 0.5, 8, 4);
+        ctx.moveTo(x + 7, y + 4);
+        ctx.quadraticCurveTo(x + w * 0.6, y + h * 0.02, x + w, y + h * 0.1);
+        ctx.lineTo(x + w, y + h * 0.32);
+        ctx.quadraticCurveTo(x + w * 0.6, y + h * 0.24, x + 7, y + h * 0.3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(x + 5, y + h, 12, 4, 0, 0, Math.PI * 2);
         ctx.fill();
         break;
-      }
-      default: {
-        ctx.fillStyle = o.color;
-        roundRect(ctx, x, y, o.w, o.h, 8);
-        ctx.fill();
       }
     }
     ctx.restore();
   }
 
-  function shade(hex, amt) {
-    try {
-      const n = parseInt(hex.slice(1), 16);
-      const r = clamp((n >> 16) + amt, 0, 255), g = clamp(((n >> 8) & 255) + amt, 0, 255), b = clamp((n & 255) + amt, 0, 255);
-      return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
-    } catch (e) { return hex; }
-  }
+  /* ---------------- Rendu scène ---------------- */
+  const sim = { byId: {}, player: null, enemies: [], coins: [], flag: null };
 
   function render() {
-    // background
-    const g = ctx.createLinearGradient(0, 0, 0, CH);
-    g.addColorStop(0, '#0B0B16');
-    g.addColorStop(1, '#0D0D1C');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, CW, CH);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = state.scene.bg || '#F1F3F8';
+    ctx.fillRect(0, 0, W, H);
 
-    // grid
-    ctx.strokeStyle = 'rgba(255,255,255,.045)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < CW; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CH); ctx.stroke(); }
-    for (let y = 0; y < CH; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke(); }
-
-    // objects
-    const objs = state.playing ? state.runtime : state.project.objects;
-    objs.forEach((o) => drawObject(o, state.playing));
-
-    // selection
-    if (!state.playing && state.selection) {
-      const o = selected();
-      if (o) {
-        ctx.save();
-        ctx.strokeStyle = '#7F7CFF';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(o.x - 1, o.y - 1, o.w + 2, o.h + 2);
-        ctx.fillStyle = '#7F7CFF';
-        ctx.font = '500 11px Inter, sans-serif';
-        ctx.fillText(o.name, o.x, o.y - 8);
-        // resize handle
-        ctx.fillRect(o.x + o.w - 5, o.y + o.h - 5, 10, 10);
-        ctx.restore();
+    for (const o of state.objects) {
+      if (o.hidden) continue;
+      const live = sim.byId[o.id];
+      if (state.play && live) {
+        drawObj(o, live.x, live.y);
+      } else {
+        drawObj(o);
       }
     }
+    updateSelBox();
   }
 
-  /* ================= Mouse / selection ================= */
-  function mousePos(e) {
-    const r = canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  function updateSelBox() {
+    const box = $('#selBox');
+    const o = findObj(state.selectedId);
+    if (!o || state.play || o.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    box.style.left = o.x + 'px';
+    box.style.top = o.y + 'px';
+    box.style.width = o.w + 'px';
+    box.style.height = o.h + 'px';
   }
 
-  function hitTest(px, py) {
-    const objs = state.project.objects;
-    for (let i = objs.length - 1; i >= 0; i--) {
-      const o = objs[i];
-      if (px >= o.x && px <= o.x + o.w && py >= o.y && py <= o.y + o.h) return o;
-    }
-    return null;
-  }
-
-  function onResizeHandle(o, px, py) {
-    return px >= o.x + o.w - 10 && px <= o.x + o.w + 6 && py >= o.y + o.h - 10 && py <= o.y + o.h + 6;
-  }
-
-  canvas.addEventListener('mousedown', (e) => {
-    if (state.playing) return;
-    const { x, y } = mousePos(e);
-    const cur = selected();
-    if (cur && onResizeHandle(cur, x, y)) {
-      state.dragging = { mode: 'resize' };
+  /* ---------------- Hiérarchie ---------------- */
+  function renderHierarchy() {
+    const el = $('#hierarchy');
+    $('#objCount').textContent = state.objects.length;
+    $('#statusCount').textContent = state.objects.length + ' ' + t('ed.objectsLabel');
+    if (!state.objects.length) {
+      el.innerHTML = '<div class="h-empty">＋<br>' + t('ed.empty') + '</div>';
       return;
     }
-    const o = hitTest(x, y);
-    if (o) {
-      select(o.id);
-      state.dragging = { mode: 'move', ox: x - o.x, oy: y - o.y };
-    } else {
-      select(null);
-    }
-    render();
-  });
+    el.innerHTML = state.objects.slice().reverse().map(function (o) {
+      return (
+        '<div class="h-row' + (o.id === state.selectedId ? ' selected' : '') + (o.hidden ? ' hidden-obj' : '') + '" data-id="' + o.id + '">' +
+          '<div class="h-dot" style="background:' + (TYPE_COLORS[o.type] || '#999') + '"></div>' +
+          '<div class="h-name" title="' + t('ed.renameHint') + '">' + escapeHtml(o.name || t('ed.' + o.type)) + '</div>' +
+          '<button class="h-eye" title="' + (o.hidden ? t('ed.eyeShow') : t('ed.eyeHide')) + '">' +
+            (o.hidden
+              ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l16 16"/><path d="M9.5 6.4A9.6 9.6 0 0 1 12 6c5 0 9 6 9 6a17 17 0 0 1-2.4 2.9M6.3 8.3A16.6 16.6 0 0 0 3 12s4 6 9 6a9 9 0 0 0 3.2-.6"/><path d="M10.2 10.4a2.8 2.8 0 0 0 3.6 3.6"/></svg>'
+              : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.6"/></svg>') +
+          '</button>' +
+        '</div>'
+      );
+    }).join('');
 
-  window.addEventListener('mousemove', (e) => {
-    if (state.playing || !state.dragging) return;
-    const { x, y } = mousePos(e);
-    const o = selected();
-    if (!o) return;
-    if (state.dragging.mode === 'move') {
-      o.x = snap(x - state.dragging.ox, e.altKey);
-      o.y = snap(y - state.dragging.oy, e.altKey);
-    } else {
-      o.w = Math.max(16, snap(x - o.x, e.altKey));
-      o.h = Math.max(16, snap(y - o.y, e.altKey));
-    }
-    syncInspectorValues();
-    render();
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (state.dragging) { state.dragging = null; markDirty(); }
-  });
-
-  /* ================= Keyboard ================= */
-  window.addEventListener('keydown', (e) => {
-    state.keys[e.key.toLowerCase()] = true;
-    if (state.playing) {
-      if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(e.key.toLowerCase())) e.preventDefault();
-      return;
-    }
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (state.selection) { removeObject(state.selection); render(); }
-    }
-    const o = selected();
-    if (o && e.key.startsWith('Arrow')) {
-      e.preventDefault();
-      const step = e.shiftKey ? 1 : 8;
-      if (e.key === 'ArrowLeft') o.x -= step;
-      if (e.key === 'ArrowRight') o.x += step;
-      if (e.key === 'ArrowUp') o.y -= step;
-      if (e.key === 'ArrowDown') o.y += step;
-      syncInspectorValues();
-      render();
-      markDirty();
-    }
-  });
-  window.addEventListener('keyup', (e) => { state.keys[e.key.toLowerCase()] = false; });
-
-  /* ================= Selection / inspector ================= */
-  function select(id) {
-    state.selection = id;
-    document.querySelectorAll('#sceneTree li').forEach((li) => li.classList.toggle('active', li.dataset.id === id));
-    const o = selected();
-    $('#inspEmpty').style.display = o ? 'none' : 'block';
-    $('#inspForm').style.display = o ? 'block' : 'none';
-    if (o) syncInspectorValues();
-    render();
-  }
-
-  function syncInspectorValues() {
-    const o = selected();
-    if (!o) return;
-    $('#pName').value = o.name;
-    $('#pX').value = Math.round(o.x);
-    $('#pY').value = Math.round(o.y);
-    $('#pW').value = Math.round(o.w);
-    $('#pH').value = Math.round(o.h);
-    $('#pRot').value = o.rot;
-    $('#pColor').value = o.color;
-    $('#pBehavior').value = o.behavior;
-    $('#pSpeed').value = o.speed;
-    $('#pSolid').checked = !!o.solid;
-  }
-
-  function bindInspector() {
-    const map = {
-      pName: (o, v) => { o.name = v; refreshTree(); },
-      pX: (o, v) => { o.x = parseFloat(v) || 0; },
-      pY: (o, v) => { o.y = parseFloat(v) || 0; },
-      pW: (o, v) => { o.w = Math.max(16, parseFloat(v) || 16); },
-      pH: (o, v) => { o.h = Math.max(16, parseFloat(v) || 16); },
-      pRot: (o, v) => { o.rot = parseFloat(v) || 0; },
-      pColor: (o, v) => { o.color = v; },
-      pBehavior: (o, v) => { o.behavior = v; },
-      pSpeed: (o, v) => { o.speed = Math.max(0.5, parseFloat(v) || 1); },
-    };
-    Object.keys(map).forEach((id) => {
-      const el = document.getElementById(id);
-      el.addEventListener('input', () => {
-        const o = selected();
-        if (!o) return;
-        map[id](o, el.value);
-        render();
-        markDirty();
+    $$('.h-row', el).forEach(function (row) {
+      const id = row.getAttribute('data-id');
+      row.addEventListener('click', function (e) {
+        if (e.target.closest('.h-eye')) return;
+        select(id);
       });
-    });
-    $('#pSolid').addEventListener('change', (e) => {
-      const o = selected();
-      if (!o) return;
-      o.solid = e.target.checked;
-      markDirty();
-    });
-  }
-
-  /* ================= Scene tree ================= */
-  function refreshTree() {
-    const ul = $('#sceneTree');
-    ul.innerHTML = '';
-    state.project.objects.forEach((o) => {
-      const li = document.createElement('li');
-      li.dataset.id = o.id;
-      if (o.id === state.selection) li.classList.add('active');
-      li.innerHTML = '<span class="li-dot" style="background:' + o.color + '"></span><span>' + escapeHtml(o.name) + '</span>';
-      li.addEventListener('click', () => select(o.id));
-      ul.appendChild(li);
+      row.addEventListener('dblclick', function (e) {
+        if (e.target.closest('.h-eye')) return;
+        beginRename(row, id);
+      });
+      const eye = row.querySelector('.h-eye');
+      eye.addEventListener('click', function () {
+        const o = findObj(id);
+        if (!o) return;
+        snapshot();
+        o.hidden = !o.hidden;
+        renderAll();
+      });
     });
   }
 
   function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-
-  /* ================= Save / load ================= */
-  function serialize() {
-    return {
-      version: 1,
-      name: state.project.name,
-      objects: state.project.objects,
-      code: $('#codeBox').value,
-    };
-  }
-
-  let dirtyTimer = null;
-  function markDirty() {
-    clearTimeout(dirtyTimer);
-    dirtyTimer = setTimeout(() => {
-      try { localStorage.setItem('kreo-autosave', JSON.stringify(serialize())); } catch (e) {}
-    }, 400);
-  }
-
-  function toast(msg) {
-    const el = $('#toast');
-    el.textContent = msg;
-    el.classList.add('show');
-    clearTimeout(el._t);
-    el._t = setTimeout(() => el.classList.remove('show'), 1800);
-  }
-
-  function loadProject(data, silent) {
-    if (!data || !Array.isArray(data.objects)) return false;
-    state.project.name = data.name || 'Mon jeu';
-    state.project.objects = data.objects.map((o) => Object.assign(defaultsFor(o.type || 'rect'), o, { id: o.id || uid() }));
-    $('#projectName').value = state.project.name;
-    $('#codeBox').value = data.code || t('ed.codeTemplate');
-    idCounter = Date.now() % 100000;
-    select(null);
-    refreshTree();
-    render();
-    if (!silent) toast(t('ed.loaded'));
-    return true;
-  }
-
-  $('#btnSave').addEventListener('click', () => {
-    try {
-      localStorage.setItem('kreo-project', JSON.stringify(serialize()));
-      toast(t('ed.saved'));
-    } catch (e) { toast('Error'); }
-  });
-
-  $('#btnLoad').addEventListener('click', () => {
-    let data = null;
-    try { data = JSON.parse(localStorage.getItem('kreo-project') || localStorage.getItem('kreo-autosave') || 'null'); } catch (e) {}
-    if (data) loadProject(data);
-    else toast('—');
-  });
-
-  $('#btnExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(serialize(), null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (state.project.name || 'jeu').replace(/\s+/g, '-') + '.kreo.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-
-  $('#btnImport').addEventListener('click', () => $('#fileInput').click());
-  $('#fileInput').addEventListener('change', (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try { loadProject(JSON.parse(reader.result)); } catch (err) { toast('Error'); }
-    };
-    reader.readAsText(f);
-    e.target.value = '';
-  });
-
-  $('#projectName').addEventListener('input', (e) => {
-    state.project.name = e.target.value;
-    markDirty();
-  });
-
-  /* ================= Tabs ================= */
-  document.querySelectorAll('.ed-tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.ed-tab').forEach((x) => x.classList.remove('active'));
-      document.querySelectorAll('.ed-panel').forEach((x) => x.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById(tab.dataset.panel).classList.add('active');
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
-  });
-
-  /* ================= Play mode ================= */
-  const GRAV = 1800;
-  let rafId = null, lastTime = 0, prevOverlaps = new Set();
-
-  function buildSceneAPI() {
-    return {
-      objects: state.runtime,
-      get score() { return state.score; },
-      get player() { return state.runtime.find((o) => o.behavior === 'player') || null; },
-      get(name) { return state.runtime.find((o) => o.name === name) || null; },
-      message(txt) { toast(String(txt)); },
-      addScore(n) { state.score += n; $('#hudScore').textContent = state.score; },
-      win() { endPlay(true); },
-      lose() { endPlay(false); },
-    };
   }
-  let sceneAPI = null;
 
-  function compileHooks() {
-    const code = $('#codeBox').value;
-    $('#codeError').classList.remove('show');
-    try {
-      const factory = new Function(code + '\n;return {' +
-        'onStart:typeof onStart==="function"?onStart:null,' +
-        'onUpdate:typeof onUpdate==="function"?onUpdate:null,' +
-        'onCollide:typeof onCollide==="function"?onCollide:null};');
-      state.hooks = factory();
-    } catch (err) {
-      state.hooks = { onStart: null, onUpdate: null, onCollide: null };
-      showCodeError(err);
+  function beginRename(row, id) {
+    const o = findObj(id);
+    if (!o) return;
+    const nameEl = row.querySelector('.h-name');
+    const input = document.createElement('input');
+    input.value = o.name || '';
+    nameEl.textContent = '';
+    nameEl.appendChild(input);
+    input.focus();
+    input.select();
+    let done = false;
+    function commit(save) {
+      if (done) return;
+      done = true;
+      if (save && input.value.trim()) {
+        snapshot();
+        o.name = input.value.trim();
+      }
+      renderAll();
+    }
+    input.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') commit(true);
+      if (e.key === 'Escape') commit(false);
+    });
+    input.addEventListener('blur', function () { commit(true); });
+  }
+
+  /* ---------------- Inspecteur ---------------- */
+  let pendingSnapshot = false;
+  function armSnapshot() { pendingSnapshot = true; }
+  function takeSnapshot() {
+    if (pendingSnapshot) {
+      snapshot();
+      pendingSnapshot = false;
     }
   }
 
-  function showCodeError(err) {
-    const box = $('#codeError');
-    box.textContent = t('ed.error') + ' : ' + err.message;
-    box.classList.add('show');
+  function renderInspector() {
+    const o = findObj(state.selectedId);
+    const empty = $('#inspectorEmpty');
+    const obj = $('#inspectorObj');
+    if (!o) {
+      empty.hidden = false;
+      obj.hidden = true;
+      $('#inSceneName').value = state.scene.name;
+      $('#inBg').value = state.scene.bg;
+      $('#inGravity').value = state.scene.gravity;
+      $('#gravityVal').textContent = state.scene.gravity;
+      return;
+    }
+    empty.hidden = true;
+    obj.hidden = false;
+
+    $('#inspTitle').textContent = (o.name || t('ed.' + o.type)) + ' · ' + t('ed.' + o.type);
+    $('#inName').value = o.name || '';
+    $('#inX').value = Math.round(o.x);
+    $('#inY').value = Math.round(o.y);
+    $('#inW').value = Math.round(o.w);
+    $('#inH').value = Math.round(o.h);
+    $('#inOpacity').value = Math.round((o.opacity != null ? o.opacity : 1) * 100);
+    $('#opacityVal').textContent = $('#inOpacity').value + ' %';
+
+    $$('.type-fields .field').forEach(function (f) {
+      const only = f.getAttribute('data-only');
+      const not = f.getAttribute('data-not');
+      let show = true;
+      if (only && only !== o.type) show = false;
+      if (not && not === o.type) show = false;
+      f.hidden = !show;
+    });
+
+    if (o.type === 'player') {
+      $('#inSpeed').value = o.speed != null ? o.speed : 240;
+      $('#speedVal').textContent = $('#inSpeed').value;
+      $('#inJump').value = o.jump != null ? o.jump : 700;
+      $('#jumpVal').textContent = $('#inJump').value;
+    }
+    if (o.type === 'enemy') {
+      $('#inEnemySpeed').value = o.speed != null ? o.speed : 80;
+      $('#enemySpeedVal').textContent = $('#inEnemySpeed').value;
+    }
+    if (o.type === 'coin') $('#inCoinValue').value = o.value != null ? o.value : 10;
+    if (o.type === 'flag') $('#inFlagMsg').value = o.message || '';
+    if (o.type === 'text') {
+      $('#inTextContent').value = o.text || '';
+      $('#inTextSize').value = o.textSize || 22;
+      $('#inTextColor').value = o.textColor || '#0D1022';
+    }
+    if (o.type === 'platform') $('#inSolid').checked = o.solid !== false;
+    if (o.type !== 'text') $('#inColor').value = o.color || '#6D4AFF';
+
+    // Code
+    o.code = o.code || { onStart: '', onUpdate: '', onCollide: '' };
+    $('#codeEditor').value = o.code[view.codeTarget] || '';
+    $$('.code-tab').forEach(function (tab) {
+      tab.classList.toggle('active', tab.getAttribute('data-code') === view.codeTarget);
+    });
+  }
+
+  function select(id) {
+    state.selectedId = id;
+    renderAll();
+  }
+
+  /* ---------------- Rendu global ---------------- */
+  function renderAll() {
+    render();
+    renderHierarchy();
+    renderInspector();
+  }
+
+  /* ---------------- Souris : déplacer / redimensionner ---------------- */
+  function scenePos(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (W / r.width),
+      y: (e.clientY - r.top) * (H / r.height)
+    };
+  }
+
+  function hitTest(x, y) {
+    for (let i = state.objects.length - 1; i >= 0; i--) {
+      const o = state.objects[i];
+      if (o.hidden) continue;
+      if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) return o;
+    }
+    return null;
+  }
+
+  let drag = null;
+  let resize = null;
+
+  canvas.addEventListener('mousedown', function (e) {
+    if (state.play) return;
+    const p = scenePos(e);
+    const o = hitTest(p.x, p.y);
+    if (o) {
+      if (state.selectedId !== o.id) select(o.id);
+      drag = { id: o.id, dx: p.x - o.x, dy: p.y - o.y, moved: false };
+    } else {
+      state.selectedId = null;
+      renderAll();
+    }
+    window.addEventListener('mousemove', onWinMouseMove);
+    window.addEventListener('mouseup', onWinMouseUp);
+    e.preventDefault();
+  });
+
+  function onWinMouseMove(e) {
+    const p = scenePos(e);
+    $('#statusPos').textContent = 'x ' + Math.round(p.x) + ' · y ' + Math.round(p.y);
+
+    if (drag) {
+      const o = findObj(drag.id);
+      if (!o) return;
+      const nx = snapVal(p.x - drag.dx);
+      const ny = snapVal(p.y - drag.dy);
+      if (!drag.moved && (Math.abs(nx - o.x) > 1 || Math.abs(ny - o.y) > 1)) {
+        snapshot();
+        drag.moved = true;
+      }
+      o.x = clamp(nx, -o.w + 8, W - 8);
+      o.y = clamp(ny, -o.h + 8, H - 8);
+      render();
+      renderInspector();
+    }
+    if (resize) {
+      const o = findObj(resize.id);
+      if (!o) return;
+      const dx = p.x - resize.startX;
+      const dy = p.y - resize.startY;
+      if (!resize.moved && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+        snapshot();
+        resize.moved = true;
+      }
+      let x = resize.orig.x, y = resize.orig.y, w = resize.orig.w, h = resize.orig.h;
+      if (resize.corner.indexOf('e') !== -1) w = snapVal(resize.orig.w + dx);
+      if (resize.corner.indexOf('s') !== -1) h = snapVal(resize.orig.h + dy);
+      if (resize.corner.indexOf('w') !== -1) { x = snapVal(resize.orig.x + dx); w = resize.orig.w + (resize.orig.x - x); }
+      if (resize.corner.indexOf('n') !== -1) { y = snapVal(resize.orig.y + dy); h = resize.orig.h + (resize.orig.y - y); }
+      o.x = x; o.y = y;
+      o.w = Math.max(16, w);
+      o.h = Math.max(16, h);
+      render();
+      renderInspector();
+    }
+  }
+
+  function onWinMouseUp() {
+    drag = null;
+    resize = null;
+    window.removeEventListener('mousemove', onWinMouseMove);
+    window.removeEventListener('mouseup', onWinMouseUp);
+  }
+
+  // Poignées de redimensionnement
+  $$('.handle').forEach(function (hEl) {
+    hEl.addEventListener('mousedown', function (e) {
+      if (state.play) return;
+      e.stopPropagation();
+      const o = findObj(state.selectedId);
+      if (!o) return;
+      const p = scenePos(e);
+      resize = {
+        id: o.id,
+        corner: hEl.getAttribute('data-corner'),
+        startX: p.x, startY: p.y,
+        orig: { x: o.x, y: o.y, w: o.w, h: o.h },
+        moved: false
+      };
+      window.addEventListener('mousemove', onWinMouseMove);
+      window.addEventListener('mouseup', onWinMouseUp);
+      e.preventDefault();
+    });
+  });
+
+  canvas.addEventListener('dblclick', function () {
+    const row = $('.h-row.selected');
+    if (row) beginRename(row, state.selectedId);
+  });
+
+  canvas.addEventListener('mousemove', function (e) {
+    const p = scenePos(e);
+    $('#statusPos').textContent = 'x ' + Math.round(p.x) + ' · y ' + Math.round(p.y);
+  });
+
+  canvas.addEventListener('wheel', function (e) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const z = clamp(view.zoom + (e.deltaY < 0 ? 0.1 : -0.1), 0.5, 1.5);
+    setZoom(Math.round(z * 100) / 100);
+  }, { passive: false });
+
+  /* ---------------- Zoom ---------------- */
+  function setZoom(z) {
+    view.zoom = z;
+    $('#stageScaler').style.transform = 'scale(' + z + ')';
+    $('#zoomSelect').value = String(z);
+    $('#statusZoom').textContent = Math.round(z * 100) + ' %';
+  }
+  $('#zoomSelect').addEventListener('change', function (e) {
+    setZoom(parseFloat(e.target.value) || 1);
+  });
+
+  /* ---------------- Objets : ajout / suppression / z-order ---------------- */
+  function addObject(type) {
+    const d = DEFAULTS[type];
+    if (!d) return;
+    snapshot();
+    const off = (state.objects.length % 6) * 14;
+    const o = Object.assign({
+      id: genId(),
+      type: type,
+      name: t('ed.' + type),
+      x: snapVal(W / 2 - d.w / 2 + off),
+      y: type === 'ground' ? H - d.h : snapVal(H / 2 - d.h / 2 + off),
+      hidden: false,
+      opacity: 1,
+      code: { onStart: '', onUpdate: '', onCollide: '' }
+    }, d);
+    state.objects.push(o);
+    state.selectedId = o.id;
+    renderAll();
+    toast('ed.newObj', '＋');
+  }
+
+  function deleteSelected() {
+    const o = findObj(state.selectedId);
+    if (!o) return;
+    snapshot();
+    state.objects = state.objects.filter(function (x) { return x.id !== o.id; });
+    state.selectedId = null;
+    renderAll();
+    toast('ed.deletedToast', '🗑️');
+  }
+
+  function duplicateSelected() {
+    const o = findObj(state.selectedId);
+    if (!o) return;
+    snapshot();
+    const copy = JSON.parse(JSON.stringify(o));
+    copy.id = genId();
+    copy.x = snapVal(o.x + 16);
+    copy.y = snapVal(o.y + 16);
+    const i = state.objects.indexOf(o);
+    state.objects.splice(i + 1, 0, copy);
+    state.selectedId = copy.id;
+    renderAll();
+    toast('ed.copiedToast', '📄');
+  }
+
+  function moveZ(dir) {
+    const o = findObj(state.selectedId);
+    if (!o) return;
+    const i = state.objects.indexOf(o);
+    const j = i + dir;
+    if (j < 0 || j >= state.objects.length) return;
+    snapshot();
+    state.objects[i] = state.objects[j];
+    state.objects[j] = o;
+    renderAll();
+  }
+
+  $$('.obj-btn').forEach(function (b) {
+    b.addEventListener('click', function () { addObject(b.getAttribute('data-type')); });
+  });
+  $('#btnDelete').addEventListener('click', deleteSelected);
+  $('#btnDelete2').addEventListener('click', deleteSelected);
+  $('#btnDuplicate').addEventListener('click', duplicateSelected);
+  $('#btnDuplicate2').addEventListener('click', duplicateSelected);
+  $('#btnForward').addEventListener('click', function () { moveZ(1); });
+  $('#btnBackward').addEventListener('click', function () { moveZ(-1); });
+
+  /* ---------------- Inspecteur : liaisons ---------------- */
+  function bindField(sel, apply, opts) {
+    const el = $(sel);
+    if (!el) return;
+    el.addEventListener('pointerdown', armSnapshot);
+    el.addEventListener('focus', armSnapshot);
+    el.addEventListener('input', function () {
+      takeSnapshot();
+      apply(el);
+      render();
+      renderHierarchy();
+    });
+  }
+
+  function selObj() { return findObj(state.selectedId); }
+
+  bindField('#inName', function (el) {
+    const o = selObj(); if (o) o.name = el.value;
+  });
+  bindField('#inX', function (el) {
+    const o = selObj(); if (o) o.x = parseFloat(el.value) || 0;
+  });
+  bindField('#inY', function (el) {
+    const o = selObj(); if (o) o.y = parseFloat(el.value) || 0;
+  });
+  bindField('#inW', function (el) {
+    const o = selObj(); if (o) o.w = Math.max(16, parseFloat(el.value) || 16);
+  });
+  bindField('#inH', function (el) {
+    const o = selObj(); if (o) o.h = Math.max(16, parseFloat(el.value) || 16);
+  });
+  bindField('#inOpacity', function (el) {
+    const o = selObj(); if (o) o.opacity = (parseFloat(el.value) || 100) / 100;
+    $('#opacityVal').textContent = el.value + ' %';
+  });
+  bindField('#inSpeed', function (el) {
+    const o = selObj(); if (o) o.speed = parseFloat(el.value);
+    $('#speedVal').textContent = el.value;
+  });
+  bindField('#inJump', function (el) {
+    const o = selObj(); if (o) o.jump = parseFloat(el.value);
+    $('#jumpVal').textContent = el.value;
+  });
+  bindField('#inEnemySpeed', function (el) {
+    const o = selObj(); if (o) o.speed = parseFloat(el.value);
+    $('#enemySpeedVal').textContent = el.value;
+  });
+  bindField('#inCoinValue', function (el) {
+    const o = selObj(); if (o) o.value = Math.max(1, parseInt(el.value, 10) || 1);
+  });
+  bindField('#inFlagMsg', function (el) {
+    const o = selObj(); if (o) o.message = el.value;
+  });
+  bindField('#inTextContent', function (el) {
+    const o = selObj(); if (o) o.text = el.value;
+  });
+  bindField('#inTextSize', function (el) {
+    const o = selObj(); if (o) o.textSize = Math.max(8, parseFloat(el.value) || 22);
+  });
+  bindField('#inTextColor', function (el) {
+    const o = selObj(); if (o) o.textColor = el.value;
+  });
+  bindField('#inColor', function (el) {
+    const o = selObj(); if (o) o.color = el.value;
+  });
+
+  $('#inSolid').addEventListener('change', function (el2) {
+    const o = selObj();
+    if (o) {
+      snapshot();
+      o.solid = $('#inSolid').checked;
+    }
+  });
+
+  // Réglages de scène
+  bindField('#inSceneName', function (el) {
+    state.scene.name = el.value;
+    $('#projectName').value = el.value;
+  });
+  bindField('#inBg', function (el) {
+    state.scene.bg = el.value;
+  });
+  bindField('#inGravity', function (el) {
+    state.scene.gravity = parseFloat(el.value) || 2000;
+    $('#gravityVal').textContent = el.value;
+  });
+
+  $('#projectName').addEventListener('input', function (e) {
+    state.scene.name = e.target.value;
+    markDirty();
+  });
+
+  /* ---------------- Code ---------------- */
+  function templateFor(hook) {
+    const fr = window.kreoCurrentLang && window.kreoCurrentLang() === 'en' ? false : true;
+    if (hook === 'onStart') {
+      return fr ? '// Se lance quand la partie démarre\nscene.message("C\'est parti !");' : '// Runs when the game starts\nscene.message("Let\'s go!");';
+    }
+    if (hook === 'onUpdate') {
+      return fr ? '// Se lance à chaque image (dt = durée d\'une image)\n// Exemple : player.vy = -600;' : '// Runs every frame (dt = frame duration)\n// Example: player.vy = -600;';
+    }
+    return fr ? '// Se lance quand le joueur touche un objet\nif (other.type === "coin") {\n  scene.addScore(5);\n}' : '// Runs when the player touches an object\nif (other.type === "coin") {\n  scene.addScore(5);\n}';
+  }
+
+  $$('.code-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      const o = selObj();
+      if (o) {
+        o.code = o.code || { onStart: '', onUpdate: '', onCollide: '' };
+        o.code[view.codeTarget] = $('#codeEditor').value;
+      }
+      view.codeTarget = tab.getAttribute('data-code');
+      renderInspector();
+    });
+  });
+
+  $('#btnApplyCode').addEventListener('click', function () {
+    const o = selObj();
+    if (!o) return;
+    snapshot();
+    o.code = o.code || { onStart: '', onUpdate: '', onCollide: '' };
+    o.code[view.codeTarget] = $('#codeEditor').value;
+    toast('ed.applied', '✓');
+  });
+
+  $('#btnResetCode').addEventListener('click', function () {
+    $('#codeEditor').value = templateFor(view.codeTarget);
+  });
+
+  /* ---------------- Sauvegarde / import / export / démo ---------------- */
+  const KEY = 'kreo-project';
+  const AUTOKEY = 'kreo-autosave';
+
+  function save() {
+    const data = { version: 1, scene: state.scene, objects: state.objects };
+    try {
+      localStorage.setItem(KEY, JSON.stringify(data));
+      state.dirty = false;
+      updateStatusSave();
+      toast('ed.saveOk', '💾');
+    } catch (e) {
+      toast('⚠️', '⚠️');
+    }
+  }
+
+  function exportFile() {
+    const data = { version: 1, scene: state.scene, objects: state.objects };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (state.scene.name || 'mon-jeu') + '.kreo.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function importFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = function () {
+      const f = input.files && input.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = function () {
+        try {
+          const data = JSON.parse(String(reader.result));
+          if (data && Array.isArray(data.objects)) {
+            snapshot();
+            state.objects = data.objects;
+            if (data.scene) state.scene = data.scene;
+            reindexIds();
+            state.selectedId = null;
+            $('#projectName').value = state.scene.name || 'Ma scène';
+            renderAll();
+            toast('app.importOk', '✅');
+          } else {
+            toast('app.importKo', '⚠️');
+          }
+        } catch (e) {
+          toast('app.importKo', '⚠️');
+        }
+      };
+      reader.readAsText(f);
+    };
+    input.click();
+  }
+
+  function reindexIds() {
+    let max = 0;
+    state.objects.forEach(function (o) {
+      const m = /(\d+)$/.exec(o.id || '');
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+      o.code = o.code || { onStart: '', onUpdate: '', onCollide: '' };
+    });
+    nextId = max + 1;
+  }
+
+  function loadSaved() {
+    try {
+      const raw = localStorage.getItem(KEY) || localStorage.getItem(AUTOKEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.objects)) return false;
+      state.objects = data.objects;
+      if (data.scene) state.scene = Object.assign(state.scene, data.scene);
+      reindexIds();
+      $('#projectName').value = state.scene.name || 'Ma scène';
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function newProject() {
+    snapshot();
+    state.objects = [];
+    state.scene = { name: 'Ma scène', bg: '#F1F3F8', gravity: 2000 };
+    state.selectedId = null;
+    $('#projectName').value = 'Ma scène';
+    renderAll();
+  }
+
+  /* ---------------- Scène de démonstration ---------------- */
+  function demoScene() {
+    function mk(type, over) {
+      const d = DEFAULTS[type];
+      return Object.assign({
+        id: genId(), type: type, name: t('ed.' + type),
+        hidden: false, opacity: 1,
+        code: { onStart: '', onUpdate: '', onCollide: '' }
+      }, d, over || {});
+    }
+    state.objects = [
+      mk('text', { x: 330, y: 46, text: 'Démo KREO — Éditeur v1', textSize: 30, textColor: '#2A2F45', w: 340, h: 44 }),
+      mk('ground', { x: 0, y: 476, w: 960, h: 64 }),
+      mk('platform', { x: 120, y: 384, w: 220 }),
+      mk('platform', { x: 430, y: 312, w: 220, color: '#22B8CF' }),
+      mk('player', { x: 150, y: 316 }),
+      mk('coin', { x: 480, y: 268 }),
+      mk('coin', { x: 540, y: 268 }),
+      mk('coin', { x: 600, y: 268 }),
+      mk('enemy', { x: 520, y: 436 }),
+      mk('flag', { x: 872, y: 386 })
+    ];
+    state.scene = { name: 'Démo KREO', bg: '#F1F3F8', gravity: 2000 };
+    state.selectedId = null;
+    $('#projectName').value = 'Démo KREO';
+    reindexIds();
+  }
+
+  /* ---------------- Play mode ---------------- */
+  let raf = 0;
+  let lastTime = 0;
+  const hooks = {};
+
+  function compileCode() {
+    for (const k of Object.keys(hooks)) delete hooks[k];
+    for (const o of state.objects) {
+      if (!o.code) continue;
+      hooks[o.id] = {};
+      for (const name of ['onStart', 'onUpdate', 'onCollide']) {
+        const src = (o.code[name] || '').trim();
+        if (!src) continue;
+        try {
+          hooks[o.id][name] = new Function('scene', 'dt', 'player', 'self', 'other', src);
+        } catch (e) {
+          toast('⚠️ ' + (e.message || 'code'), '⚠️');
+        }
+      }
+    }
+  }
+
+  function makeApi() {
+    return {
+      get: function (id) {
+        const o = findObj(id);
+        return o ? makeProxy(o) : null;
+      },
+      get player() { return sim.player ? sim.player.api : null; },
+      get score() { return state.score; },
+      message: function (msg) { toast(String(msg), '💬'); },
+      addScore: function (n) {
+        state.score += (Number(n) || 0);
+        updateHUD();
+      },
+      win: function (msg) { winGame(msg); },
+      lose: function (msg) { loseGame(msg); }
+    };
+  }
+
+  function makeProxy(o) {
+    const live = sim.byId[o.id];
+    const target = live || o;
+    return {
+      get id() { return o.id; },
+      get type() { return o.type; },
+      get name() { return o.name; },
+      get x() { return target.x; }, set x(v) { target.x = Number(v) || 0; },
+      get y() { return target.y; }, set y(v) { target.y = Number(v) || 0; },
+      get vx() { return target.vx || 0; }, set vx(v) { target.vx = Number(v) || 0; },
+      get vy() { return target.vy || 0; }, set vy(v) { target.vy = Number(v) || 0; },
+      get w() { return o.w; },
+      get h() { return o.h; },
+      get hidden() { return o.hidden; }, set hidden(v) { o.hidden = !!v; }
+    };
+  }
+
+  function runHooks(name, selfObj, otherObj, dt) {
+    for (const o of state.objects) {
+      const h = hooks[o.id] && hooks[o.id][name];
+      if (!h) continue;
+      const playerProxy = sim.player ? sim.player.api : null;
+      const selfProxy = makeProxy(selfObj || o);
+      const otherProxy = otherObj ? makeProxy(otherObj) : null;
+      try {
+        h(makeApi(), dt || 0, playerProxy, selfProxy, otherProxy);
+      } catch (e) {
+        hooks[o.id][name] = null;
+        toast('⚠️ ' + (e.message || 'code'), '⚠️');
+      }
+    }
   }
 
   function startPlay() {
-    if (state.playing) return;
-    state.playing = true;
+    if (state.play) return;
+    state.play = true;
+    state.won = false;
+    state.lost = false;
     state.score = 0;
-    state.runtime = JSON.parse(JSON.stringify(state.project.objects)).map((o) => Object.assign(o, {
-      vx: 0, vy: 0, grounded: false, hidden: false,
-      spawnX: o.x, spawnY: o.y, dir: 1,
-    }));
-    prevOverlaps = new Set();
-    $('#app').classList.add('playing');
+
+    sim.byId = {};
+    sim.player = null;
+    sim.enemies = [];
+    sim.coins = [];
+    sim.flag = null;
+
+    for (const o of state.objects) {
+      if (o.hidden) continue;
+      if (o.type === 'player') {
+        sim.player = {
+          ref: o, x: o.x, y: o.y, w: o.w, h: o.h,
+          vx: 0, vy: 0, onGround: false,
+          speed: o.speed != null ? o.speed : 240,
+          jump: o.jump != null ? o.jump : 700
+        };
+        sim.byId[o.id] = sim.player;
+      } else if (o.type === 'enemy') {
+        const e = { ref: o, x: o.x, y: o.y, w: o.w, h: o.h, vx: (o.speed != null ? o.speed : 80) };
+        sim.enemies.push(e);
+        sim.byId[o.id] = e;
+      } else if (o.type === 'coin') {
+        const c = { ref: o, x: o.x, y: o.y, w: o.w, h: o.h, got: false, value: o.value != null ? o.value : 10 };
+        sim.coins.push(c);
+        sim.byId[o.id] = c;
+      } else if (o.type === 'flag') {
+        sim.flag = { ref: o, x: o.x, y: o.y, w: o.w, h: o.h };
+        sim.byId[o.id] = sim.flag;
+      }
+    }
+    if (sim.player) sim.player.api = makeProxy(sim.player.ref);
+
+    compileCode();
+    runHooks('onStart', null, null, 0);
+
+    $('#hud').hidden = false;
+    $('#winOverlay').hidden = true;
+    $('#loseOverlay').hidden = true;
+    $('#btnPlay').classList.add('playing');
     $('#playLabel').textContent = t('ed.stop');
-    $('#hudScore').textContent = '0';
-    $('#overlay').classList.remove('show');
-    compileHooks();
-    sceneAPI = buildSceneAPI();
-    try { if (state.hooks.onStart) state.hooks.onStart(sceneAPI); } catch (err) { showCodeError(err); }
+    $('#playIcon').innerHTML = '<rect x="7" y="7" width="10" height="10" rx="2"/>';
+    updateHUD();
+
     lastTime = performance.now();
-    rafId = requestAnimationFrame(loop);
+    raf = requestAnimationFrame(loop);
   }
 
   function stopPlay() {
-    state.playing = false;
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
-    $('#app').classList.remove('playing');
+    state.play = false;
+    cancelAnimationFrame(raf);
+    $('#hud').hidden = true;
+    $('#winOverlay').hidden = true;
+    $('#loseOverlay').hidden = true;
+    $('#btnPlay').classList.remove('playing');
     $('#playLabel').textContent = t('ed.play');
-    $('#overlay').classList.remove('show');
+    $('#playIcon').innerHTML = '<path d="M8 5.5v13l10-6.5z"/>';
+    sim.byId = {};
     render();
   }
 
-  function endPlay(won) {
-    $('#overlayTitle').textContent = won ? t('ed.win') : t('ed.lose');
-    $('#overlayText').textContent = won ? t('ed.score') + ' : ' + state.score : '';
-    $('#overlay').classList.add('show');
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
+  function togglePlay() {
+    if (state.play) stopPlay();
+    else startPlay();
   }
 
-  $('#btnPlay').addEventListener('click', () => (state.playing ? stopPlay() : startPlay()));
-  $('#btnRetry').addEventListener('click', () => { stopPlay(); startPlay(); });
+  function loop(ts) {
+    if (!state.play) return;
+    const dt = Math.min(0.033, (ts - lastTime) / 1000);
+    lastTime = ts;
+    updateSim(dt);
+    render();
+    updateHUD();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function solids() {
+    return state.objects.filter(function (o) {
+      return !o.hidden && (o.type === 'platform' ? o.solid !== false : (o.type === 'ground'));
+    });
+  }
 
   function aabb(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
 
-  function loop(now) {
-    if (!state.playing) return;
-    const dt = Math.min(0.033, (now - lastTime) / 1000);
-    lastTime = now;
-    stepPhysics(dt);
-    try { if (state.hooks.onUpdate) state.hooks.onUpdate(sceneAPI, dt); } catch (err) { showCodeError(err); }
-    render();
-    rafId = requestAnimationFrame(loop);
-  }
+  function updateSim(dt) {
+    const p = sim.player;
+    const keys = state.keys;
 
-  function stepPhysics(dt) {
-    const objs = state.runtime;
-    const solids = objs.filter((o) => o.solid && !o.hidden);
-    const player = objs.find((o) => o.behavior === 'player');
+    if (p) {
+      let dir = 0;
+      if (keys['arrowleft'] || keys['a'] || keys['q']) dir -= 1;
+      if (keys['arrowright'] || keys['d']) dir += 1;
+      const targetVx = dir * p.speed;
+      p.vx += (targetVx - p.vx) * Math.min(1, dt * 14);
+      if (Math.abs(p.vx) < 1) p.vx = 0;
 
-    // player control + gravity
-    objs.forEach((o) => {
-      const hasGravity = o.behavior === 'player' || o.behavior === 'enemy';
-      if (o.behavior === 'player') {
-        const k = state.keys;
-        const left = k['arrowleft'] || k['q'] || k['a'];
-        const right = k['arrowright'] || k['d'];
-        const jump = k[' '] || k['arrowup'] || k['w'] || k['z'];
-        o.vx = (right ? 1 : 0) - (left ? 1 : 0);
-        o.vx *= 230 * (o.speed || 1);
-        if (jump && o.grounded) { o.vy = -720; o.grounded = false; }
-      } else if (o.behavior === 'enemy') {
-        o.x += o.dir * 60 * (o.speed || 1) * dt * 3;
-        if (o.x > o.spawnX + 110) o.dir = -1;
-        if (o.x < o.spawnX - 110) o.dir = 1;
+      const jumpKey = keys['arrowup'] || keys['w'] || keys['z'] || keys[' '];
+      if (jumpKey && p.onGround) {
+        p.vy = -p.jump;
+        p.onGround = false;
+        SFX.jump();
       }
 
-      if (hasGravity) {
-        o.vy = Math.min(o.vy + GRAV * dt, 1400);
-        // move X
-        o.x += o.vx * dt;
-        solids.forEach((s) => {
-          if (s === o || s.hidden) return;
-          if (aabb(o, s)) {
-            if (o.vx > 0) o.x = s.x - o.w;
-            else if (o.vx < 0) o.x = s.x + s.w;
-            o.vx = 0;
+      p.vy += (state.scene.gravity || 2000) * dt;
+
+      // Déplacement horizontal
+      p.x += p.vx * dt;
+      for (const s of solids()) {
+        if (aabb(p, s)) {
+          if (p.vx > 0) p.x = s.x - p.w;
+          else if (p.vx < 0) p.x = s.x + s.w;
+          p.vx = 0;
+        }
+      }
+
+      // Déplacement vertical
+      p.y += p.vy * dt;
+      p.onGround = false;
+      for (const s of solids()) {
+        if (aabb(p, s)) {
+          if (p.vy > 0) {
+            p.y = s.y - p.h;
+            p.vy = 0;
+            p.onGround = true;
+          } else if (p.vy < 0) {
+            p.y = s.y + s.h;
+            p.vy = 0;
           }
-        });
-        // move Y
-        o.y += o.vy * dt;
-        o.grounded = false;
-        solids.forEach((s) => {
-          if (s === o || s.hidden) return;
-          if (aabb(o, s)) {
-            if (o.vy > 0) { o.y = s.y - o.h; o.grounded = true; }
-            else if (o.vy < 0) { o.y = s.y + s.h; }
-            o.vy = 0;
-          }
-        });
-        // fall out
-        if (o.y > CH + 300 && o.behavior === 'player') endPlay(false);
+        }
       }
-    });
 
-    if (!player) return;
+      // Limites
+      if (p.x < 0) { p.x = 0; p.vx = 0; }
+      if (p.x + p.w > W) { p.x = W - p.w; p.vx = 0; }
 
-    // overlaps: coins, flag, enemies + onCollide hook
-    objs.forEach((o) => {
-      if (o === player || o.hidden) return;
-      if (!aabb(player, o)) { prevOverlaps.delete(o.id); return; }
-      const isNew = !prevOverlaps.has(o.id);
-      prevOverlaps.add(o.id);
-
-      if (isNew) {
-        try { if (state.hooks.onCollide) state.hooks.onCollide(player, o); } catch (err) { showCodeError(err); }
+      // Chute
+      if (p.y > H + 160) {
+        loseGame(null);
+        return;
       }
-      if (o.behavior === 'coin' && !o.hidden) {
-        o.hidden = true;
-        state.score += 1;
-        $('#hudScore').textContent = state.score;
-      } else if (o.behavior === 'flag') {
-        endPlay(true);
-      } else if (o.behavior === 'enemy') {
-        endPlay(false);
+
+      // Pièces
+      for (const c of sim.coins) {
+        if (!c.got && aabb(p, c)) {
+          c.got = true;
+          state.score += c.value;
+          SFX.coin();
+        }
       }
-    });
-  }
 
-  /* ================= Demo scene ================= */
-  function demoScene() {
-    const W = CW, H = CH;
-    const mk = (type, over) => Object.assign(defaultsFor(type), over);
-    return [
-      mk('platform', { name: 'sol', x: 60, y: H - 110, w: W - 120, h: 28 }),
-      mk('platform', { name: 'plateforme-haute', x: W * 0.32, y: H - 250, w: 180, h: 24 }),
-      mk('platform', { name: 'plateforme-haute-2', x: W * 0.62, y: H - 330, w: 150, h: 24 }),
-      mk('player', { name: 'joueur', x: 120, y: H - 190 }),
-      mk('coin', { name: 'piece-1', x: W * 0.36, y: H - 300 }),
-      mk('coin', { name: 'piece-2', x: W * 0.42, y: H - 300 }),
-      mk('coin', { name: 'piece-3', x: W * 0.66, y: H - 380 }),
-      mk('enemy', { name: 'ennemi-1', x: W * 0.52, y: H - 150 }),
-      mk('flag', { name: 'arrivee', x: W - 150, y: H - 200 }),
-    ];
-  }
+      // Ennemis
+      for (const e of sim.enemies) {
+        if (aabb(p, e)) {
+          SFX.hit();
+          shake();
+          loseGame(null);
+          return;
+        }
+      }
 
-  /* ================= i18n hooks ================= */
-  function applyEditorLang() {
-    $('#projectName').placeholder = t('ed.projectName');
-    if (!state.playing) $('#playLabel').textContent = t('ed.play');
-    if (!$('#codeBox').value.trim() || $('#codeBox').dataset.template === '1') {
-      $('#codeBox').value = t('ed.codeTemplate');
-      $('#codeBox').dataset.template = '1';
+      // Drapeau
+      if (sim.flag && aabb(p, sim.flag)) {
+        winGame(sim.flag.ref.message || null);
+        return;
+      }
+
+      runHooks('onUpdate', sim.player.ref, null, dt);
+    }
+
+    // Ennemis : patrouille
+    for (const e of sim.enemies) {
+      const oldX = e.x;
+      e.x += e.vx * dt;
+      let hitWall = false;
+      for (const s of solids()) {
+        if (aabb(e, s)) {
+          hitWall = true;
+          break;
+        }
+      }
+      if (hitWall || e.x < 0 || e.x + e.w > W) {
+        e.x = oldX;
+        e.vx = -e.vx;
+      }
     }
   }
-  document.addEventListener('kreo:langchange', applyEditorLang);
 
-  /* ================= Init ================= */
-  function init() {
-    resizeCanvas();
-    bindInspector();
+  function winGame(msg) {
+    if (state.won || state.lost) return;
+    state.won = true;
+    SFX.win();
+    $('#winScore').textContent = t('ed.scoreLabel') + ' : ' + state.score;
+    $('#winOverlay').hidden = false;
+  }
 
-    // restore autosave or load demo
-    let restored = false;
+  function loseGame(msg) {
+    if (state.won || state.lost) return;
+    state.lost = true;
+    SFX.lose();
+    $('#loseOverlay').hidden = false;
+  }
+
+  function shake() {
+    const w = $('#stageWrap');
+    w.classList.remove('shake');
+    void w.offsetWidth;
+    w.classList.add('shake');
+    setTimeout(function () { w.classList.remove('shake'); }, 420);
+  }
+
+  function updateHUD() {
+    $('#hudScore').textContent = state.score;
+    const total = sim.coins.length;
+    const got = sim.coins.filter(function (c) { return c.got; }).length;
+    $('#hudCoins').textContent = got + ' / ' + total;
+  }
+
+  $('#btnPlay').addEventListener('click', togglePlay);
+  $('#btnReplay').addEventListener('click', function () {
+    $('#winOverlay').hidden = true;
+    stopPlay();
+    startPlay();
+  });
+  $('#btnReplay2').addEventListener('click', function () {
+    $('#loseOverlay').hidden = true;
+    stopPlay();
+    startPlay();
+  });
+  $('#btnBackEdit').addEventListener('click', stopPlay);
+  $('#btnBackEdit2').addEventListener('click', stopPlay);
+
+  /* ---------------- Clavier ---------------- */
+  function isTyping(e) {
+    const el = e.target;
+    return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    const key = e.key.toLowerCase();
+    state.keys[key] = true;
+    state.keys[e.code.toLowerCase()] = true;
+
+    if (isTyping(e)) return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (!state.play) togglePlay(); // En jeu : Espace = saut (géré par les hooks/physics)
+      return;
+    }
+    if (key === 'escape') {
+      if (state.play) stopPlay();
+      else { state.selectedId = null; renderAll(); }
+      return;
+    }
+    if (key === 'delete' || key === 'backspace') {
+      if (!state.play) { e.preventDefault(); deleteSelected(); }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) {
+      e.preventDefault(); undo(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) {
+      e.preventDefault(); redo(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 'd') {
+      e.preventDefault(); if (!state.play) duplicateSelected(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 's') {
+      e.preventDefault(); save(); return;
+    }
+    if (key === 'g' && !state.play) {
+      view.grid = !view.grid;
+      $('#gridOverlay').classList.toggle('off', !view.grid);
+      $('#btnGrid').classList.toggle('active', view.grid);
+      return;
+    }
+
+    // Déplacement flèches (édition)
+    if (!state.play && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].indexOf(key) !== -1) {
+      const o = findObj(state.selectedId);
+      if (!o) return;
+      e.preventDefault();
+      snapshot();
+      const step = e.shiftKey ? 8 : 4;
+      if (key === 'arrowleft') o.x -= step;
+      if (key === 'arrowright') o.x += step;
+      if (key === 'arrowup') o.y -= step;
+      if (key === 'arrowdown') o.y += step;
+      renderAll();
+    }
+  });
+
+  document.addEventListener('keyup', function (e) {
+    state.keys[e.key.toLowerCase()] = false;
+    state.keys[e.code.toLowerCase()] = false;
+  });
+
+  /* ---------------- Boutons topbar ---------------- */
+  $('#btnUndo').addEventListener('click', undo);
+  $('#btnRedo').addEventListener('click', redo);
+  $('#btnGrid').addEventListener('click', function () {
+    view.grid = !view.grid;
+    $('#gridOverlay').classList.toggle('off', !view.grid);
+    $('#btnGrid').classList.toggle('active', view.grid);
+  });
+  $('#btnSnap').addEventListener('click', function () {
+    view.snap = !view.snap;
+    $('#btnSnap').classList.toggle('active', view.snap);
+    toast(view.snap ? 'ed.snapOn' : 'ed.snapOff', '🧲');
+  });
+  $('#btnNew').addEventListener('click', newProject);
+  $('#btnSave').addEventListener('click', save);
+  $('#btnExport').addEventListener('click', exportFile);
+  $('#btnImport').addEventListener('click', importFile);
+  $('#btnDemo').addEventListener('click', function () {
+    snapshot();
+    demoScene();
+    renderAll();
+    toast('ed.demoLoaded', '⭐');
+  });
+  $('#btnHelp').addEventListener('click', function () {
+    $('#modalHelp').classList.add('open');
+  });
+  $('#modalHelp').addEventListener('click', function (e) {
+    if (e.target === e.currentTarget || e.target.hasAttribute('data-close')) {
+      $('#modalHelp').classList.remove('open');
+    }
+  });
+
+  /* ---------------- Son ---------------- */
+  function applyMute() {
+    $('#btnMute').classList.toggle('active', !view.muted);
+    $('#muteIcon').innerHTML = view.muted
+      ? '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>'
+      : '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M17.8 6.8a7.5 7.5 0 0 1 0 10.4"/>';
+  }
+  $('#btnMute').addEventListener('click', function () {
+    view.muted = !view.muted;
+    applyMute();
+    toast(view.muted ? 'ed.muted' : 'ed.mute', view.muted ? '🔇' : '🔊');
+  });
+
+  /* ---------------- Langue ---------------- */
+  $('#langToggle').addEventListener('click', function () {
+    const next = window.kreoCurrentLang() === 'fr' ? 'en' : 'fr';
+    window.kreoApplyLang(next);
+    $('#langLabel').textContent = next.toUpperCase();
+  });
+
+  window.addEventListener('kreo:editor-render', function () {
+    $('#langLabel').textContent = window.kreoCurrentLang().toUpperCase();
+    updateStatusSave();
+    renderHierarchy();
+    renderInspector();
+    if (state.play) $('#playLabel').textContent = t('ed.stop');
+    else $('#playLabel').textContent = t('ed.play');
+    $('#statusHint').textContent = t('ed.renameHint');
+    if (state.play) updateHUD();
+  });
+
+  /* ---------------- Autosave ---------------- */
+  setInterval(function () {
+    if (!state.dirty) return;
     try {
-      const auto = JSON.parse(localStorage.getItem('kreo-autosave') || 'null');
-      if (auto && auto.objects && auto.objects.length) restored = loadProject(auto, true);
-    } catch (e) {}
-    if (!restored) {
-      state.project.objects = demoScene();
-      refreshTree();
-      $('#codeBox').value = t('ed.codeTemplate');
-      $('#codeBox').dataset.template = '1';
-      $('#projectName').value = t('ed.projectName');
-      state.project.name = t('ed.projectName');
-    }
+      localStorage.setItem(AUTOKEY, JSON.stringify({ version: 1, scene: state.scene, objects: state.objects }));
+    } catch (e) { /* quota */ }
+  }, 15000);
 
-    $('#codeBox').addEventListener('input', (e) => {
-      e.target.dataset.template = '0';
-      markDirty();
-    });
-
-    // Tab key inserts spaces in code box
-    $('#codeBox').addEventListener('keydown', (e) => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const el = e.target, s = el.selectionStart;
-        el.value = el.value.slice(0, s) + '  ' + el.value.slice(el.selectionEnd);
-        el.selectionStart = el.selectionEnd = s + 2;
-      }
-    });
-
-    applyEditorLang();
-    select(null);
-    render();
-  }
-
-  init();
+  /* ---------------- Init ---------------- */
+  if (!loadSaved()) demoScene();
+  setZoom(1);
+  applyMute();
+  renderAll();
+  updateStatusSave();
 })();
