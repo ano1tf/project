@@ -85,6 +85,21 @@ export class CarSlot {
     mk(new THREE.CylinderGeometry(0.09, 0.11, 0.3, 10), chrome, 0.55, 0.5, -2.42, Math.PI / 2);
     // Prises d'air
     mk(new THREE.BoxGeometry(0.8, 0.16, 0.3), dark, 0, 1.28, 1.02);
+    // Ailes élargies (passages de roues)
+    for (const [fx, fz] of [[-1.0, 1.5], [1.0, 1.5], [-1.0, -1.52], [1.0, -1.52]]) {
+      mk(new THREE.BoxGeometry(0.16, 0.3, 1.34), paint, fx, 0.76, fz);
+    }
+    // Bas de caisse
+    mk(new THREE.BoxGeometry(0.1, 0.16, 2.7), dark, -1.02, 0.36, -0.15);
+    mk(new THREE.BoxGeometry(0.1, 0.16, 2.7), dark, 1.02, 0.36, -0.15);
+    // Rétroviseurs
+    mk(new THREE.BoxGeometry(0.22, 0.11, 0.07), dark, -1.06, 1.34, 0.86);
+    mk(new THREE.BoxGeometry(0.22, 0.11, 0.07), dark, 1.06, 1.34, 0.86);
+    // Antenne
+    mk(new THREE.CylinderGeometry(0.014, 0.02, 0.26, 6), dark, 0, 1.92, -0.86);
+    // Flancs d'aileron
+    mk(new THREE.BoxGeometry(0.03, 0.3, 0.56), dark, -0.99, 1.78, -2.18, 0.12);
+    mk(new THREE.BoxGeometry(0.03, 0.3, 0.56), dark, 0.99, 1.78, -2.18, 0.12);
 
     /* ---- Feux ---- */
     const headMat = new THREE.MeshStandardMaterial({
@@ -98,6 +113,39 @@ export class CarSlot {
     mk(new THREE.BoxGeometry(0.56, 0.15, 0.08), this.tailMat, -0.66, 1.12, -2.34);
     mk(new THREE.BoxGeometry(0.56, 0.15, 0.08), this.tailMat, 0.66, 1.12, -2.34);
 
+    // Halos additifs (faux bloom)
+    const glowCanvas = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d');
+      const gr = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+      gr.addColorStop(0, 'rgba(255,255,255,1)');
+      gr.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    })();
+    const glowSprite = (color, scale, x, y, z, opacity) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowCanvas,
+        color,
+        transparent: true,
+        opacity,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      }));
+      sp.scale.set(scale, scale, 1);
+      sp.position.set(x, y, z);
+      sp.renderOrder = 3;
+      this.body.add(sp);
+      return sp;
+    };
+    glowSprite(0xFFE9BE, 1.15, -0.62, 1.02, 2.4, 0.5);
+    glowSprite(0xFFE9BE, 1.15, 0.62, 1.02, 2.4, 0.5);
+    glowSprite(0xFF3040, 0.85, -0.66, 1.12, -2.42, 0.42);
+    glowSprite(0xFF3040, 0.85, 0.66, 1.12, -2.42, 0.42);
+
     /* ---- Roues (groupe par roue : direction + rotation) ---- */
     this.wheels = [];
     const tireGeo = new THREE.CylinderGeometry(0.53, 0.53, 0.44, 22);
@@ -108,10 +156,15 @@ export class CarSlot {
 
     const tireMat = new THREE.MeshStandardMaterial({ color: 0x17191F, roughness: 0.92 });
     const rimMat = new THREE.MeshStandardMaterial({ color: 0xB9C2D4, metalness: 0.92, roughness: 0.24 });
+    const discGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.05, 18);
+    discGeo.rotateZ(Math.PI / 2);
+    const discMat = new THREE.MeshStandardMaterial({ color: 0x2A2E36, metalness: 0.85, roughness: 0.45 });
+    const caliperGeo = new THREE.BoxGeometry(0.09, 0.17, 0.1);
+    const caliperMat = new THREE.MeshStandardMaterial({ color: 0xC93A2E, metalness: 0.6, roughness: 0.4 });
 
     const positions = [
-      [-1.0, 0.53, 1.5, true], [1.0, 0.53, 1.5, true],
-      [-1.0, 0.53, -1.52, false], [1.0, 0.53, -1.52, false]
+      [-0.88, 0.53, 1.5, true], [0.88, 0.53, 1.5, true],
+      [-0.88, 0.53, -1.52, false], [0.88, 0.53, -1.52, false]
     ];
     for (const [x, y, z, front] of positions) {
       const wheel = new THREE.Group();
@@ -122,12 +175,18 @@ export class CarSlot {
       wheel.add(tire);
       const rim = new THREE.Mesh(rimGeo, rimMat);
       wheel.add(rim);
+      const disc = new THREE.Mesh(discGeo, discMat);
+      disc.position.x = x > 0 ? -0.04 : 0.04;
+      wheel.add(disc);
       for (let s = 0; s < 5; s++) {
         const spoke = new THREE.Mesh(spokeGeo, rimMat);
         spoke.rotation.x = (s / 5) * Math.PI * 2;
         spoke.position.x = x > 0 ? 0.02 : -0.02;
         wheel.add(spoke);
       }
+      const caliper = new THREE.Mesh(caliperGeo, caliperMat);
+      caliper.position.set(x * 1.02, y + 0.13, z - 0.21);
+      this.body.add(caliper);
       this.body.add(wheel);
       this.wheels.push({ group: wheel, front, spin: 0 });
     }

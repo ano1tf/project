@@ -47,6 +47,19 @@ function checkerCanvas() {
   return c;
 }
 
+function glowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+
 function bannerCanvas() {
   const c = document.createElement('canvas');
   c.width = 1024; c.height = 128;
@@ -399,6 +412,18 @@ export class TrackSlot {
         .addScaledVector(s0.left, off);
       lamp.position.y += 7.02;
       lamp.rotation.y = Math.atan2(s0.tangent.x, s0.tangent.z);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture(),
+        color: 0x000000,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      }));
+      glow.scale.set(1.7, 1.7, 1);
+      glow.renderOrder = 3;
+      lamp.add(glow);
+      lamp.userData.glow = glow;
       gantry.add(lamp);
       this.startLights.push(lamp);
     }
@@ -569,6 +594,15 @@ export class TrackSlot {
     this.startLights.forEach((lamp) => {
       const c = state === 'red' ? 0xFF2333 : state === 'green' ? 0x22E077 : 0x2A1215;
       lamp.material.color.setHex(c);
+      const glow = lamp.userData.glow;
+      if (glow) {
+        if (state === 'off') {
+          glow.material.opacity = 0;
+        } else {
+          glow.material.color.setHex(c);
+          glow.material.opacity = 0.9;
+        }
+      }
     });
   }
 

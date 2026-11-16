@@ -45,6 +45,10 @@ function applyLang() {
   el('btnMenu').textContent = T().menu;
   el('btnResume').textContent = T().resume;
   document.querySelector('#pause h2').textContent = T().pause;
+  const subEl = document.querySelector('.menu-sub');
+  if (subEl) subEl.textContent = T().sub;
+  const loadEl = document.querySelector('.load-txt');
+  if (loadEl) loadEl.textContent = T().load;
   el('soundLabel').textContent = muted ? T().muted : T().sound;
   if (cameraSlot) el('camSelectLabel').textContent = T().cam + cameraSlot.label(LANG).replace('CAMÉRA : ', '').replace('CAMERA: ', '');
   if (race) {
@@ -306,7 +310,7 @@ function renderResults(standings) {
     return (
       '<div class="res-row' + (s.me ? ' me' : '') + '">' +
       '<div class="res-pos">' + pos + '</div>' +
-      '<div class="res-name">' + s.name + '</div>' +
+      '<div class="res-name">' + (s.me ? (LANG === 'en' ? 'YOU' : 'TOI') : s.name) + '</div>' +
       '<div class="res-time">' + (s.me ? (race && race.bestLap != null ? '★ ' + fmt(race.bestLap) : '—') : '—') + '</div>' +
       '</div>'
     );
