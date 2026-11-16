@@ -106,11 +106,13 @@ class Enemy {
     // teinte par type + visière émissive (repérée sur la tête)
     for (const m of inst.mats) {
       if (!m.color) continue;
-      m.color.setHex(0x2A3040).lerp(new THREE.Color(this.def.accent), 0.34);
-      m.metalness = Math.min(1, (m.metalness || 0.2) + 0.35);
-      m.roughness = 0.55;
-      m.emissive.setHex(0x000000);
-      m.emissiveIntensity = 0;
+      m.color.setHex(0x3C4557).lerp(new THREE.Color(this.def.accent), 0.30);
+      m.metalness = Math.min(1, (m.metalness || 0.2) + 0.25);
+      m.roughness = 0.6;
+      // Légère auto-illumination : les robots se détachent du sol la nuit, où
+      // ils n'étaient que des silhouettes noires impossibles à viser.
+      m.emissive.setHex(this.def.accent);
+      m.emissiveIntensity = 0.16;
     }
     root.traverse((o) => {
       if (!o.isMesh || !o.material || !/head/i.test(o.name)) return;
@@ -270,16 +272,23 @@ export class EnemyManager {
       else if (n >= 2 && i % 3 === 2) types.push('shooter');
       else types.push('grunt');
     }
+    // les trois premiers de la vague occupent l'arc d'ouverture (face au joueur)
     const spots = this.arena.spawnPoints.slice();
+    if (n <= 1 && this.arena.openingSpots) spots.unshift(...this.arena.openingSpots);
     const taken = [];
     for (const type of types) {
-      // spot loin du joueur mais pas déjà pris
+      // Spot à portée de vue (≈ 26 unités) mais pas dans le dos du joueur :
+      // viser « le plus loin possible » envoyait la vague à 60+ mètres, où les
+      // robots n'étaient que des points noirs dans le brouillard.
       let best = spots[0], bestScore = -Infinity;
+      const fwd = new THREE.Vector3(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw));
       for (const s of spots) {
-        const d = s.distanceToSquared(this.player.pos);
+        const dist = Math.sqrt(s.distanceToSquared(this.player.pos));
+        const toSpot = s.clone().sub(this.player.pos).setY(0).normalize();
+        const facing = toSpot.dot(fwd);                    // 1 = pile devant
         let sep = 0;
-        for (const t of taken) sep = Math.max(sep, t.distanceToSquared(s));
-        const score = d + Math.min(sep, 2500) * 1.4;
+        for (const t of taken) sep = Math.max(sep, Math.sqrt(t.distanceToSquared(s)));
+        const score = -Math.abs(dist - 26) * 1.4 + facing * 26 + Math.min(sep, 40) * 0.6;
         if (score > bestScore) { bestScore = score; best = s; }
       }
       taken.push(best.clone());

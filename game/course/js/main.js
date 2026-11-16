@@ -61,8 +61,9 @@ function applyLang() {
 }
 
 /* ================= Rendu ================= */
-const LOW = /low|weak|pixel 3|mali|adreno 6\d\d/i.test(navigator.userAgent || '') ||
-  (navigator.hardwareConcurrency || 8) < 4;
+// « Faible » = mobile réel : le nombre de cœurs n'est pas un signal fiable.
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini/i.test(navigator.userAgent || '');
+const LOW = IS_MOBILE && Math.min(window.innerWidth, window.innerHeight) < 700;
 
 const canvas = el('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });

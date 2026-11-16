@@ -96,9 +96,11 @@ function applyLang() {
 }
 
 /* ================= Rendu ================= */
-const LOW = /low|weak|pixel 3|mali|adreno 6\d\d/i.test(
-  (navigator.userAgent || '') + ' ' + (navigator.hardwareConcurrency < 4 ? 'low' : '')
-);
+// « Faible » = mobile réel, pas un navigateur de test ou une machine headless.
+// Le nombre de cœurs n'est pas un signal fiable (VM, navigateurs de test, etc.),
+// et la qualité s'adapte déjà toute seule en jeu (adaptQuality).
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini/i.test(navigator.userAgent || '');
+const LOW = IS_MOBILE && Math.min(window.innerWidth, window.innerHeight) < 700;
 
 const canvas = el('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
@@ -359,6 +361,11 @@ function startGame() {
   player.vel.set(0, 0, 0);
   player.yaw = arena.playerSpawn.yaw;
   player.pitch = 0;
+  // le recul est cumulé dans _recoilPitch, appliqué une seule fois puis remis à
+  // zéro : sans ce reset, un retour au menu en pleine rafale laissait la caméra
+  // pointée vers le ciel au respawn.
+  player._recoilPitch = 0;
+  player._recoilYaw = 0;
   player.health = 100;
   player.armor = 25;
   player.alive = true;
@@ -461,10 +468,18 @@ document.addEventListener('mouseup', (e) => {
   if (e.button === 2) input.ads = false;
 });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
+// Au passage en pointer lock, le navigateur émet un mousemove avec un delta
+// énorme (position absolue → centre) : la caméra partait vers le ciel au spawn.
+// On ignore les tout premiers événements et tout saut aberrant.
+let lookWarm = 0;
+document.addEventListener('pointerlockchange', () => {
+  lookWarm = document.pointerLockElement === canvas ? 2 : 0;
+});
 document.addEventListener('mousemove', (e) => {
-  if (document.pointerLockElement === canvas && (game.state === 'playing' || game.state === 'intermission')) {
-    player.addLook(e.movementX, e.movementY);
-  }
+  if (document.pointerLockElement !== canvas || (game.state !== 'playing' && game.state !== 'intermission')) return;
+  if (lookWarm > 0) { lookWarm--; return; }
+  if (Math.abs(e.movementX) > 220 || Math.abs(e.movementY) > 220) return;
+  player.addLook(e.movementX, e.movementY);
 });
 document.addEventListener('wheel', (e) => {
   if (game.state === 'playing' || game.state === 'intermission') weapons.switchWheel(e.deltaY);
@@ -492,8 +507,6 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  vmCam.aspect = window.innerWidth / window.innerHeight;
-  vmCam.updateProjectionMatrix();
   post.resize();
 });
 
@@ -537,18 +550,51 @@ el('btnLang').addEventListener('click', () => {
 
 /* ================= Viewmodel (rendu en calque dans le pipeline HDR) ================= */
 const vmScene = new THREE.Scene();
-const vmCam = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.01, 6);
-vmScene.add(new THREE.HemisphereLight(0xB8CCE8, 0x1A1E28, 1.15));
-const vmKey = new THREE.DirectionalLight(0xFFE8CE, 2.1);
-vmKey.position.set(0.6, 1.2, 0.9);
+// Sans IBL, un métal ne renvoie rien : l'arme restait un pavé noir. On donne au
+// calque son propre « studio » (dégradé bleu froid au-dessus, rebond chaud en
+// dessous) plutôt que le ciel de la scène : l'arme reste lisible de nuit comme
+// de jour, avec des reflets qui suivent la même direction que la lumière clé.
+{
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const g2 = c.getContext('2d');
+  const grad = g2.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0.0, '#8FA6C8');
+  grad.addColorStop(0.45, '#5A6A82');
+  grad.addColorStop(0.62, '#3A3A3C');
+  grad.addColorStop(1.0, '#2A2118');
+  g2.fillStyle = grad; g2.fillRect(0, 0, 256, 128);
+  // petite source chaude à droite pour accrocher une arête de l'arme
+  const warm = g2.createRadialGradient(200, 52, 2, 200, 52, 46);
+  warm.addColorStop(0, 'rgba(255,214,160,0.85)');
+  warm.addColorStop(1, 'rgba(255,214,160,0)');
+  g2.fillStyle = warm; g2.fillRect(140, 0, 120, 110);
+  const envTex = new THREE.CanvasTexture(c);
+  envTex.mapping = THREE.EquirectangularReflectionMapping;
+  envTex.colorSpace = THREE.SRGBColorSpace;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  vmScene.environment = pmrem.fromEquirectangular(envTex).texture;
+  pmrem.dispose();
+  envTex.dispose();
+}
+vmScene.environmentIntensity = 1.0;
+vmScene.add(new THREE.HemisphereLight(0xB8CCE8, 0x2A2E36, 1.7));
+const vmKey = new THREE.DirectionalLight(0xFFF0DC, 2.9);
+// Rig de viewmodel : l'arme est à droite de l'écran et on voit son flanc
+// gauche. La clé vient donc de la gauche/hauteur, le remplissage de la droite,
+// le contre-jour détache la silhouette du fond. Jamais le rig du monde : sinon
+// l'arme disparaît dans le noir dès qu'on regarde vers le sol.
+vmKey.position.set(-1.1, 1.1, 1.0);
 vmScene.add(vmKey);
-const vmRim = new THREE.DirectionalLight(0x8FB6FF, 1.35);
-vmRim.position.set(-1.1, 0.4, -0.8);
+const vmRim = new THREE.DirectionalLight(0xBBD0F0, 1.9);
+vmRim.position.set(1.5, 0.5, 0.7);
 vmScene.add(vmRim);
-// le modèle d'arme actuel est le seul enfant de weapons.vm
-vmScene.add(weapons.vm);
-weapons.vm.position.set(0, 0, 0);
-weapons.vm.rotation.set(0, 0, 0);
+// L'arme vit dans la scène du calque (voir weapons.js) : elle est rendue à
+// part, avec ses propres lumières, puis composée sur l'image HDR. Le nœud
+// racine copie la pose de la caméra à chaque image.
+const vmRoot = new THREE.Group();
+vmScene.add(vmRoot);
+vmRoot.add(weapons.vm);
 
 // flash de bouche du viewmodel (indépendant de la lumière du monde)
 const vmFlash = new THREE.PointLight(0xFFC878, 0, 3, 2);
@@ -558,50 +604,51 @@ let vmFlashT = 0;
 // l'arme est masquée pendant les menus (la caméra d'intro est libre)
 weapons.vm.visible = false;
 
-// La caméra du viewmodel suit celle du joueur (mêmes matrices, FOV 76 comme le jeu)
-function updateVmCamera() {
-  vmCam.position.copy(camera.position);
-  vmCam.quaternion.copy(camera.quaternion);
-  // même champ de vision que le jeu : l'arme reste collée à l'écran
-  if (vmCam.fov !== camera.fov) {
-    vmCam.fov = camera.fov;
-    vmCam.updateProjectionMatrix();
-  }
-  vmCam.updateMatrixWorld(true);
-}
-
-// Le viewmodel est ajouté au composer : il profite du HDR, du bloom et du
-// grading, et son depth est nettoyé pour rester devant le décor.
+// Le viewmodel est rendu en calque dans le composer : il profite du HDR, du
+// bloom et du grading, tout en restant devant le décor (il est dessiné avant
+// que la scène principale n'écrive ses profondeurs).
+post.setViewmodelScene(vmScene, vmRoot);
+// Position de repos du viewmodel (définie par le slot armes) : on ne touche
+// qu'aux offsets de tremblement, jamais à la position de base.
+const VM_BASE = weapons.vm.position.clone();
 post.setLayerRenderer(function (r) {
   const damage = post.grade.uniforms.damage.value;
-  weapons.vm.position.x = (Math.random() - 0.5) * damage * 0.05;
-  weapons.vm.position.y = (Math.random() - 0.5) * damage * 0.05;
-  r.render(vmScene, vmCam);
+  weapons.vm.position.x = VM_BASE.x + (Math.random() - 0.5) * damage * 0.05;
+  weapons.vm.position.y = VM_BASE.y + (Math.random() - 0.5) * damage * 0.05;
 });
 
-/* ================= Qualité adaptative ================= */
-// Si la machine peine (< 40 fps pendant 2 s), on coupe AO puis on baisse la résolution.
-const perf = { acc: 0, frames: 0, level: 0 };
+/* ================= Qualité adaptative =================
+   0 : sans AO (défaut, ~18 ms/frame au pire)
+   1 : AO activée (machine véloce)
+   2 : sans AO (a décroché)
+   3 : sans bloom ni AO
+   4 : rendu direct (dernier recours)
+   On ne monte jamais en qualité dans les 4 premières secondes : le temps que
+   les shaders se compilent et que le premier chargement se tasse. */
+const perf = { acc: 0, frames: 0, level: 0, t: 0, warm: 6 };
 function adaptQuality(rawDt) {
   if (LOW) return;
+  perf.t += rawDt;
   perf.acc += rawDt; perf.frames++;
   if (perf.acc < 2) return;
   const fps = perf.frames / perf.acc;
   perf.acc = 0; perf.frames = 0;
-  if (fps < 40 && perf.level === 0) {
+  if (perf.warm > 0) { perf.warm -= 2; return; }
+
+  if (perf.level === 0 && fps > 75) {
+    // beaucoup de marge → on peut se payer l'occlusion ambiante
     perf.level = 1;
-    post.ao.enabled = false;            // l'AO est le poste le plus cher
-    post.bloom.strength *= 0.8;
-  } else if (fps < 34 && perf.level === 1) {
-    perf.level = 2;
-    renderer.setPixelRatio(1);
-    post.resize();
-  } else if (fps < 28 && perf.level === 2) {
-    perf.level = 3;
-    post.enabled = false;               // dernier recours : rendu direct
-  } else if (fps > 58 && perf.level === 1) {
-    perf.level = 0;
     post.ao.enabled = true;
+  } else if (perf.level === 1 && fps < 62) {
+    perf.level = 2;
+    post.ao.enabled = false;
+  } else if (perf.level <= 2 && fps < 45) {
+    perf.level = 3;
+    post.ao.enabled = false;
+    post.bloom.strength = 0.28;
+  } else if (perf.level === 3 && fps < 32) {
+    perf.level = 4;
+    post.enabled = false;              // rendu direct
   }
 }
 
@@ -698,8 +745,11 @@ function loop(now) {
     if (vmFlashT <= 0) vmFlash.intensity = 0;
   }
 
-  updateVmCamera();
-  post.render(rawDt, time);
+  try {
+    post.render(rawDt, time);
+  } catch (e) {
+    throw e;
+  }
 }
 
 /* ================= Démarrage ================= */
@@ -711,6 +761,7 @@ async function boot() {
   try {
     const env = await loadEnvironment(renderer, scene, '../../assets/env/moonless_golf_1k.hdr');
     arena.applyEnvironment(env);
+
   } catch (e) {
     console.warn('HDR indisponible', e);
   }
@@ -732,4 +783,6 @@ async function boot() {
     requestAnimationFrame(loop);
   });
 }
+// API publique minimale (debug, tests de rendu, outils) : un seul point d'entrée.
+window.KREO = { camera, scene, post, renderer, weapons, player, enemies, arena, juice, vmScene, game };
 boot();

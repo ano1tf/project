@@ -34,6 +34,8 @@ const ctx2d = () => new Proxy({}, {
   get: (t, k) => {
     if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop: noop });
     if (k === 'measureText') return () => ({ width: 10 });
+    // le viewmodel cuit une carte de rugosité procédurale (bruit) au démarrage
+    if (k === 'createImageData') return (w, h) => ({ width: w || 256, height: h || 256, data: new Uint8ClampedArray((w || 256) * (h || 256) * 4) });
     return noop;
   },
   set: () => true

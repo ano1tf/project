@@ -123,7 +123,8 @@ export class Arena {
     this.env = env;
     // le ciel HDR remplace le ciel dessiné à la main
     this.scene.background = env.texture;
-    this.scene.backgroundIntensity = 1.0;
+    // ciel légèrement sous-exposé : il doit rester un fond, pas la vedette
+    this.scene.backgroundIntensity = 0.82;
     this.scene.environment = env.envMap;
     this.scene.environmentIntensity = 0.9;
     // brouillard accordé au ciel
@@ -332,6 +333,16 @@ export class Arena {
     }
   }
 
+  /** true si un collider occupe le point (test large, rayon 1 m). */
+  _blockedAt(p) {
+    for (const c of this.colliders) {
+      if (p.x > c.min.x - 1 && p.x < c.max.x + 1 &&
+          p.z > c.min.z - 1 && p.z < c.max.z + 1 &&
+          c.max.y > 0.4) return true;
+    }
+    return false;
+  }
+
   /* ---------- Spawns ---------- */
   _buildSpawns() {
     for (let i = 0; i < 10; i++) {
@@ -348,7 +359,26 @@ export class Arena {
       new THREE.Vector3(26, 0, -26),
       new THREE.Vector3(-26, 0, 26)
     ];
-    this.playerSpawn = { pos: new THREE.Vector3(0, 0, 32), yaw: Math.PI };
+    // spawn décalé sur le côté et orienté vers le centre : on voit l'arène et les
+    // ennemis dès la première image (face au mur, la vue d'ouverture était vide)
+    // Le soleil du HDR est bas sur l'horizon : on oriente le joueur à 90° de
+    // son azimut pour qu'il éclaire la scène au lieu de l'aveugler à l'ouverture.
+    this.playerSpawn = { pos: new THREE.Vector3(6, 0, 26), yaw: Math.atan2(6, 26) + Math.PI / 2 };
+    // Ennemis "d'ouverture" : trois robots sur un arc devant le joueur, à 20-26
+    // unités. Les spawns de la vague sont à 34-40 m, souvent cachés par les
+    // caisses : sur la première image on ne voyait aucune menace, donc aucune
+    // accroche. Ces trois-là sont dans l'axe du regard dès le départ.
+    // On vérifie que chaque point est dégagé (pas de caisse devant) : un robot
+    // caché derrière un obstacle ne sert à rien pour l'accroche d'ouverture.
+    this.openingSpots = [0, 0.4, -0.4].map((off, i) => {
+      const a = this.playerSpawn.yaw + off;
+      const from = this.playerSpawn.pos;
+      for (let r = 22 + i * 2.5; r <= 34; r += 3) {
+        const p = new THREE.Vector3(from.x - Math.sin(a) * r, 0, from.z - Math.cos(a) * r);
+        if (!this._blockedAt(p)) return p;
+      }
+      return new THREE.Vector3(from.x - Math.sin(a) * 24, 0, from.z - Math.cos(a) * 24);
+    });
     // accès (rampes) pour monter sur les zones surélevées
     this.climbAccess = [
       new THREE.Vector3(0, 0, 17), new THREE.Vector3(0, 0, -17),
