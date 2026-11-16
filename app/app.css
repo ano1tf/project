@@ -273,6 +273,16 @@ html[data-theme="light"] .continue-card .c-label { color: #0E7490; }
 .continue-card h3 { font-family: 'Space Grotesk'; font-size: 17px; margin-bottom: 3px; }
 .continue-card p { font-size: 12px; color: var(--muted); }
 
+/* Carte démo KREO Racing */
+a.continue-card { text-decoration: none; color: inherit; cursor: pointer; }
+.demo-card {
+  background: linear-gradient(120deg, rgba(37, 99, 235, 0.18), rgba(139, 92, 246, 0.14));
+  border-color: rgba(99, 102, 241, 0.45);
+}
+.demo-card:hover { border-color: rgba(99, 102, 241, 0.85); }
+.demo-card .c-label { color: #7CFFB2; }
+html[data-theme="light"] .demo-card .c-label { color: #047857; }
+
 /* Stats */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 32px; }
 .stat {
