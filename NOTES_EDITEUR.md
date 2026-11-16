@@ -38,3 +38,22 @@
 - Multiplayer temps réel
 - Publication par lien (backend à prévoir)
 - Comptes / connexion (étape future validée)
+
+## Direction technique — Éditeur 3D (nov. 2026)
+
+L'éditeur est maintenant un **environnement 3D complet**, dans l'esprit des
+vrais moteurs (Godot, Unreal, Unity) :
+- Viewport 3D (three.js) avec caméra orbitale, ciel, ombres, brouillard
+- **Gizmos** de transformation : Déplacer (W) / Pivoter (E) / Échelle (R),
+  aimantation (grille 0.5 / 15° / 0.1)
+- Arbre de scène + inspecteur complet (transform XYZ, matériau PBR, lumières,
+  comportement, code) + **console de sortie**
+- Types d'objets : cube, sphère, cylindre, cône, sol, tore, lumière du jour,
+  lumière ponctuelle, **joueur**, **pièce**, **objectif**
+- **Mode jeu 3e personne** : WASD/ZQSD, saut, gravité, collisions AABB,
+  pièces, objectif, HUD, sons, écrans victoire/défaite
+- Code JS par objet : onStart / onUpdate / onCollide + API scene/player
+- Sauvegarde JSON (.kreo3d.json), undo/redo, autosave
+
+Ambition inchangée : **mieux qu'Unreal Engine**. Blocs pour démarrer,
+vrai JavaScript pour aller plus loin. Comptes/connexion : plus tard.

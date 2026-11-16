@@ -211,8 +211,8 @@
       try {
         const data = JSON.parse(String(reader.result));
         if (data && Array.isArray(data.objects)) {
-          localStorage.setItem('kreo-project', JSON.stringify(data));
-          localStorage.setItem('kreo-autosave', JSON.stringify(data));
+          localStorage.setItem('kreo-project3d', JSON.stringify(data));
+          localStorage.setItem('kreo-autosave3d', JSON.stringify(data));
           closeModal('#modalImport');
           toast('app.importOk', '✅');
           setTimeout(function () { location.href = '../editor/'; }, 700);
