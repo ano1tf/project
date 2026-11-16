@@ -11,6 +11,9 @@ import { FXSlot } from './fx.js';
 import { Player } from './player.js';
 import { WeaponSystem, WEAPONS } from './weapons.js';
 import { EnemyManager } from './enemies.js';
+import { PostFX } from './post.js';
+import { loadEnvironment, loadCharacter } from './assets.js';
+import { Juice } from './juice.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -93,20 +96,32 @@ function applyLang() {
 }
 
 /* ================= Rendu ================= */
+const LOW = /low|weak|pixel 3|mali|adreno 6\d\d/i.test(
+  (navigator.userAgent || '') + ' ' + (navigator.hardwareConcurrency < 4 ? 'low' : '')
+);
+
 const canvas = el('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOW ? 1 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 scene.userData.renderer = renderer;
 
 const camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.08, 320);
 scene.add(camera);
+
+/* ================= Post-processing + Juice ================= */
+const post = new PostFX({ renderer, scene, camera, low: LOW });
+
+/* ================= Juice ================= */
+const juice = new Juice({ camera });
+juice.onShake = (a) => post.shake(a);
 
 /* ================= Slots ================= */
 const sound = new SoundSlot();
@@ -120,6 +135,7 @@ const enemies = new EnemyManager({
       player.damage(dmg, fromPos);
       damageFlash = 1;
       dmgDirT = 1.25;
+      juice.shake(0.035 + dmg * 0.0016);
       if (fromPos) {
         const dx = fromPos.x - player.pos.x;
         const dz = fromPos.z - player.pos.z;
@@ -134,6 +150,8 @@ const enemies = new EnemyManager({
       game.kills++;
       game.score += score;
       pushKillfeed(type, score);
+      juice.hitstop(0.075);
+      juice.shake(0.05);
       hudRefresh();
     }
   }
@@ -165,16 +183,27 @@ function raycast(origin, dir, maxDist) {
 }
 
 const weapons = new WeaponSystem({
-  camera, scene, player, sound, fx, raycast,
+  camera, scene, player, sound, fx, raycast, juice, post,
   cb: {
-    onShot: () => { game.shots++; },
+    onShot: (def) => {
+      game.shots++;
+      vmFlashT = 0.055;
+      vmFlash.intensity = 7;
+      // recul de caméra : sec pour une arme lourde, léger pour le pistolet
+      juice.kick(def ? def.recoil * 0.55 : 0.01, (Math.random() - 0.5) * 0.012, def && def.id === 'shotgun' ? 1.6 : 0.6);
+      juice.shake(def && def.id === 'shotgun' ? 0.032 : 0.012);
+    },
     onHitEnemy: (hit, isHead) => {
       game.hits++;
       game.score += isHead ? 25 : 10;
       showHitmarker(isHead);
       if (isHead) showBanner('headshot');
+      // À l'impact : micro-gel + retour visuel. Headshot = plus sec.
+      juice.hitstop(isHead ? 0.065 : 0.035);
+      post.setHitFlash(1);
       hudRefresh();
-    }
+    },
+    onHitWorld: () => { /* impacts gérés par FXSlot */ }
   }
 });
 
@@ -462,6 +491,9 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  vmCam.aspect = window.innerWidth / window.innerHeight;
+  vmCam.updateProjectionMatrix();
+  post.resize();
 });
 
 /* ================= Boutons ================= */
@@ -500,13 +532,81 @@ el('btnLang').addEventListener('click', () => {
   applyLang();
 });
 
+/* ================= Viewmodel (maintenant rendu à part) ================= */
+const vmScene = new THREE.Scene();
+const vmCam = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.01, 6);
+vmScene.add(new THREE.HemisphereLight(0xB8CCE8, 0x1A1E28, 1.15));
+const vmKey = new THREE.DirectionalLight(0xFFE8CE, 2.1);
+vmKey.position.set(0.6, 1.2, 0.9);
+vmScene.add(vmKey);
+const vmRim = new THREE.DirectionalLight(0x8FB6FF, 1.35);
+vmRim.position.set(-1.1, 0.4, -0.8);
+vmScene.add(vmRim);
+// le modèle d'arme actuel est le seul enfant de weapons.vm
+vmScene.add(weapons.vm);
+weapons.vm.position.set(0, 0, 0);
+weapons.vm.rotation.set(0, 0, 0);
+
+// flash de bouche du viewmodel (indépendant de la lumière du monde)
+const vmFlash = new THREE.PointLight(0xFFC878, 0, 3, 2);
+vmFlash.position.set(0.12, 0.02, -0.5);
+vmScene.add(vmFlash);
+let vmFlashT = 0;
+
+function renderViewModel(damage) {
+  // on masque les particules/décalques du monde et l'arme elle-même
+  // via un rendu de scène séparé : rien à cacher, le vmScene ne contient que l'arme.
+  const prevAutoClear = renderer.autoClear;
+  renderer.autoClear = false;
+  renderer.clearDepth();
+  vmCam.projectionMatrix.copy(camera.projectionMatrix);
+  vmCam.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+  vmCam.matrixWorld.copy(camera.matrixWorld);
+  vmCam.matrixWorldInverse.copy(vmCam.matrixWorld).invert();
+  // tremblement d'arme lié aux dégâts
+  weapons.vm.position.x = (Math.random() - 0.5) * damage * 0.05;
+  weapons.vm.position.y = (Math.random() - 0.5) * damage * 0.05;
+  renderer.render(vmScene, vmCam);
+  renderer.autoClear = prevAutoClear;
+}
+
+/* ================= Qualité adaptative ================= */
+// Si la machine peine (< 40 fps pendant 2 s), on coupe AO puis on baisse la résolution.
+const perf = { acc: 0, frames: 0, level: 0 };
+function adaptQuality(rawDt) {
+  if (LOW) return;
+  perf.acc += rawDt; perf.frames++;
+  if (perf.acc < 2) return;
+  const fps = perf.frames / perf.acc;
+  perf.acc = 0; perf.frames = 0;
+  if (fps < 40 && perf.level === 0) {
+    perf.level = 1;
+    post.ao.enabled = false;            // l'AO est le poste le plus cher
+    post.bloom.strength *= 0.8;
+  } else if (fps < 34 && perf.level === 1) {
+    perf.level = 2;
+    renderer.setPixelRatio(1);
+    post.resize();
+  } else if (fps < 28 && perf.level === 2) {
+    perf.level = 3;
+    post.enabled = false;               // dernier recours : rendu direct
+  } else if (fps > 58 && perf.level === 1) {
+    perf.level = 0;
+    post.ao.enabled = true;
+  }
+}
+
 /* ================= Boucle ================= */
 let last = performance.now();
+let time = 0;
 function loop(now) {
   requestAnimationFrame(loop);
-  let dt = Math.min(0.05, (now - last) / 1000);
+  const rawDt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  const time = now / 1000;
+  time += rawDt;
+  // dt « gameplay » : ralenti par le hitstop, le reste (UI, FX d'écran) suit le temps réel
+  const dt = juice.tick(rawDt);
+  adaptQuality(rawDt);
 
   arena.update(time);
 
@@ -576,17 +676,53 @@ function loop(now) {
     }
   }
 
-  fx.update(dt);
-  renderer.render(scene, camera);
+  // décroissance des feedbacks post (temps réel, pas ralenti par le hitstop)
+  const gd = post.grade.uniforms;
+  gd.damage.value = Math.max(0, gd.damage.value - rawDt * 2.6);
+  gd.hitFlash.value = Math.max(0, gd.hitFlash.value - rawDt * 7.5);
+  if (damageFlash > 0.05) gd.damage.value = Math.max(gd.damage.value, Math.min(0.85, damageFlash * 0.75));
+
+  fx.update(rawDt);
+  if (vmFlashT > 0) {
+    vmFlashT -= rawDt;
+    vmFlash.intensity = Math.max(0, vmFlash.intensity - rawDt * 160);
+    if (vmFlashT <= 0) vmFlash.intensity = 0;
+  }
+
+  // Viewmodel toujours visible par-dessus le décor (rendu séparé)
+  renderViewModel(gd.damage.value);
+
+  post.render(rawDt, time);
 }
 
 /* ================= Démarrage ================= */
 el('loading').hidden = false;
 el('loadingTxt').textContent = T().loading;
-requestAnimationFrame(() => setTimeout(() => {
-  el('loading').hidden = true;
-  el('menuOverlay').hidden = false;
-  applyLang();
-  hudRefresh();
-  requestAnimationFrame(loop);
-}, 60));
+
+async function boot() {
+  // Environnement HDR : ciel réel + réflexions IBL (avant le premier rendu)
+  try {
+    const env = await loadEnvironment(renderer, scene, '../../assets/env/moonless_golf_1k.hdr');
+    arena.applyEnvironment(env);
+  } catch (e) {
+    console.warn('HDR indisponible', e);
+  }
+
+  // Personnages riggés (14 animations) : les ennemis deviennent des robots animés
+  try {
+    const char = await loadCharacter('../../assets/models/RobotExpressive.glb', { height: 2.15 });
+    enemies.attachCharacter(char);
+  } catch (e) {
+    console.warn('GLB indisponible, ennemis procéduraux', e);
+  }
+
+  requestAnimationFrame(() => {
+    el('loading').hidden = true;
+    el('menuOverlay').hidden = false;
+    applyLang();
+    hudRefresh();
+    last = performance.now();
+    requestAnimationFrame(loop);
+  });
+}
+boot();

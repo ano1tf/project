@@ -3,25 +3,30 @@
    Robots assaillants : 3 types (grondeur mêlée, tireur à
    projectiles, brute blindée). Déplacements avec évitement
    d'obstacles (segments vs AABB), lignes de vue, télégraphe
-   d'attaque, morts animées, projectiles ennemis.
+   d'attaque, projectiles ennemis.
+
+   Visuel : GLB riggé (RobotExpressive) cloné avec son squelette
+   et blend d'animations (Idle / Walking / Running / Punch /
+   Death), teinté par type. Repli procédural si le GLB manque.
    ============================================================ */
 import * as THREE from 'three';
+import { Animator } from './assets.js';
 
 const TYPES = {
   grunt: {
-    hp: 65, speed: 5.4, scale: 1,
+    hp: 65, speed: 5.4, scale: 1, rigScale: 0.82,
     melee: { range: 2.4, dmg: 12, cd: 1.1 },
     ranged: null,
     accent: 0xFF4D4D, score: 100
   },
   shooter: {
-    hp: 85, speed: 4.3, scale: 1,
+    hp: 85, speed: 4.3, scale: 1, rigScale: 0.8,
     melee: { range: 2.0, dmg: 8, cd: 1.3 },
     ranged: { range: 36, dmg: 11, cd: 2.1, telegraph: 0.42, speed: 27 },
     accent: 0xFFA23C, score: 150
   },
   brute: {
-    hp: 240, speed: 3.4, scale: 1.32,
+    hp: 240, speed: 3.4, scale: 1.32, rigScale: 1.12,
     melee: { range: 2.9, dmg: 26, cd: 1.5 },
     ranged: null,
     accent: 0xB45CFF, score: 250
@@ -45,7 +50,7 @@ function segBox(p0, p1, box) {
 }
 
 class Enemy {
-  constructor(type, pos, scene) {
+  constructor(type, pos, scene, charAsset) {
     this.type = type;
     this.def = TYPES[type];
     this.hp = this.def.hp;
@@ -60,6 +65,90 @@ class Enemy {
     this.onDeath = null;
     this._deathHandled = false;
 
+    this.group = new THREE.Group();
+    this.rig = null;      // instance GLB { root, mixer, actions, mats }
+    this.anim = null;     // Animator
+    this._animState = '';
+    this._attackAnimT = 0;
+    if (charAsset) this._buildRig(charAsset);
+    else this._buildProcedural();
+
+    // cibles de tir (mesh → partie)
+    if (!this.rig) {
+      this.hitMeshes = [
+        { mesh: this.head, part: 'head' },
+        { mesh: this.visor, part: 'head' },
+        { mesh: this.torso, part: 'body' },
+        { mesh: this.legL, part: 'body' },
+        { mesh: this.legR, part: 'body' },
+        { mesh: this.armL, part: 'body' },
+        { mesh: this.armR, part: 'body' }
+      ];
+    }
+    scene.add(this.group);
+  }
+
+  /* ---------- Visuel : robot riggé animé ---------- */
+  _buildRig(charAsset) {
+    const inst = charAsset.instance();
+    this.rig = inst;
+    this.anim = new Animator(inst);
+    const root = inst.root;
+    root.scale.setScalar(inst.root.scale.x * this.def.rigScale);
+    this.group.add(root);
+
+    // hauteur réelle de la silhouette (après échelle)
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const h = Math.max(0.2, box.max.y - box.min.y);
+    this._height = h;
+
+    // teinte par type + visière émissive (repérée sur la tête)
+    for (const m of inst.mats) {
+      if (!m.color) continue;
+      m.color.setHex(0x2A3040).lerp(new THREE.Color(this.def.accent), 0.34);
+      m.metalness = Math.min(1, (m.metalness || 0.2) + 0.35);
+      m.roughness = 0.55;
+      m.emissive.setHex(0x000000);
+      m.emissiveIntensity = 0;
+    }
+    root.traverse((o) => {
+      if (!o.isMesh || !o.material || !/head/i.test(o.name)) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        m.emissive = new THREE.Color(this.def.accent);
+        m.emissiveIntensity = 0.5;
+      }
+    });
+
+    // cibles de tir : le squelette se déforme, on tire sur des volumes invisibles
+    const headH = h * 0.2;
+    const bodyH = h - headH;
+    this.headHit = new THREE.Mesh(new THREE.BoxGeometry(h * 0.3, headH, h * 0.32), this._hitMat());
+    this.headHit.position.y = bodyH + headH / 2;
+    this.bodyHit = new THREE.Mesh(new THREE.BoxGeometry(h * 0.46, bodyH, h * 0.34), this._hitMat());
+    this.bodyHit.position.y = bodyH / 2;
+    for (const m of [this.headHit, this.bodyHit]) {
+      m.visible = false;   // invisible mais raycasté (raycaster ignore visible=false !)
+      m.userData.raycastVisible = true;
+      this.group.add(m);
+    }
+    this.hitMeshes = [
+      { mesh: this.headHit, part: 'head' },
+      { mesh: this.bodyHit, part: 'body' }
+    ];
+    this._height = h;
+  }
+
+  /* Matériau invisible mais raycastable (les rayons frappent la capsule) */
+  _hitMat() {
+    if (!Enemy._hitMatShared) {
+      Enemy._hitMatShared = new THREE.MeshBasicMaterial({ visible: false });
+    }
+    return Enemy._hitMatShared;
+  }
+
+  /* ---------- Visuel : repli procédural (boîtes) ---------- */
+  _buildProcedural() {
     const s = this.def.scale;
     const body = new THREE.MeshStandardMaterial({ color: 0x2C313B, roughness: 0.55, metalness: 0.7 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x171A20, roughness: 0.6, metalness: 0.6 });
@@ -69,8 +158,6 @@ class Enemy {
       emissiveIntensity: 1.6,
       roughness: 0.35
     });
-
-    this.group = new THREE.Group();
     const add = (geo, mat, x, y, z) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x * s, y * s, z * s);
@@ -89,51 +176,73 @@ class Enemy {
     this.armL = add(new THREE.BoxGeometry(0.16, 0.68, 0.2), dark, -0.5, 1.32, 0);
     this.armR = add(new THREE.BoxGeometry(0.16, 0.68, 0.2), dark, 0.5, 1.32, 0);
 
-    if (type === 'brute') {
+    if (this.type === 'brute') {
       add(new THREE.BoxGeometry(0.95, 0.3, 0.55), body, 0, 1.72, 0);
       const shL = add(new THREE.CylinderGeometry(0.14, 0.14, 0.5, 8), dark, -0.58, 1.3, 0);
       const shR = add(new THREE.CylinderGeometry(0.14, 0.14, 0.5, 8), dark, 0.58, 1.3, 0);
       shL.rotation.x = Math.PI / 2;
       shR.rotation.x = Math.PI / 2;
     }
-    if (type === 'shooter') {
+    if (this.type === 'shooter') {
       add(new THREE.BoxGeometry(0.12, 0.12, 0.7), dark, 0.5, 1.32, -0.35);
       add(new THREE.BoxGeometry(0.2, 0.16, 0.16), this.visorMat, 0.5, 1.32, -0.72);
     }
 
-    // cibles de tir (mesh → partie)
-    this.hitMeshes = [
-      { mesh: this.head, part: 'head' },
-      { mesh: this.visor, part: 'head' },
-      { mesh: this.torso, part: 'body' },
-      { mesh: this.legL, part: 'body' },
-      { mesh: this.legR, part: 'body' },
-      { mesh: this.armL, part: 'body' },
-      { mesh: this.armR, part: 'body' }
-    ];
-    scene.add(this.group);
   }
 
   takeDamage(dmg, point, isHead) {
     if (this.dead) return;
     this.hp -= dmg;
     this.hurtFlash = 1;
+    if (this.rig) this._flash(this.hurtFlash);
+    if (this.onHurtSound) this.onHurtSound(isHead);
     if (this.hp <= 0) {
       this.dead = true;
+      if (this.rig) {
+        // mort animée : l'animation Death joue, le corps reste au sol
+        this.anim.play('Death', 0.08, { once: true, clamp: true });
+        this._flash(1.6);
+      }
       if (this.onDeath) this.onDeath();
+    }
+  }
+
+  /* Surbrillance d'impact : la coque s'embrase brièvement */
+  _flash(k) {
+    for (const m of this.rig.mats) {
+      if (!m.emissive) continue;
+      if (m.userData._baseEmissive === undefined) m.userData._baseEmissive = m.emissiveIntensity || 0;
+      m.emissiveIntensity = m.userData._baseEmissive + k * 1.8;
+    }
+  }
+
+  /* Attaque : coup de poing / tir, animation ponctuelle */
+  playAttack(ranged) {
+    if (!this.rig) { this._attackAnimT = 0.4; return; }
+    this._attackAnimT = 0.55;
+    if (ranged) {
+      this.anim.play('Punch', 0.06, { once: true, timeScale: 1.5 });
+    } else {
+      this.anim.play(this.type === 'brute' ? 'Punch' : 'Punch', 0.06, { once: true, timeScale: 1.25 });
     }
   }
 
   dispose(scene) {
     scene.remove(this.group);
+    if (this.rig) {
+      if (this.anim) this.anim.mixer.stopAllAction();
+      for (const m of this.rig.mats) m.dispose();
+    }
     this.group.traverse((o) => {
-      if (o.geometry) o.geometry.dispose();
+      // les géométries/squelettes partagés du GLB ne sont pas disposés ici
+      if (o.geometry && !this.rig) o.geometry.dispose();
     });
   }
 }
 
 export class EnemyManager {
   constructor({ scene, arena, player, sound, fx, callbacks }) {
+    this.char = null;        // CharacterAsset (GLB riggé)
     this.scene = scene;
     this.arena = arena;
     this.player = player;
@@ -145,6 +254,11 @@ export class EnemyManager {
     this._projGeo = new THREE.SphereGeometry(0.17, 10, 10);
     this._projMat = new THREE.MeshBasicMaterial({ color: 0xFF7A3C });
     this._projMatHead = new THREE.MeshBasicMaterial({ color: 0xFFD27A });
+  }
+
+  /* ---------- Personnage riggé (chargé en asynchrone) ---------- */
+  attachCharacter(asset) {
+    this.char = asset;
   }
 
   /* ---------- Vague ---------- */
@@ -172,8 +286,9 @@ export class EnemyManager {
       const pos = best.clone();
       pos.x += (Math.random() - 0.5) * 4;
       pos.z += (Math.random() - 0.5) * 4;
-      const en = new Enemy(type, pos, this.scene);
+      const en = new Enemy(type, pos, this.scene, this.char);
       en.onDeath = () => this.killEnemy(en);
+      en.onHurtSound = () => this.sound.enemyHurt();
       this.enemies.push(en);
       this.fx.explosion(pos.clone().setY(1), true);
     }
@@ -225,17 +340,26 @@ export class EnemyManager {
     for (const e of this.enemies) {
       if (e.dead) {
         e.deadT += dt;
-        // chute
-        e.group.rotation.x = Math.min(Math.PI / 2, e.group.rotation.x + dt * 3.4);
-        if (e.deadT > 1.6) {
-          e.group.position.y -= dt * 0.9;
+        if (e.rig) {
+          // l'animation Death gère la chute : on laisse le corps au sol
+          e.anim.update(dt);
+          e._flash(Math.max(0, 1 - e.deadT * 3));
+          if (e.deadT > 2.2) e.group.position.y -= dt * 0.35;
+        } else {
+          e.group.rotation.x = Math.min(Math.PI / 2, e.group.rotation.x + dt * 3.4);
+          if (e.deadT > 1.6) e.group.position.y -= dt * 0.9;
         }
         continue;
       }
 
       e.attackCd = Math.max(0, e.attackCd - dt);
       e.hurtFlash = Math.max(0, e.hurtFlash - dt * 4);
-      e.visorMat.emissiveIntensity = 1.6 + e.hurtFlash * 4 + (e.telegraphT > 0 ? 2.2 : 0);
+      if (e.rig) {
+        e._flash(e.hurtFlash);
+        if (e._attackAnimT > 0) e._attackAnimT -= dt;
+      } else if (e.visorMat) {
+        e.visorMat.emissiveIntensity = 1.6 + e.hurtFlash * 4 + (e.telegraphT > 0 ? 2.2 : 0);
+      }
 
       const toPlayer = new THREE.Vector3().subVectors(pPos, e.pos);
       toPlayer.y = 0;
@@ -258,6 +382,7 @@ export class EnemyManager {
           e.telegraphT -= dt;
           if (e.telegraphT <= 0) {
             this._fireProjectile(e, eye);
+            e.playAttack(true);
             e.attackCd = def.ranged.cd * (0.85 + Math.random() * 0.4);
           }
         } else if (e.attackCd <= 0) {
@@ -268,6 +393,7 @@ export class EnemyManager {
       // --- mêlée ---
       if (def.melee && dist < def.melee.range && e.attackCd <= 0 && e.telegraphT <= 0) {
         e.attackCd = def.melee.cd;
+        e.playAttack(false);
         if (this.cb.damagePlayer) this.cb.damagePlayer(def.melee.dmg, e.pos);
         this.sound.enemyShot();
       }
@@ -333,13 +459,29 @@ export class EnemyManager {
       e.pos.y += (gy - e.pos.y) * Math.min(1, dt * 9);
       e.group.position.copy(e.pos);
 
-      // pas (animation jambes)
-      const moving = wantClose ? 1 : 0;
-      const walk = Math.sin(performance.now() * 0.008 * def.speed + e.phase) * 0.5 * moving;
-      e.legL.rotation.x = walk;
-      e.legR.rotation.x = -walk;
-      e.armL.rotation.x = -walk * 0.7;
-      e.armR.rotation.x = walk * 0.7;
+      if (e.rig) {
+        // état d'animation : course au loin, marche au contact, idle sinon
+        let st = 'Idle';
+        if (wantClose) st = dist > def.melee ? 'Running' : 'Walking';
+        else if (dist < 14 && def.melee) st = 'Walking';
+        if (e._attackAnimT > 0) st = 'Punch';
+        if (e._animState !== st) {
+          e._animState = st;
+          // la vitesse de l'animation suit la vitesse réelle de l'unité
+          e.anim.play(st, 0.18, {
+            timeScale: st === 'Running' ? def.speed / 5.4 : (st === 'Walking' ? 0.9 : 1)
+          });
+        }
+        e.anim.update(dt);
+      } else {
+        // repli : animation jambes procédurale
+        const moving = wantClose ? 1 : 0;
+        const walk = Math.sin(performance.now() * 0.008 * def.speed + e.phase) * 0.5 * moving;
+        e.legL.rotation.x = walk;
+        e.legR.rotation.x = -walk;
+        e.armL.rotation.x = -walk * 0.7;
+        e.armR.rotation.x = walk * 0.7;
+      }
     }
 
     // nettoyage des morts depuis longtemps

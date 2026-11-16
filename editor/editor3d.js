@@ -7,6 +7,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 const $ = (s, c) => (c || document).querySelector(s);
 const $$ = (s, c) => Array.from((c || document).querySelectorAll(s));
@@ -30,8 +33,18 @@ const view = { snap: true, grid: true, mode: 'translate' };
 const TYPE_COLORS = {
   cube: '#8B7CFF', sphere: '#22B8CF', cylinder: '#F5A623', cone: '#F26D6D',
   plane: '#7BD88F', torus: '#E879F9', sun: '#FFE066', point: '#FFB86B',
-  player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E'
+  player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E', model: '#7DD3A0'
 };
+
+/* ============ Modèles 3D importés (GLB / GLTF) ============ */
+// Loaders partagés ; les modèles sont mémorisés dans une bibliothèque
+// afin que la sauvegarde JSON ne stocke que leur nom et leur échelle.
+const _draco = new DRACOLoader();
+_draco.setDecoderPath('../assets/vendor/three/addons/libs/draco/gltf/');
+const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(_draco);
+const MODELS = new Map();          // nom → { gltf, animations, url }
+const modelInstances = new Map();  // recId → AnimationMixer
 const CAP = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function genId() { return 'obj-' + (nextId++); }
@@ -101,7 +114,7 @@ const canvas = $('#gl');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
 
@@ -244,6 +257,32 @@ function createObject(type, opts) {
 
   let obj3d = null;
   switch (type) {
+    case 'model': {
+      // Instance d'un modèle importé (GLB) : clone riggé + animations
+      const asset = MODELS.get(opts.model);
+      const g = new THREE.Group();
+      if (asset) {
+        const root = cloneSkinned(asset.gltf.scene);
+        g.add(root);
+        if (asset.gltf.animations && asset.gltf.animations.length) {
+          const mixer = new THREE.AnimationMixer(root);
+          const clip = asset.gltf.animations[opts.anim || 0] || asset.gltf.animations[0];
+          mixer.clipAction(clip).play();
+          g.userData.mixer = mixer;
+          g.userData.clipIndex = opts.anim || 0;
+          g.userData.clipCount = asset.gltf.animations.length;
+        }
+      } else {
+        const ph = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), mat({ color: 0x7DD3A0, wireframe: true }));
+        ph.position.y = 0.8;
+        g.add(ph);
+      }
+      rec.model = opts.model || '';
+      rec.anim = opts.anim || 0;
+      rec.collidable = opts.collidable || false;
+      obj3d = g;
+      break;
+    }
     case 'cube': {
       obj3d = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat({ color: opts.color || 0x8FA3C8 }));
       break;
@@ -397,7 +436,9 @@ function recToProps(rec) {
       color: '#' + rec.light.color.getHexString(),
       intensity: rec.light.intensity
     } : null,
-    script: rec.script
+    script: rec.script,
+    model: rec.model || null,
+    anim: rec.anim || 0
   };
 }
 
@@ -455,12 +496,12 @@ function duplicateObject(id) {
   toast('ed.copiedToast', '📄');
 }
 
-function addObject(type) {
+function addObject(type, opts) {
   pushHistory();
   const n = reg.size % 5;
-  const rec = createObject(type, {
+  const rec = createObject(type, Object.assign({
     position: [n * 2.2 - 3, type === 'plane' ? 0.25 : 1.4, type === 'goal' ? -4 : (n * 1.4 - 2)]
-  });
+  }, opts || {}));
   select(rec.id);
   markDirty();
   toast('ed.newObj', '＋');
@@ -1380,6 +1421,67 @@ function demoScene() {
   log('⭐ ' + t('ed.demoLoaded'), 'ok');
 }
 
+/* ================= Import de modèles GLB ================= */
+async function importModel(file) {
+  if (!file) return null;
+  const name = file.name.replace(/\.(glb|gltf)$/i, '');
+  const url = URL.createObjectURL(file);
+  log('⏳ ' + t('ed.modelLoading') + ' ' + name, 'warn');
+  try {
+    const gltf = await gltfLoader.loadAsync(url);
+    gltf.scene.traverse(function (o) {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+        o.frustumCulled = false;
+      }
+    });
+    MODELS.set(name, { gltf: gltf, url: url, animations: (gltf.animations || []).length });
+
+    pushHistory();
+    const rec = addObject('model', { model: name, name: name });
+    // pose le modèle au sol
+    const box = new THREE.Box3().setFromObject(rec.obj3d);
+    if (isFinite(box.min.y)) rec.obj3d.position.y = -box.min.y + 0.01;
+    log('✅ ' + t('ed.modelLoaded') + ' ' + name + ' (' + (gltf.animations || []).length + ' anim)', 'ok');
+    return rec;
+  } catch (e) {
+    console.error(e);
+    log('❌ ' + t('ed.modelError') + ' : ' + name, 'err');
+    return null;
+  }
+}
+
+/* Ouverture d'un sélecteur de fichiers GLB / GLTF */
+function pickModel() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.glb,.gltf,model/gltf-binary,model/gltf+json';
+  input.onchange = function () {
+    if (input.files && input.files[0]) importModel(input.files[0]);
+  };
+  input.click();
+}
+
+/* Glisser-déposer d'un .glb dans le viewport */
+(function initDrop() {
+  const vp = $('#viewport');
+  if (!vp) return;
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    vp.addEventListener(ev, function (e) { e.preventDefault(); vp.classList.add('dropping'); });
+  });
+  ['dragleave', 'dragend'].forEach(function (ev) {
+    vp.addEventListener(ev, function () { vp.classList.remove('dropping'); });
+  });
+  vp.addEventListener('drop', function (e) {
+    e.preventDefault();
+    vp.classList.remove('dropping');
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f && /\.(glb|gltf)$/i.test(f.name)) importModel(f);
+    else toast('ed.modelError', '⚠️');
+  });
+})();
+
 /* ================= Boucle de rendu ================= */
 let lastTime = performance.now();
 let fpsAcc = 0, fpsCount = 0, fpsTimer = 0;
@@ -1394,6 +1496,12 @@ function animate(now) {
   } else if (!state.play) {
     orbit.update();
   }
+
+  // animations des modèles importés (mode édition comme en jeu)
+  reg.forEach(function (rec) {
+    const m = rec.obj3d && rec.obj3d.userData && rec.obj3d.userData.mixer;
+    if (m) m.update(dt);
+  });
 
   if (selBox) selBox.update();
   renderer.render(scene3d, camera);
@@ -1537,7 +1645,11 @@ $('#btnDelete2').addEventListener('click', function () { if (state.selectedId) d
 $('#btnDuplicate').addEventListener('click', function () { if (state.selectedId) duplicateObject(state.selectedId); });
 $('#btnDuplicate2').addEventListener('click', function () { if (state.selectedId) duplicateObject(state.selectedId); });
 $$('#addBar .obj-btn').forEach(function (b) {
-  b.addEventListener('click', function () { addObject(b.getAttribute('data-add')); });
+  b.addEventListener('click', function () {
+    const type = b.getAttribute('data-add');
+    if (type === 'model') pickModel();
+    else addObject(type);
+  });
 });
 
 /* Son */

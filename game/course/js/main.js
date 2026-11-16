@@ -10,6 +10,7 @@ import { SoundSlot } from './sounds.js';
 import { FXSlot } from './fx.js';
 import { CameraSlot } from './cameras.js';
 import { RaceGame } from './race.js';
+import { PostFX } from './post.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (id) => document.getElementById(id);
@@ -60,14 +61,18 @@ function applyLang() {
 }
 
 /* ================= Rendu ================= */
+const LOW = /low|weak|pixel 3|mali|adreno 6\d\d/i.test(navigator.userAgent || '') ||
+  (navigator.hardwareConcurrency || 8) < 4;
+
 const canvas = el('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOW ? 1 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xAFBED4, 320, 1250);
@@ -117,6 +122,9 @@ const skyTex = buildSky();
 scene.background = skyTex;
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromEquirectangular(skyTex).texture;
+
+/* Post-processing : HDR + AO + bloom discret + grading « plein jour » */
+const post = new PostFX({ renderer, scene, camera, low: LOW, mood: 'day' });
 
 /* Lumières */
 const sun = new THREE.DirectionalLight(0xFFF1DC, 2.7);
@@ -396,6 +404,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  post.resize();
 });
 
 /* ================= Boucle ================= */
@@ -447,7 +456,7 @@ function loop(now) {
   if (paused) sound.setEngine(0.03, 0, 0);
   track.animateFlags(now / 1000);
   fx.update(dt);
-  renderer.render(scene, camera);
+  post.render(dt, now / 1000);
 }
 
 /* ================= Démarrage ================= */

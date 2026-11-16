@@ -32,7 +32,7 @@ export class WeaponSystem {
    * @param cb { onHitEnemy(hit, isHead), onHitWorld(hit) }
    * raycast(origin, dir, maxDist) → { point, normal, enemy, part } | { point, normal } | null
    */
-  constructor({ camera, scene, player, sound, fx, raycast, cb }) {
+  constructor({ camera, scene, player, sound, fx, raycast, cb, juice, post }) {
     this.camera = camera;
     this.scene = scene;
     this.player = player;
@@ -40,6 +40,8 @@ export class WeaponSystem {
     this.fx = fx;
     this.raycast = raycast;
     this.cb = cb || {};
+    this.juice = juice || null;
+    this.post = post || null;
 
     this.index = 0;
     this.state = WEAPONS.map((w) => ({ mag: w.mag, reserve: w.reserve, reloading: 0, cooldown: 0 }));
@@ -224,7 +226,9 @@ export class WeaponSystem {
       const end = hit ? hit.point : origin.clone().addScaledVector(dir, 220);
       if (p === 0 || def.pellets === 1) {
         // une traçante par tir (pas par plomb)
-        const mzPos = this.muzzle.getWorldPosition(new THREE.Vector3());
+        const mzPos = origin.clone()
+          .addScaledVector(baseDir, 0.5)
+          .addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion), 0.12);
         this.fx.tracer(mzPos, end);
       } else if (p < 4) {
         this.fx.tracer(origin.clone().addScaledVector(dir, 0.6), end);
@@ -238,13 +242,20 @@ export class WeaponSystem {
           if (this.cb.onHitEnemy) this.cb.onHitEnemy(hit, isHead);
         } else {
           this.fx.impact(hit.point, hit.normal);
+          this.sound.impact();
+          if (this.juice) this.juice.shake(0.006);
           if (this.cb.onHitWorld) this.cb.onHitWorld(hit);
         }
       }
     }
 
     // flash, douille, recul
-    const mz = this.muzzle.getWorldPosition(new THREE.Vector3());
+    // Le viewmodel vit désormais dans une scène séparée : la position de
+    // bouche se calcule depuis la caméra (toujours juste, quel que soit le FOV).
+    const mz = this.player.eyePos()
+      .addScaledVector(this.player.forwardDir(), 0.42)
+      .addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion), 0.1)
+      .add(new THREE.Vector3(0, -0.06, 0));
     this.fx.muzzleFlash(mz, baseDir);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
     this.fx.casing(mz.clone().addScaledVector(right, 0.12), right);
@@ -255,6 +266,7 @@ export class WeaponSystem {
     this.player.addRecoil(kickP, kickY);
     this._recoilKick = Math.min(0.09, 0.03 + def.recoil * 1.6);
     this._recoilRot = Math.min(0.35, 0.1 + def.recoil * 5);
-    if (this.cb.onShot) this.cb.onShot();
+    if (this.post) this.post.shake(0.006);
+    if (this.cb.onShot) this.cb.onShot(def);
   }
 }

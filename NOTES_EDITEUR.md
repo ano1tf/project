@@ -57,3 +57,54 @@ vrais moteurs (Godot, Unreal, Unity) :
 
 Ambition inchangée : **mieux qu'Unreal Engine**. Blocs pour démarrer,
 vrai JavaScript pour aller plus loin. Comptes/connexion : plus tard.
+
+## Direction technique — Passage « AAA » (16 nov. 2026)
+
+Objectif : sortir de la démo et viser un rendu et un game feel de niveau
+production. Tout ce qui suit est **livré et testé** (harnais Node exécutant
+les vrais modules, WebGL non testable en sandbox).
+
+### Rendu
+- **Pipeline HDR** : `game/*/js/post.js` (EffectComposer, cible HalfFloat,
+  MSAA 4x) → GTAO (occlusion ambiante) → bloom physique (UnrealBloom)
+  → grading maison (contraste, saturation, lift/gain, vignette, grain,
+  aberration chromatique radiale, netteté, flash de dégâts/headshot)
+  → OutputPass (ACES + sRGB).
+- **IBL réel** : `assets/env/moonless_golf_1k.hdr` (nuit) et
+  `venice_sunset_1k.hdr` (course, jour) chargés en PMREM.
+- **Viewmodel séparé** : l'arme est rendue dans sa propre scène avec son
+  propre éclairage et un `clearDepth` → plus de clipping dans les murs,
+  flash de bouche dédié.
+- **Qualité adaptative** : FPS mesurés en continu, l'AO puis la résolution
+  puis le post sont désactivés si la machine décroche.
+- `PCFSoftShadowMap` (supprimé de three r187) → `PCFShadowMap`.
+
+### Personnages et animations
+- `assets.js` : `CharacterAsset` (GLB riggé, normalisation de hauteur,
+  clonage de squelette, matériaux dupliqués) + `Animator` (blend/crossfade).
+- `assets/models/RobotExpressive.glb` : 14 clips (Idle, Walking, Running,
+  Punch, Death…). Les ennemis sont des robots animés teintés par type,
+  avec volants de collision invisibles (tête / corps) pour les headshots.
+- Repli procédural automatique si le GLB ne charge pas.
+
+### Game feel
+- `juice.js` : **hitstop** (gel du temps 35–75 ms à l'impact), screenshake,
+  kick de caméra + FOV, décroissance frame-rate indépendante.
+- Sons : moteur de synthèse réécrit — détonation en 3 couches, queue de
+  salle par convolution (IR générée), pas avec matière, ambiance
+  drone + vent + grondement.
+
+### Éditeur
+- Bouton **Importer un modèle 3D** + glisser-déposer d'un `.glb` dans le
+  viewport (GLTFLoader + DRACOLoader vendorisés).
+- Nouveau type d'objet `model` : clone riggé, animation jouée dans
+  l'éditeur, sérialisé dans le JSON (nom + index d'animation).
+
+### Landing
+- Carte « Importe tes modèles 3D / rendu studio », et les deux jeux
+  jouables (KREO Arena, KREO Racing) ajoutés à la galerie avec liens.
+
+### Ce qui reste pour un vrai AAA
+Voir la réponse : assets sous licence, capture de mouvement, direction
+artistique (DA) unifiée, level design itéré, backend/multijoueur,
+QA et certification. La technique ne représente qu'une partie du chemin.

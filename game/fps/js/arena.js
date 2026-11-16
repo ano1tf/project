@@ -82,6 +82,7 @@ export class Arena {
 
   /* ---------- Ciel procédural + environnement ---------- */
   _buildSky() {
+    this._fallbackSky = true;
     const c = document.createElement('canvas');
     c.width = 1024; c.height = 512;
     const g = c.getContext('2d');
@@ -115,6 +116,18 @@ export class Arena {
       const pmrem = new THREE.PMREMGenerator(renderer);
       this.scene.environment = pmrem.fromEquirectangular(tex).texture;
     }
+  }
+
+  /* ---------- Environnement HDR (IBL) ---------- */
+  applyEnvironment(env) {
+    this.env = env;
+    // le ciel HDR remplace le ciel dessiné à la main
+    this.scene.background = env.texture;
+    this.scene.backgroundIntensity = 1.0;
+    this.scene.environment = env.envMap;
+    this.scene.environmentIntensity = 0.9;
+    // brouillard accordé au ciel
+    if (this.scene.fog) this.scene.fog.color.setHex(0x2A3348);
   }
 
   /* ---------- Lumières ---------- */
