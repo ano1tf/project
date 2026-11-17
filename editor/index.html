@@ -7,7 +7,7 @@
 <meta name="description" content="KREO — l'éditeur de jeux 3D qui commence sans code et va plus loin avec du vrai code JavaScript.">
 <link rel="icon" href="../assets/kreo-logo-web.png">
 <meta name="theme-color" content="#17181D">
-<link rel="stylesheet" href="editor.css?v=4">
+<link rel="stylesheet" href="editor.css?v=5">
 <script type="importmap">
 {
   "imports": {
@@ -27,7 +27,6 @@
     <span class="badge-3d">3D</span>
     <input id="projectName" value="Ma scène" spellcheck="false">
     <div class="tb-sep"></div>
-
     <div class="tb-group" id="gizmoGroup">
       <button class="tb-btn active" data-mode="translate" title="Déplacer (W)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><span class="tb-label" data-i18n="ed.move">Déplacer</span></button>
       <button class="tb-btn" data-mode="rotate" title="Pivoter (E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3v5h-5"/></svg><span class="tb-label" data-i18n="ed.rotate">Pivoter</span></button>
@@ -39,6 +38,7 @@
       <button class="tb-btn toggle active" id="btnSnap" title="Aimantation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 4h4M14 4h4"/></svg><span class="tb-label" data-i18n="ed.snap">Aimantation</span></button>
       <button class="tb-btn toggle active" id="btnGrid" title="Grille (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9.5h16M4 14.5h16M9.5 4v16M14.5 4v16"/><rect x="4" y="4" width="16" height="16" rx="3"/></svg><span class="tb-label" data-i18n="ed.grid">Grille</span></button>
       <button class="tb-btn" id="btnFocus" title="Centrer (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21"/></svg><span class="tb-label" data-i18n="ed.focus">Centrer</span></button>
+      <button class="tb-btn toggle" id="btnDebug" title="Débogueur (colliders, rayons, états)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9h8a4 4 0 0 1 4 4v1a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-1a4 4 0 0 1 4-4Z"/><path d="M9 9V7a3 3 0 0 1 6 0v2M4 13H2m20 0h-2M5.5 19 3.5 21m15-2 2 2M5.5 8 3.5 6m15 2 2-2"/></svg><span class="tb-label" data-i18n="ed.debug">Debug</span></button>
       <button class="tb-btn toggle" id="btnWire" title="Fil de fer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg><span class="tb-label" data-i18n="ed.wireframe">Fil de fer</span></button>
     </div>
     <div class="tb-sep"></div>
@@ -47,6 +47,8 @@
       <button class="tb-btn" id="btnNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="tb-label" data-i18n="ed.new">Nouveau</span></button>
       <button class="tb-btn" id="btnSave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l4 4v12H5z"/><path d="M8 4v5h7"/></svg><span class="tb-label" data-i18n="ed.save">Enregistrer</span></button>
       <button class="tb-btn" id="btnImport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/></svg><span class="tb-label" data-i18n="ed.import">Importer</span></button>
+      <button class="tb-btn" id="btnExportGame"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13l3 3-3 3H4z"/><path d="M9 15v4"/></svg><span class="tb-label" data-i18n="ed.exportGame">Exporter le jeu</span></button>
+      <button class="tb-btn" id="btnExportFolder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5 12 16l2.5-2.5"/></svg><span class="tb-label" data-i18n="ed.exportFolder">Dossier</span></button>
       <button class="tb-btn" id="btnExport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg><span class="tb-label" data-i18n="ed.export">Exporter</span></button>
       <button class="tb-btn" id="btnDemo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.2 6.6H21l-5.4 4 2 6.4-5.6-4-5.6 4 2-6.4-5.4-4h6.8z"/></svg><span class="tb-label" data-i18n="ed.demo">Démo</span></button>
       <button class="tb-btn" id="btnHelp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.6" r=".6" fill="currentColor"/></svg><span class="tb-label" data-i18n="ed.help">Aide</span></button>
@@ -65,6 +67,56 @@
     </button>
   </header>
 
+  <!-- Ajout façon Shift+A dans Blender : catégories, recherche, primitives éditables. -->
+  <div class="add-menu" id="addMenu" hidden role="dialog" aria-label="Ajouter un objet">
+    <div class="add-menu-head">
+      <div><strong data-i18n="ed.addMenuTitle">Ajouter à la scène</strong><small data-i18n="ed.addMenuHint">Choisis un objet à créer · Maj+A</small></div>
+      <button class="add-menu-close" id="btnCloseAddMenu" aria-label="Fermer">×</button>
+    </div>
+    <label class="add-menu-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
+      <input id="addMenuSearch" type="search" autocomplete="off" placeholder="Rechercher un objet…" data-i18n-placeholder="ed.addSearch">
+      <kbd>Esc</kbd>
+    </label>
+    <div class="add-menu-content" id="addMenuContent">
+      <section class="add-menu-group" data-menu-group>
+        <h3 data-i18n="ed.addMesh">Maillage éditable</h3>
+        <div class="add-menu-grid">
+          <button data-menu-prim="box" data-search="cube box mesh maillage"><span class="add-glyph">⬡</span><span data-i18n="ed.menuCube">Cube</span></button>
+          <button data-menu-prim="plane" data-search="plane plan surface"><span class="add-glyph">▱</span><span data-i18n="ed.menuPlane">Plan</span></button>
+          <button data-menu-prim="uvSphere" data-search="uv sphere sphère uv"><span class="add-glyph">◉</span><span data-i18n="ed.uvSphere">Sphère UV</span></button>
+          <button data-menu-prim="icoSphere" data-search="ico sphere icosphere icosphère"><span class="add-glyph">◌</span><span data-i18n="ed.icoSphere">Icosphère</span></button>
+          <button data-menu-prim="cylinder" data-search="cylinder cylindre"><span class="add-glyph">▯</span><span data-i18n="ed.menuCylinder">Cylindre</span></button>
+          <button data-menu-prim="cone" data-search="cone cône"><span class="add-glyph">△</span><span data-i18n="ed.menuCone">Cône</span></button>
+          <button data-menu-prim="torus" data-search="torus tore donut"><span class="add-glyph">◎</span><span data-i18n="ed.menuTorus">Tore</span></button>
+        </div>
+      </section>
+      <section class="add-menu-group" data-menu-group>
+        <h3 data-i18n="ed.addGameObjects">Objets de jeu</h3>
+        <div class="add-menu-grid">
+          <button data-menu-type="player" data-search="player joueur spawn départ"><span class="add-glyph">♙</span><span data-i18n="ed.menuPlayer">Joueur</span></button>
+          <button data-menu-type="spawn" data-search="spawn départ point"><span class="add-glyph">⚑</span><span data-i18n="ed.addSpawn">Point de départ</span></button>
+          <button data-menu-type="enemy" data-search="enemy ennemi"><span class="add-glyph">☻</span><span data-i18n="ed.menuEnemy">Ennemi</span></button>
+          <button data-menu-type="goal" data-search="goal objectif victoire"><span class="add-glyph">⚑</span><span data-i18n="ed.menuGoal">Objectif</span></button>
+          <button data-menu-type="checkpoint" data-search="checkpoint reprise respawn"><span class="add-glyph">◉</span><span data-i18n="ed.menuCheckpoint">Checkpoint</span></button>
+          <button data-menu-type="coin" data-search="coin pièce collectible"><span class="add-glyph">◉</span><span data-i18n="ed.menuCoin">Pièce</span></button>
+          <button data-menu-type="weapon" data-search="weapon arme pickup"><span class="add-glyph">⌁</span><span data-i18n="ed.menuWeapon">Arme</span></button>
+          <button data-menu-type="pickup" data-search="pickup bonus santé health"><span class="add-glyph">✚</span><span data-i18n="ed.pickup">Bonus</span></button>
+        </div>
+      </section>
+      <section class="add-menu-group" data-menu-group>
+        <h3 data-i18n="ed.addSceneObjects">Environnement & lumières</h3>
+        <div class="add-menu-grid">
+          <button data-menu-type="terrain" data-search="terrain paysage sculpt"><span class="add-glyph">⌁</span><span data-i18n="ed.menuTerrain">Terrain</span></button>
+          <button data-menu-type="sun" data-search="sun soleil lumière directionnelle"><span class="add-glyph">☼</span><span data-i18n="ed.addSun">Soleil</span></button>
+          <button data-menu-type="point" data-search="point light lumière ponctuelle"><span class="add-glyph">✦</span><span data-i18n="ed.addPointLight">Lumière ponctuelle</span></button>
+          <button data-menu-type="model" data-search="model modèle glb gltf import"><span class="add-glyph">⬡</span><span data-i18n="ed.importModel">Importer modèle…</span></button>
+        </div>
+      </section>
+    </div>
+    <div class="add-menu-foot"><span data-i18n="ed.addMenuPlacement">Les objets sont créés dans la scène et sélectionnés pour édition.</span><span>Shift + A</span></div>
+  </div>
+
   <!-- ============ WORKSPACE ============ -->
   <div class="workspace">
 
@@ -72,6 +124,10 @@
     <aside class="panel-left">
       <div class="panel-head">
         <span data-i18n="ed.scene">Scène</span>
+        <button class="tb-btn add-menu-trigger" id="btnAddMenu" aria-haspopup="true" aria-expanded="false" title="Ajouter un objet (Maj+A)" aria-label="Ajouter un objet" data-i18n-title="ed.addMenuTooltip" data-i18n-aria-label="ed.addMenuTooltip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="tb-label" data-i18n="ed.addMenu">Ajouter</span><kbd>⇧A</kbd>
+        </button>
         <div class="obj-count" id="objCount">0</div>
       </div>
 
@@ -88,12 +144,42 @@
         <div class="tb-sep"></div>
         <button class="obj-btn" data-add="player" data-tip="Joueur"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="7" r="3.2"/><path d="M6.5 20a5.5 5.5 0 0 1 11 0"/></svg></button>
         <button class="obj-btn" data-add="coin" data-tip="Pièce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="obj-btn" data-add="terrain" data-tip="Terrain sculptable"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m2 18 6-7 4 4 3-3 7 6z"/><path d="M8 11 6 9"/></svg></button>
+        <button class="obj-btn" data-add="mesh" data-tip="Modéliser un maillage (à la main)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M12 4v16M4 8.5l8 3 8-3"/><circle cx="12" cy="11.5" r="1.2" fill="currentColor"/></svg></button>
+        <button class="obj-btn" data-add="model" data-tip="Importer un modèle 3D (.glb)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5"/><path d="M12 12v9"/><path d="M17.5 3.5v4M15.5 5.5h4"/></svg></button>
+        <button class="obj-btn" data-add="spawn" data-tip="Point de départ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 3v18"/><path d="M6 4h11l-2.5 4L17 12H6z"/></svg></button>
+        <button class="obj-btn" data-add="weapon" data-tip="Arme (pickup)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 10h12l4 2v3h-5l-2 3H8l-1-3H3z"/><path d="M8 16v3"/></svg></button>
+        <button class="obj-btn" data-add="enemy" data-tip="Ennemi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M9 12h.01M15 12h.01"/><path d="M12 3v4M8 18v3M16 18v3"/></svg></button>
         <button class="obj-btn" data-add="goal" data-tip="Objectif"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 4v16"/><path d="M6 5c3-1.8 6 1.8 9 0v8c-3 1.8-6-1.8-9 0z"/></svg></button>
+        <button class="obj-btn" data-add="checkpoint" data-tip="Checkpoint (reprise après une mort)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg></button>
       </div>
 
+      <div class="scenes-bar" id="scenesBar">
+        <span class="sb-label" data-i18n="ed.scenes">Niveaux</span>
+        <div class="scenes-list" id="scenesList"></div>
+        <button class="sc-btn" id="btnAddScene" title="Nouveau niveau">+</button>
+      </div>
+
+      <div class="prefabs-bar assets-bar">
+        <button class="sb-label assets-tbtn" id="btnAssets" title="Bibliothèque de modèles GLB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5"/></svg><span data-i18n="ed.assets">Assets</span><b id="assetCount">0</b></button>
+        <div class="prefab-list" id="assetList"></div>
+        <button class="sc-btn" id="btnAssetImport" title="Importer un GLB dans la bibliothèque">+</button>
+      </div>
+
+      <div class="prefabs-bar">
+        <span class="sb-label" data-i18n="ed.prefabs">Prefabs</span>
+        <div class="prefab-list" id="prefabList"></div>
+        <button class="sc-btn" id="btnPrefabScene" title="Enregistrer tout le niveau">◍</button>
+      </div>
+
+      <div class="sel-badge" id="selCount" hidden></div>
       <div class="hierarchy" id="hierarchy"></div>
 
       <div class="panel-foot">
+        <button class="ghost-btn" id="btnAlign" title="Aligner la sélection"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4v16"/><rect x="8" y="6" width="10" height="4" rx="1"/><rect x="8" y="14" width="6" height="4" rx="1"/></svg><span data-i18n="ed.align">Aligner</span></button>
+        <button class="ghost-btn" id="btnArray" title="Dupliquer en réseau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="9" width="4" height="6" rx="1"/><rect x="10" y="9" width="4" height="6" rx="1"/><rect x="17" y="9" width="4" height="6" rx="1"/></svg><span data-i18n="ed.array">Réseau</span></button>
+        <button class="ghost-btn" id="btnGroup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M11 7h4a2 2 0 0 1 2 2v4"/></svg><span data-i18n="ed.groupBtn">Grouper</span></button>
+        <button class="ghost-btn" id="btnPrefab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg><span data-i18n="ed.prefab">Prefab</span></button>
         <button class="ghost-btn" id="btnDuplicate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 5H6a1 1 0 0 0-1 1v10"/></svg><span data-i18n="ed.duplicate">Dupliquer</span></button>
         <button class="ghost-btn danger" id="btnDelete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M8 7V5h8v2"/><path d="M6.5 7l1 13h9l1-13"/></svg><span data-i18n="ed.delete">Supprimer</span></button>
       </div>
@@ -104,6 +190,44 @@
       <div class="viewport" id="viewport">
         <canvas id="gl"></canvas>
 
+        <!-- ===== Modélisation ===== -->
+        <div class="mesh-bar" id="meshBar" hidden>
+          <div class="mb-title"><span data-i18n="ed.meshMode">Maillage</span> <b id="meshStat"></b></div>
+          <div class="mb-row">
+            <button class="mb-btn" id="mbExtrude" title="Extruder la face (E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h10V4"/><path d="M4 14v6h6"/><path d="m14 4 6 6"/><path d="M20 10v10H10"/></svg><span data-i18n="ed.extrude">Extruder</span></button>
+            <button class="mb-btn" id="mbInset" title="Extruder vers l'intérieur">↘<span data-i18n="ed.inset">Inset</span></button>
+            <button class="mb-btn" id="mbSubdiv" title="Subdiviser la sélection">◱<span data-i18n="ed.subdivide">Subdiviser</span></button>
+            <button class="mb-btn" id="mbLoop" title="Insérer une boucle">═<span data-i18n="ed.loop">Boucle</span></button>
+            <button class="mb-btn" id="mbWeld" title="Souder les sommets confondus">⊙<span data-i18n="ed.weld">Souder</span></button>
+            <button class="mb-btn" id="mbMirror" title="Miroir sur X">⇋<span data-i18n="ed.mirror">Miroir</span></button>
+            <button class="mb-btn" id="mbSmooth" title="Lisser">≈<span data-i18n="ed.smooth">Lisser</span></button>
+            <button class="mb-btn danger" id="mbDelete" title="Supprimer les faces">✕<span data-i18n="ed.deleteFaces">Suppr.</span></button>
+          </div>
+          <div class="mb-row">
+            <span class="mb-hint" data-i18n="ed.meshHint">Clic : face · Maj+clic : ajouter · glisser un sommet : déplacer</span>
+          </div>
+        </div>
+        <div class="mesh-bar" id="sculptBar" hidden>
+          <div class="mb-title"><span data-i18n="ed.sculpt">Sculpter</span> <b id="sculptStat"></b></div>
+          <div class="mb-row">
+            <button class="mb-btn" id="scRaise" title="Monter">▲<span data-i18n="ed.raise">Monter</span></button>
+            <button class="mb-btn" id="scLower" title="Creuser">▼<span data-i18n="ed.lower">Creuser</span></button>
+            <button class="mb-btn" id="scFlatten" title="Aplatir">▬<span data-i18n="ed.flatten">Aplatir</span></button>
+            <button class="mb-btn" id="scNoise" title="Relief aléatoire">≈<span data-i18n="ed.relief">Relief</span></button>
+          </div>
+          <div class="mb-row">
+            <label class="mb-hint" data-i18n="ed.brush">Pinceau</label>
+            <input type="range" id="scRadius" min="2" max="20" step="1" value="6">
+            <span class="mb-hint" id="scRadiusVal">6 m</span>
+            <label class="mb-hint" data-i18n="ed.strength">Force</label>
+            <input type="range" id="scStrength" min="0.1" max="3" step="0.1" value="0.8">
+            <span class="mb-hint" id="scStrengthVal">0.8</span>
+          </div>
+          <div class="mb-row"><span class="mb-hint" data-i18n="ed.sculptHint">Clique-glisse sur le terrain pour le sculpter</span></div>
+        </div>
+        <div class="align-menu" id="alignMenu" hidden></div>
+        <div class="dlg-overlay" id="arrayDialog" hidden></div>
+        <div class="dbg-overlay" id="dbgOverlay" hidden></div>
         <div class="play-hint" id="playHint" hidden><span data-i18n="ed.playHint">ZQSD/WASD : se déplacer · Flèches : tourner · Espace : sauter · Glisser : regarder</span></div>
 
         <div class="vp-top">
@@ -112,8 +236,14 @@
         </div>
 
         <div class="hud" id="hud" hidden>
+          <div class="hud-cross" id="hudCross"></div>
+          <div class="hud-vignette" id="hudVignette"></div>
           <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.2"/><path d="M12 8.2v7.6"/></svg><span id="hudScore">0</span></div>
-          <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/></svg><span id="hudCoins">0 / 0</span></div>
+          <div class="hud-pill hud-health"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z"/></svg><span id="hudHealth">100</span></div>
+          <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9h13l3 3-3 3H4z"/><path d="M9 15v4"/></svg><span id="hudAmmo">0 / 0</span></div>
+          <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><circle cx="12" cy="12" r="3"/></svg><span id="hudKills">0</span></div>
+          <div class="hud-pill" title="Vies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z"/><path d="M9 11h6"/></svg><span id="hudLives">3</span></div>
+          <div class="hud-pill hud-wave" id="hudWavePill"><span id="hudWave"></span></div>
         </div>
 
         <div class="game-overlay" id="winOverlay" hidden>
@@ -147,6 +277,11 @@
           <button class="ghost-btn tiny" id="btnClearConsole"><span data-i18n="ed.clear">Effacer</span></button>
         </div>
         <div class="console-body" id="consoleBody"></div>
+        <div class="console-input" id="consoleInputWrap">
+          <span class="ci-prompt">›</span>
+          <input id="consoleInput" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="Commande : help · select Nom · tp 0 2 0 · spawn enemy · play · debug">
+        </div>
       </div>
     </div>
 
@@ -163,6 +298,18 @@
           <label data-i18n="ed.fog">Brouillard</label>
           <label class="switch"><input type="checkbox" id="inFog" checked><span></span></label>
         </div>
+        <div class="field"><label data-i18n="ed.skyTop">Ciel — haut</label><input type="color" id="inSkyTop" value="#6E9BD8"></div>
+        <div class="field"><label data-i18n="ed.skyBottom">Ciel — horizon</label><input type="color" id="inSkyBottom" value="#DCE7F2"></div>
+        <div class="field"><label data-i18n="ed.sunColor">Couleur du soleil</label><input type="color" id="inSunColor" value="#FFF2DE"></div>
+        <div class="field"><label data-i18n="ed.sunIntensity">Intensité du soleil</label>
+          <div class="range-row"><input type="range" id="inSunIntensity" min="0" max="5" step="0.1" value="2.3"><span id="sunVal">2.3</span></div>
+        </div>
+        <div class="field"><label data-i18n="ed.ambient">Ambiance</label>
+          <div class="range-row"><input type="range" id="inAmbient" min="0" max="1.5" step="0.05" value="0.32"><span id="ambVal">0.32</span></div>
+        </div>
+        <div class="field"><label data-i18n="ed.exposure">Exposition</label>
+          <div class="range-row"><input type="range" id="inExposure" min="0.4" max="2" step="0.05" value="1.08"><span id="expVal">1.08</span></div>
+        </div>
       </div>
 
       <div id="inspectorObj" class="inspector-body" hidden>
@@ -172,6 +319,16 @@
         </div>
 
         <div class="field"><label data-i18n="ed.name">Nom</label><input type="text" id="inName"></div>
+
+        <div id="meshPrimBlock" hidden>
+          <div class="insp-section" data-i18n="ed.meshPrim">Primitive</div>
+          <div class="prim-row">
+            <button class="mini-btn" data-prim="box">Cube</button>
+            <button class="mini-btn" data-prim="sphere">Sphère</button>
+            <button class="mini-btn" data-prim="cylinder">Cylindre</button>
+            <button class="mini-btn" data-prim="plane">Plan</button>
+          </div>
+        </div>
 
         <div class="insp-section" data-i18n="ed.transform">Transformation</div>
         <div class="vec-field">
@@ -201,7 +358,21 @@
 
         <div class="type-block" id="matBlock">
           <div class="insp-section" data-i18n="ed.material">Matériau</div>
+          <div class="field" id="subMatField" hidden><label data-i18n="ed.subMaterial">Sous-partie</label>
+            <select id="inSubMat"></select>
+          </div>
           <div class="field"><label data-i18n="ed.color">Couleur</label><input type="color" id="inColor"></div>
+          <div class="field"><label data-i18n="ed.texture">Texture</label>
+            <select id="inTexture">
+              <option value="none">—</option>
+              <option value="concrete">Béton</option>
+              <option value="metal">Métal</option>
+              <option value="grid">Grille</option>
+              <option value="checker">Damier</option>
+              <option value="wood">Bois</option>
+              <option value="noise">Bruit</option>
+            </select>
+          </div>
           <div class="field"><label data-i18n="ed.metalness">Métallique</label>
             <div class="range-row"><input type="range" id="inMetal" min="0" max="1" step="0.05"><span id="metalVal"></span></div>
           </div>
@@ -209,6 +380,20 @@
             <div class="range-row"><input type="range" id="inRough" min="0" max="1" step="0.05"><span id="roughVal"></span></div>
           </div>
           <div class="field"><label data-i18n="ed.emissive">Émissif</label><input type="color" id="inEmissive"></div>
+          <div class="field"><label data-i18n="ed.sound">Son</label>
+            <select id="inSound">
+              <option value="none">—</option>
+              <option value="alarm">Alarme</option>
+              <option value="fire">Feu</option>
+              <option value="water">Eau</option>
+              <option value="machine">Machine</option>
+              <option value="wind">Vent</option>
+              <option value="beep">Bip</option>
+            </select>
+          </div>
+          <div class="field"><label data-i18n="ed.soundEvery">Intervalle (s)</label>
+            <div class="range-row"><input type="range" id="inSoundEvery" min="0.3" max="12" step="0.1"><span id="soundEveryVal"></span></div>
+          </div>
           <div class="field"><label data-i18n="ed.opacity">Opacité</label>
             <div class="range-row"><input type="range" id="inOpacity" min="10" max="100" step="5"><span id="opacityVal"></span></div>
           </div>
@@ -235,6 +420,31 @@
             <div class="range-row"><input type="range" id="inJump" min="3" max="18" step="0.5"><span id="jumpVal"></span></div>
           </div>
           <div class="field" id="valueField" hidden><label data-i18n="ed.coinValue">Valeur</label><input type="number" id="inValue" min="1" step="1"></div>
+          <div class="field" id="weaponKindField" hidden><label data-i18n="ed.weaponKind">Arme</label>
+            <select id="inWeaponKind">
+              <option value="pistol" data-i18n="ed.wepPistol">Pistolet</option>
+              <option value="rifle" data-i18n="ed.wepRifle">Fusil</option>
+              <option value="shotgun" data-i18n="ed.wepShotgun">Fusil à pompe</option>
+            </select>
+          </div>
+          <div class="field" id="goalKillsField" hidden><label data-i18n="ed.goalKills">Objectif : éliminations (0 = atteindre le lieu)</label><input type="number" id="inGoalKills" min="0" step="1"></div>
+
+          <div class="insp-section" id="enemyBlock" hidden data-i18n="ed.enemyAI">Intelligence ennemie</div>
+          <div class="field" id="enemyHpField" hidden><label data-i18n="ed.hp">Points de vie</label>
+            <div class="range-row"><input type="range" id="inEnemyHp" min="20" max="500" step="10"><span id="enemyHpVal"></span></div>
+          </div>
+          <div class="field" id="enemyRangeField" hidden><label data-i18n="ed.attackRange">Portée de tir</label>
+            <div class="range-row"><input type="range" id="inEnemyRange" min="6" max="70" step="1"><span id="enemyRangeVal"></span></div>
+          </div>
+          <div class="field" id="enemyVisionField" hidden><label data-i18n="ed.vision">Vision</label>
+            <div class="range-row"><input type="range" id="inEnemyVision" min="8" max="80" step="1"><span id="enemyVisionVal"></span></div>
+          </div>
+          <div class="field" id="enemySpeedField" hidden><label data-i18n="ed.speed">Vitesse</label>
+            <div class="range-row"><input type="range" id="inEnemySpeed" min="0.5" max="8" step="0.1"><span id="enemySpeedVal"></span></div>
+          </div>
+          <div class="field" id="enemyDmgField" hidden><label data-i18n="ed.damage">Dégâts</label>
+            <div class="range-row"><input type="range" id="inEnemyDmg" min="1" max="50" step="1"><span id="enemyDmgVal"></span></div>
+          </div>
         </div>
 
         <div class="code-block">
@@ -245,6 +455,7 @@
             <button class="code-tab" data-code="onCollide">onCollide</button>
           </div>
           <textarea id="codeEditor" spellcheck="false"></textarea>
+          <div class="api-ref" id="apiRef"></div>
           <button class="primary-btn wide" id="btnApplyCode"><span data-i18n="ed.apply">Appliquer le code</span></button>
           <button class="ghost-btn wide" id="btnResetCode"><span data-i18n="ed.resetCode">Réinitialiser</span></button>
         </div>
@@ -296,6 +507,6 @@
 
 <script src="../assets/i18n.js"></script>
 <script src="i18n-editor.js"></script>
-<script type="module" src="editor3d.js?v=2"></script>
+<script type="module" src="editor3d.js?v=3"></script>
 </body>
 </html>

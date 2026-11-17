@@ -57,3 +57,90 @@ vrais moteurs (Godot, Unreal, Unity) :
 
 Ambition inchangée : **mieux qu'Unreal Engine**. Blocs pour démarrer,
 vrai JavaScript pour aller plus loin. Comptes/connexion : plus tard.
+
+## Direction technique — Passage « AAA » (16 nov. 2026)
+
+Objectif : sortir de la démo et viser un rendu et un game feel de niveau
+production. Tout ce qui suit est **livré et testé** (harnais Node exécutant
+les vrais modules, WebGL non testable en sandbox).
+
+### Rendu
+- **Pipeline HDR** : `game/*/js/post.js` (EffectComposer, cible HalfFloat,
+  MSAA 4x) → GTAO (occlusion ambiante) → bloom physique (UnrealBloom)
+  → grading maison (contraste, saturation, lift/gain, vignette, grain,
+  aberration chromatique radiale, netteté, flash de dégâts/headshot)
+  → OutputPass (ACES + sRGB).
+- **IBL réel** : `assets/env/moonless_golf_1k.hdr` (nuit) et
+  `venice_sunset_1k.hdr` (course, jour) chargés en PMREM.
+- **Viewmodel séparé** : l'arme est rendue dans sa propre scène avec son
+  propre éclairage et un `clearDepth` → plus de clipping dans les murs,
+  flash de bouche dédié.
+- **Qualité adaptative** : FPS mesurés en continu, l'AO puis la résolution
+  puis le post sont désactivés si la machine décroche.
+- `PCFSoftShadowMap` (supprimé de three r187) → `PCFShadowMap`.
+
+### Personnages et animations
+- `assets.js` : `CharacterAsset` (GLB riggé, normalisation de hauteur,
+  clonage de squelette, matériaux dupliqués) + `Animator` (blend/crossfade).
+- `assets/models/RobotExpressive.glb` : 14 clips (Idle, Walking, Running,
+  Punch, Death…). Les ennemis sont des robots animés teintés par type,
+  avec volants de collision invisibles (tête / corps) pour les headshots.
+- Repli procédural automatique si le GLB ne charge pas.
+
+### Game feel
+- `juice.js` : **hitstop** (gel du temps 35–75 ms à l'impact), screenshake,
+  kick de caméra + FOV, décroissance frame-rate indépendante.
+- Sons : moteur de synthèse réécrit — détonation en 3 couches, queue de
+  salle par convolution (IR générée), pas avec matière, ambiance
+  drone + vent + grondement.
+
+### Éditeur
+- Bouton **Importer un modèle 3D** + glisser-déposer d'un `.glb` dans le
+  viewport (GLTFLoader + DRACOLoader vendorisés).
+- Nouveau type d'objet `model` : clone riggé, animation jouée dans
+  l'éditeur, sérialisé dans le JSON (nom + index d'animation).
+
+### Landing
+- Carte « Importe tes modèles 3D / rendu studio », et les deux jeux
+  jouables (KREO Arena, KREO Racing) ajoutés à la galerie avec liens.
+
+### Ce qui reste pour un vrai AAA
+Voir la réponse : assets sous licence, capture de mouvement, direction
+artistique (DA) unifiée, level design itéré, backend/multijoueur,
+QA et certification. La technique ne représente qu'une partie du chemin.
+
+## Éditeur 3D (état actuel — 16/11/2026)
+
+L'éditeur de `editor/` n'est plus la v0 2D : c'est un éditeur 3D temps réel
+avec un runtime FPS, et il produit un jeu autonome.
+
+### Ce qui est livré
+- **Export jeu `.html`** : un fichier de ~2,3 Mo, double-cliquable, jouable
+  hors ligne (`file://`). three.js + runtime + scène + modèles sont inlinés.
+- **Runtime FPS complet** : vue subjective, viewmodel, sprint/accroupi/glissade,
+  coyote time, franchissement de marche, hitscan avec recul et gerbe,
+  munitions/rechargement, armes en données (pistolet, fusil, fusil à pompe),
+  ennemis IA, projectiles, particules, pickups, dégâts/régénération.
+- **Rendu** : IBL (PMREM) pour les métaux, textures procédurales (béton, métal,
+  grille, damier, bois, bruit), post-traitement (ACES filmique, sRGB, étalonnage,
+  vignette, grain, aberration chromatique pilotée par les dégâts).
+- **Audio procédural** : bus, compresseur, réverbération par IR générée ;
+  11 effets de jeu ; sons assignables par objet avec atténuation de distance.
+- **Niveaux multiples**, **prefabs embarqués dans le projet** (transportés avec le `.kreo3d.json`), **groupes et sélection multiple**,
+  **parenté persistée**, **débogueur** (colliders, rayons, états, valeurs, objectifs, vagues et erreurs de scripts).
+- **Console de commandes** avec `help`, `select`, `tp`, `spawn`, `delete`, `play`/`stop`, `debug`, `stats`, `clean`, `save` et `export` ; historique ↑/↓.
+- **Menu Ajouter (Maj+A)** inspiré de Shift+A dans Blender : primitives de maillage éditables (cube, plan, sphère UV, icosphère, cylindre, cône, tore), objets de jeu, terrain, lumières et import GLB ; recherche intégrée, focus automatique et édition directe (extrusion, inset, subdivision, boucle, soudure, miroir, lissage).
+- **Ciel / soleil / ambiance / exposition** réglables, repris à l'identique
+  dans l'export.
+- **Scripting** : `api` fusionne l'API globale et l'objet courant ; `print()`
+  remonte dans la console ; erreurs attribuées à l'objet et au hook ;
+  14 extraits de code insérés en un clic.
+
+### Ce qui reste volontairement hors périmètre
+- **Assets 3D AAA** (modèles, armes, mocap) : intégrés plus tard par
+  l'utilisateur. Les systèmes qui les consommeront sont en place :
+  import GLB/GLTF, modèles embarqués en data URL, machines à états
+  d'animation par clip, viewmodel découplé.
+- **Comptes, backend, publication par lien, multijoueur** : nécessitent une
+  infrastructure, non commencés.
+- **Éditeur de blocs visuels** : pas encore commencé.
