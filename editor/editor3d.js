@@ -11,6 +11,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { KreoRuntime, makeNoiseTexture, makeTexture, textureToThree, bindTextureGlobals } from './runtime.js';
+import {
+  MESH_PRIMS, emptyMesh, boxMesh, meshToGeometry, cloneMesh, boundsOf,
+  extrudeFace, extrudeEdge, subdivideFaces, subdivideAll, insertLoop, weldMesh,
+  deleteFaces, moveVertex, smoothMesh, mirrorMesh, faceNormal, faceCenter,
+  transformMesh, nearestVertexOnScreen
+} from './mesh.js';
 
 const $ = (s, c) => (c || document).querySelector(s);
 const $$ = (s, c) => Array.from((c || document).querySelectorAll(s));
@@ -43,7 +49,7 @@ const TYPE_COLORS = {
   plane: '#7BD88F', torus: '#E879F9', sun: '#FFE066', point: '#FFB86B',
   player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E', model: '#7DD3A0',
   spawn: '#FF8A5C', weapon: '#9AA7FF', enemy: '#FF5C5C', pickup: '#4FD1C5', cover: '#6C7B94',
-  group: '#9BA6B8'
+  group: '#9BA6B8', mesh: '#B48CFF'
 };
 
 /* ============ Modèles 3D importés (GLB / GLTF) ============ */
@@ -402,11 +408,11 @@ function createObject(type, opts) {
   const rec = {
     id: id,
     type: type,
-    name: opts.name || t('ed.add' + CAP(type)),
+    name: opts.name || (type === 'mesh' ? t('ed.meshPrim') + ' ' + (reg.size + 1) : t('ed.add' + CAP(type))),
     script: opts.script || { onStart: '', onUpdate: '', onCollide: '' },
     sound: opts.sound || null,
     def: opts.def || {},
-    collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus'].indexOf(type) !== -1,
+    collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'mesh'].indexOf(type) !== -1,
     value: opts.value != null ? opts.value : 10,
     speed: opts.speed != null ? opts.speed : 6,
     jump: opts.jump != null ? opts.jump : 9
@@ -438,6 +444,19 @@ function createObject(type, opts) {
       rec.anim = opts.anim || 0;
       rec.collidable = opts.collidable || false;
       obj3d = g;
+      break;
+    }
+    case 'mesh': {
+      // Maillage éditable : la géométrie vient du module mesh.js et reste
+      // stockée en sommets/faces dans le JSON du projet.
+      rec.mesh = opts.mesh ? cloneMesh(opts.mesh) : boxMesh();
+      obj3d = new THREE.Mesh(
+        meshToGeometry(rec.mesh, { vcolors: true }),
+        new THREE.MeshStandardMaterial({
+          vertexColors: true, color: 0xffffff, roughness: 0.7, metalness: 0.0,
+          flatShading: true, side: THREE.DoubleSide
+        })
+      );
       break;
     }
     case 'group': {
@@ -650,6 +669,7 @@ function recToProps(rec) {
       intensity: rec.light.intensity
     } : null,
     script: rec.script,
+    mesh: rec.type === 'mesh' ? rec.mesh : null,
     parent: rec.parent || null,
     parentOffset: rec.parentOffset || null,
     // Les modèles importés sont désormais EMBARQUÉS (data URL) : sans ça, un
@@ -842,6 +862,321 @@ function addObject(type, opts) {
   log('+ ' + rec.name);
 }
 
+/* ================= Modélisation =================
+   Un maillage (`mesh`) se manipule en sélectionnant des faces puis en
+   appliquant une opération. C'est le geste de base de tout modeleur : on
+   extrude, on subdivise, on déplace un sommet, on soude. */
+const meshState = { faceSel: [], vertSel: null, prim: 'box' };
+
+function meshRec() {
+  const rec = findRec(state.selectedId);
+  if (!rec || rec.type !== 'mesh') return null;
+  if (state.play) return null;
+  return rec;
+}
+
+/** Reconstruit la géométrie après une opération topologique. */
+function refreshMesh(rec) {
+  if (!rec || rec.type !== 'mesh' || !rec.obj3d) return;
+  const old = rec.obj3d.geometry;
+  rec.obj3d.geometry = meshToGeometry(rec.mesh, { vcolors: true });
+  if (old && old.dispose) old.dispose();
+  // la boîte de sélection et les colliders suivent
+  if (selBox) { scene3d.remove(selBox); selBox = null; }
+  if (state.selectedId === rec.id) {
+    selBox = new THREE.BoxHelper(rec.obj3d, 0x8B7CFF);
+    selBox.material.depthTest = false;
+    scene3d.add(selBox);
+  }
+  markDirty();
+  updateMeshBar();
+}
+
+function updateMeshBar() {
+  const bar = $('#meshBar');
+  if (!bar) return;
+  const rec = meshRec();
+  bar.hidden = !rec || state.play;
+  if (!rec) return;
+  const stat = $('#meshStat');
+  if (stat) {
+    stat.textContent = rec.mesh.verts.length + ' sommets · ' + rec.mesh.faces.length + ' faces'
+      + (meshState.faceSel.length ? ' · ' + meshState.faceSel.length + ' sél.' : '');
+  }
+}
+
+/** Applique une opération d'édition, avec une seule entrée d'historique. */
+function meshOp(label, fn) {
+  const rec = meshRec();
+  if (!rec) return;
+  pushHistory();
+  const before = cloneMesh(rec.mesh);
+  try {
+    fn(rec.mesh);
+  } catch (e) {
+    rec.mesh = before;
+    log('mesh · ' + e.message, 'err');
+    return;
+  }
+  // l'extrusion décale la sélection : on repart d'une sélection vide
+  refreshMesh(rec);
+  refreshVertexDots(rec);
+  if (label) log('◈ ' + label + ' · ' + rec.mesh.faces.length + ' faces');
+}
+
+function doExtrude(distance) {
+  if (!meshState.faceSel.length) { toast('ed.meshNeedFace', '⚠️'); return; }
+  const d = distance == null ? 0.5 : distance;
+  meshOp('extrude', function (m) {
+    // on extrude de la dernière à la première : les indices restent valides
+    meshState.faceSel.slice().sort((a, b) => a - b).forEach(function (fi) {
+      extrudeFace(m, fi, d);
+    });
+  });
+  meshState.faceSel = [];
+}
+
+function doInset() {
+  if (!meshState.faceSel.length) { toast('ed.meshNeedFace', '⚠️'); return; }
+  meshOp('inset', function (m) {
+    subdivideFaces(m, meshState.faceSel);
+  });
+  meshState.faceSel = [];
+}
+
+function doSubdivide() {
+  const rec = meshRec();
+  if (!rec) return;
+  if (meshState.faceSel.length) {
+    const sel = meshState.faceSel.slice();
+    meshOp('subdiviser', function (m) { subdivideFaces(m, sel); });
+    meshState.faceSel = [];
+  } else {
+    meshOp('subdiviser tout', function (m) { subdivideAll(m); });
+  }
+}
+
+function doLoop() {
+  if (!meshState.faceSel.length) { toast('ed.meshNeedFace', '⚠️'); return; }
+  const fi = meshState.faceSel[0];
+  meshOp('boucle', function (m) { insertLoop(m, fi, 0); });
+  meshState.faceSel = [];
+}
+
+function doWeld() {
+  meshOp('souder', function (m) {
+    const w = weldMesh(m);
+    m.verts = w.verts;
+    m.faces = w.faces;
+  });
+}
+
+function doMirror() {
+  meshOp('miroir', function (m) {
+    const r = mirrorMesh(m, 0);
+    m.verts = r.verts;
+    m.faces = r.faces;
+  });
+}
+
+function doSmoothMesh() {
+  meshOp('lisser', function (m) { smoothMesh(m, 2, 0.45); });
+}
+
+function doDeleteFaces() {
+  if (!meshState.faceSel.length) { toast('ed.meshNeedFace', '⚠️'); return; }
+  const sel = meshState.faceSel.slice();
+  meshOp('supprimer', function (m) {
+    const r = deleteFaces(m, sel);
+    m.verts = r.verts;
+    m.faces = r.faces;
+  });
+  meshState.faceSel = [];
+}
+
+/** Remplace le maillage par une primitive (nouvel objet ou objet courant). */
+function applyPrimitive(kind) {
+  meshState.prim = kind;
+  const rec = meshRec();
+  const factory = MESH_PRIMS[kind] || boxMesh;
+  if (!rec) {
+    const created = addObject('mesh', { mesh: factory() });
+    if (created) log('◈ ' + kind);
+    return;
+  }
+  meshOp('primitive ' + kind, function (m) {
+    const p = factory();
+    m.verts = p.verts;
+    m.faces = p.faces;
+  });
+  meshState.faceSel = [];
+}
+
+/**
+ * Sélection de face au clic : on identifie le triangle touché, puis la face
+ * d'origine (les faces sont triangulées en éventail dans la géométrie).
+ */
+function pickMeshFace(rec, ndc) {
+  raycaster.setFromCamera(ndc, camera);
+  // La caméra est animée par le damping d'OrbitControls : sans mise à jour
+  // de sa matrice, le rayon part d'une pose périmée et rate la cible.
+  camera.updateMatrixWorld();
+  rec.obj3d.updateMatrixWorld(true);
+  const hits = raycaster.intersectObject(rec.obj3d, false);
+  if (!hits.length) return null;
+  const h = hits[0];
+  if (h.faceIndex == null) return null;
+  // retrouve la face polygonale correspondant au triangle
+  let tri = 0;
+  for (let fi = 0; fi < rec.mesh.faces.length; fi++) {
+    const n = rec.mesh.faces[fi].length - 2;
+    if (h.faceIndex < tri + n) return fi;
+    tri += n;
+  }
+  return null;
+}
+
+function meshPointerDown(e) {
+  const rec = meshRec();
+  window.__md = { rec: rec ? rec.id : null, play: state.play, btn: e.button };
+  if (!rec || state.play || e.button !== 0) return false;
+  const r = canvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((e.clientX - r.left) / r.width) * 2 - 1,
+    -((e.clientY - r.top) / r.height) * 2 + 1
+  );
+
+  // 1) priorité au sommet : on peut le tirer pour déformer
+  // Tolérance volontairement faible : sinon, cliquer une face près d'une
+  // arête démarre un déplacement de sommet et la face n'est jamais choisie.
+  // 3 px : au-delà, un clic sur une face près d'un sommet démarre un
+  // déplacement au lieu d'une sélection. Les sommets sont matérialisés, donc
+  // l'utilisateur vise précisément.
+  const near = nearestVertexOnScreen(rec.mesh, rec.obj3d.matrixWorld, camera, ndc, 3, r.width, r.height);
+  window.__md.near = near;
+  // diagnostic : on calcule aussi la distance écran en pixels du sommet
+  try {
+    const v = new THREE.Vector3(rec.mesh.verts[0][0], rec.mesh.verts[0][1], rec.mesh.verts[0][2])
+      .applyMatrix4(rec.obj3d.matrixWorld).project(camera);
+    window.__md.ndc = { x: ndc.x, y: ndc.y };
+    window.__md.proj = { x: v.x, y: v.y };
+    window.__md.px = Math.hypot((v.x - ndc.x) * r.width * 0.5, (v.y - ndc.y) * r.height * 0.5);
+  } catch (err) { window.__md.err = err.message; }
+  if (near) {
+    meshState.vertSel = near.index;
+    meshState.dragging = { index: near.index, start: { x: e.clientX, y: e.clientY } };
+    canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+    return true;
+  }
+
+  // 2) sinon, sélection de face
+  const fi = pickMeshFace(rec, ndc);
+  window.__md.fi = fi;
+  if (fi == null) return false;
+  const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+  if (additive) {
+    const i = meshState.faceSel.indexOf(fi);
+    if (i >= 0) meshState.faceSel.splice(i, 1);
+    else meshState.faceSel.push(fi);
+  } else {
+    meshState.faceSel = [fi];
+  }
+  highlightFaces(rec);
+  updateMeshBar();
+  return true;
+}
+
+/* Aperçu de la sélection : les faces choisies passent en surbrillance. */
+let faceHi = null;
+function highlightFaces(rec) {
+  if (faceHi) { scene3d.remove(faceHi); faceHi = null; }
+  if (!rec || !meshState.faceSel.length) return;
+  const pos = [];
+  meshState.faceSel.forEach(function (fi) {
+    const f = rec.mesh.faces[fi];
+    if (!f || f.length < 3) return;
+    for (let k = 1; k < f.length - 1; k++) {
+      [f[0], f[k], f[k + 1]].forEach(function (vi) {
+        const v = rec.mesh.verts[vi];
+        if (v) pos.push(v[0], v[1], v[2]);
+      });
+    }
+  });
+  if (!pos.length) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  faceHi = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: 0xFFB030, transparent: true, opacity: 0.55, depthTest: true,
+    polygonOffset: true, polygonOffsetFactor: -2, side: THREE.DoubleSide
+  }));
+  faceHi.position.copy(rec.obj3d.position);
+  faceHi.rotation.copy(rec.obj3d.rotation);
+  faceHi.scale.copy(rec.obj3d.scale);
+  scene3d.add(faceHi);
+}
+
+/** Points de sommet : sans repère visuel, impossible de viser un sommet. */
+let vertDots = null;
+function refreshVertexDots(rec) {
+  if (vertDots) { scene3d.remove(vertDots); vertDots.geometry.dispose(); vertDots.material.dispose(); vertDots = null; }
+  if (!rec) return;
+  const pos = [];
+  rec.mesh.verts.forEach(function (v) { pos.push(v[0], v[1], v[2]); });
+  if (!pos.length) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  vertDots = new THREE.Points(geo, new THREE.PointsMaterial({
+    color: 0x7FD4FF, size: 6, sizeAttenuation: false, depthTest: false, transparent: true, opacity: 0.9
+  }));
+  vertDots.position.copy(rec.obj3d.position);
+  vertDots.rotation.copy(rec.obj3d.rotation);
+  vertDots.scale.copy(rec.obj3d.scale);
+  vertDots.renderOrder = 999;
+  scene3d.add(vertDots);
+}
+
+/* Glisser un sommet déplace réellement le maillage. */
+function meshPointerMove(e) {
+  if (!meshState.dragging) return false;
+  const d = meshState.dragging;
+  const moved = d.start ? Math.hypot(e.clientX - d.start.x, e.clientY - d.start.y) : 99;
+  if (moved < 5) return true;   // clic sec : on ne déforme rien
+  const rec = meshRec();
+  if (!rec) return false;
+  const r = canvas.getBoundingClientRect();
+  const now = new THREE.Vector2(
+    ((e.clientX - r.left) / r.width) * 2 - 1,
+    -((e.clientY - r.top) / r.height) * 2 + 1
+  );
+  if (!meshState.dragging.last) {
+    meshState.dragging.last = now;
+    return true;
+  }
+  const dx = (now.x - meshState.dragging.last.x) * 0.5;
+  const dy = (now.y - meshState.dragging.last.y) * 0.5;
+  meshState.dragging.last = now;
+  // plan de déplacement : celui de la caméra, pour un geste naturel
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+  const s = rec.obj3d.scale;
+  const delta = right.multiplyScalar(dx / (s.x || 1)).add(up.multiplyScalar(-dy / (s.y || 1)));
+  moveVertex(rec.mesh, meshState.dragging.index, [delta.x, delta.y, delta.z]);
+  rec.obj3d.geometry.dispose();
+  rec.obj3d.geometry = meshToGeometry(rec.mesh, { vcolors: true });
+  markDirty();
+  return true;
+}
+
+function meshPointerUp() {
+  if (meshState.dragging) {
+    meshState.dragging = null;
+    updateMeshBar();
+    return true;
+  }
+  return false;
+}
+
 /* ================= Sélection ================= */
 function select(id, additive) {
   // Sélection multiple : Maj/Ctrl+clic ajoute ou retire de la sélection.
@@ -881,6 +1216,12 @@ function select(id, additive) {
   renderHierarchy();
   renderInspector();
   updateSelectionBadge();
+  updateMeshBar();
+  meshState.faceSel = [];
+  meshState.vertSel = null;
+  highlightFaces(rec);
+  refreshVertexDots(rec);
+  updateMeshBar();
 }
 
 let selBoxGroup = null;
@@ -1452,7 +1793,13 @@ let downPos = null;
 
 canvas.addEventListener('pointerdown', function (e) {
   downPos = { x: e.clientX, y: e.clientY, button: e.button };
+  // en mode maillage, le clic appartient au modeleur
+  if (meshPointerDown(e)) { downPos = null; }
 });
+canvas.addEventListener('pointermove', function (e) {
+  if (meshPointerMove(e)) { downPos = null; }
+});
+canvas.addEventListener('pointerup', function () { meshPointerUp(); });
 canvas.addEventListener('pointerup', function (e) {
   if (!downPos) return;
   const moved = Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y);
@@ -2601,6 +2948,7 @@ function resize() {
 new ResizeObserver(resize).observe($('#viewport'));
 
 /* ================= Clavier ================= */
+// (les raccourcis propres au modeleur sont plus bas, après leurs définitions)
 state.keys = {};
 function isTyping(e) {
   const el = e.target;
@@ -2634,6 +2982,19 @@ document.addEventListener('keydown', function (e) {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && key === 's') { e.preventDefault(); save(); return; }
+
+  // --- raccourcis du modeleur, actifs dès qu'un maillage est sélectionné
+  if (!state.play && meshRec()) {
+    if (key === 'x' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); doExtrude(0.5); return; }
+    if (key === 'i') { e.preventDefault(); doInset(); return; }
+    if (key === 'b') { e.preventDefault(); doSubdivide(); return; }
+    if (key === 'l') { e.preventDefault(); doLoop(); return; }
+    if (key === 'm') { e.preventDefault(); doMirror(); return; }
+    if (key === 'o') { e.preventDefault(); doWeld(); return; }
+    if (key === 'delete' || key === 'backspace') {
+      if (meshState.faceSel.length) { e.preventDefault(); doDeleteFaces(); return; }
+    }
+  }
 
   if (key === 'g' && !state.play) { toggleGrid(); return; }
   if (key === 'f' && !state.play) { focusSelection(); return; }
@@ -2692,6 +3053,19 @@ $('#btnSnap').addEventListener('click', function () {
   toast(view.snap ? 'ed.snapOn' : 'ed.snapOff', '🧲');
 });
 $('#btnFocus').addEventListener('click', focusSelection);
+
+/* ---- boutons du modeleur ---- */
+[['#mbExtrude', function () { doExtrude(0.5); }],
+ ['#mbInset', doInset],
+ ['#mbSubdiv', doSubdivide],
+ ['#mbLoop', doLoop],
+ ['#mbWeld', doWeld],
+ ['#mbMirror', doMirror],
+ ['#mbSmooth', doSmoothMesh],
+ ['#mbDelete', doDeleteFaces]].forEach(function (pair) {
+  const el = $(pair[0]);
+  if (el) el.addEventListener('click', pair[1]);
+});
 if ($('#btnDebug')) $('#btnDebug').addEventListener('click', toggleDebug);
 initDebug();
 $('#btnWire').addEventListener('click', function () {

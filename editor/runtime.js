@@ -44,6 +44,29 @@ export function makeNoiseTexture(THREE, size = 64, repeat = 4, contrast = 0.5) {
   return tex;
 }
 
+/* ---------------------------------------------------------- maillages */
+/**
+ * Un objet `mesh` porte ses sommets et ses faces dans le projet : le jeu
+ * exporté doit donc savoir les reconstruire. On réutilise le même code que
+ * l'éditeur pour éviter deux géométries divergentes.
+ */
+function buildMeshGeometry(T, mesh) {
+  const pos = [];
+  for (const face of mesh.faces) {
+    if (face.length < 3) continue;
+    for (let k = 1; k < face.length - 1; k++) {
+      const a = mesh.verts[face[0]], b = mesh.verts[face[k]], c = mesh.verts[face[k + 1]];
+      if (!a || !b || !c) continue;
+      pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+    }
+  }
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  return geo;
+}
+
 /* ---------------------------------------------------------- textures */
 /**
  * Textures procédurales : grille, béton, métal, damier, bruit.
@@ -390,6 +413,24 @@ export class KreoRuntime {
     };
 
     switch (p.type) {
+      case 'mesh': {
+        const geo = buildMeshGeometry(T, p.mesh || { verts: [], faces: [] });
+        const mat = new T.MeshStandardMaterial({
+          color: 0xDDDDDD, roughness: 0.7, metalness: 0, flatShading: true, side: T.DoubleSide
+        });
+        // matériau du projet, s'il y en a un
+        if (p.material) {
+          mat.color.set(p.material.color || '#DDDDDD');
+          mat.roughness = p.material.roughness != null ? p.material.roughness : 0.7;
+          mat.metalness = p.material.metalness != null ? p.material.metalness : 0;
+          if (p.material.emissive) mat.emissive.set(p.material.emissive);
+        }
+        const m = new T.Mesh(geo, mat);
+        rec.ownedGeom = [geo];
+        rec.ownedMat = [mat];
+        g.add(m);
+        break;
+      }
       case 'cube':
       case 'sphere':
       case 'cylinder':

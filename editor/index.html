@@ -90,6 +90,7 @@
         <div class="tb-sep"></div>
         <button class="obj-btn" data-add="player" data-tip="Joueur"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="7" r="3.2"/><path d="M6.5 20a5.5 5.5 0 0 1 11 0"/></svg></button>
         <button class="obj-btn" data-add="coin" data-tip="Pièce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="obj-btn" data-add="mesh" data-tip="Modéliser un maillage (à la main)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M12 4v16M4 8.5l8 3 8-3"/><circle cx="12" cy="11.5" r="1.2" fill="currentColor"/></svg></button>
         <button class="obj-btn" data-add="model" data-tip="Importer un modèle 3D (.glb)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5"/><path d="M12 12v9"/><path d="M17.5 3.5v4M15.5 5.5h4"/></svg></button>
         <button class="obj-btn" data-add="spawn" data-tip="Point de départ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 3v18"/><path d="M6 4h11l-2.5 4L17 12H6z"/></svg></button>
         <button class="obj-btn" data-add="weapon" data-tip="Arme (pickup)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 10h12l4 2v3h-5l-2 3H8l-1-3H3z"/><path d="M8 16v3"/></svg></button>
@@ -125,6 +126,23 @@
       <div class="viewport" id="viewport">
         <canvas id="gl"></canvas>
 
+        <!-- ===== Modélisation ===== -->
+        <div class="mesh-bar" id="meshBar" hidden>
+          <div class="mb-title"><span data-i18n="ed.meshMode">Maillage</span> <b id="meshStat"></b></div>
+          <div class="mb-row">
+            <button class="mb-btn" id="mbExtrude" title="Extruder la face (E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h10V4"/><path d="M4 14v6h6"/><path d="m14 4 6 6"/><path d="M20 10v10H10"/></svg><span data-i18n="ed.extrude">Extruder</span></button>
+            <button class="mb-btn" id="mbInset" title="Extruder vers l'intérieur">↘<span data-i18n="ed.inset">Inset</span></button>
+            <button class="mb-btn" id="mbSubdiv" title="Subdiviser la sélection">◱<span data-i18n="ed.subdivide">Subdiviser</span></button>
+            <button class="mb-btn" id="mbLoop" title="Insérer une boucle">═<span data-i18n="ed.loop">Boucle</span></button>
+            <button class="mb-btn" id="mbWeld" title="Souder les sommets confondus">⊙<span data-i18n="ed.weld">Souder</span></button>
+            <button class="mb-btn" id="mbMirror" title="Miroir sur X">⇋<span data-i18n="ed.mirror">Miroir</span></button>
+            <button class="mb-btn" id="mbSmooth" title="Lisser">≈<span data-i18n="ed.smooth">Lisser</span></button>
+            <button class="mb-btn danger" id="mbDelete" title="Supprimer les faces">✕<span data-i18n="ed.deleteFaces">Suppr.</span></button>
+          </div>
+          <div class="mb-row">
+            <span class="mb-hint" data-i18n="ed.meshHint">Clic : face · Maj+clic : ajouter · glisser un sommet : déplacer</span>
+          </div>
+        </div>
         <div class="dbg-overlay" id="dbgOverlay" hidden></div>
         <div class="play-hint" id="playHint" hidden><span data-i18n="ed.playHint">ZQSD/WASD : se déplacer · Flèches : tourner · Espace : sauter · Glisser : regarder</span></div>
 
