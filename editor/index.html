@@ -98,6 +98,7 @@
         <button class="obj-btn" data-add="weapon" data-tip="Arme (pickup)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 10h12l4 2v3h-5l-2 3H8l-1-3H3z"/><path d="M8 16v3"/></svg></button>
         <button class="obj-btn" data-add="enemy" data-tip="Ennemi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M9 12h.01M15 12h.01"/><path d="M12 3v4M8 18v3M16 18v3"/></svg></button>
         <button class="obj-btn" data-add="goal" data-tip="Objectif"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 4v16"/><path d="M6 5c3-1.8 6 1.8 9 0v8c-3 1.8-6-1.8-9 0z"/></svg></button>
+        <button class="obj-btn" data-add="checkpoint" data-tip="Checkpoint (reprise après une mort)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg></button>
       </div>
 
       <div class="scenes-bar" id="scenesBar">
@@ -188,6 +189,8 @@
           <div class="hud-pill hud-health"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z"/></svg><span id="hudHealth">100</span></div>
           <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9h13l3 3-3 3H4z"/><path d="M9 15v4"/></svg><span id="hudAmmo">0 / 0</span></div>
           <div class="hud-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><circle cx="12" cy="12" r="3"/></svg><span id="hudKills">0</span></div>
+          <div class="hud-pill" title="Vies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z"/><path d="M9 11h6"/></svg><span id="hudLives">3</span></div>
+          <div class="hud-pill hud-wave" id="hudWavePill"><span id="hudWave"></span></div>
         </div>
 
         <div class="game-overlay" id="winOverlay" hidden>

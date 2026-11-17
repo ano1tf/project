@@ -291,8 +291,14 @@ export class KreoRuntime {
     this.state = {
       score: 0, health: 100, maxHealth: 100,
       ammo: 0, ammoMax: 0, weapon: null,
-      won: false, lost: false, kills: 0, wave: 1
+      won: false, lost: false, kills: 0, wave: 1,
+      lives: 3, wave: 0, waveTotal: 0, enemiesLeft: 0
     };
+    // Reprise après une mort : sans points de reprise, une partie se termine
+    // au premier échange de tirs et le joueur recommence tout.
+    this.checkpoint = null;
+    this.checkpoints = [];
+    this._deathT = 0;
 
     /* ---- combat ---- */
     this.enemies = [];        // IA vivante
@@ -364,6 +370,7 @@ export class KreoRuntime {
     this._rebuildWorld();
     this._spawnPlayer();
     this._spawnEnemies();
+    this._initWaves();
     this.projectiles.forEach((pr) => { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); });
     this.projectiles.length = 0;
     if (!this._vmBuilt) { this._buildViewmodel(); this._vmBuilt = true; }
@@ -469,6 +476,9 @@ export class KreoRuntime {
       case 'weapon':
       case 'enemy':
       case 'cover':
+      case 'checkpoint':
+      case 'ammo':
+      case 'health':
         g.add(this._marker(p, rec));
         break;
       default: break;
@@ -547,7 +557,8 @@ export class KreoRuntime {
     const T = this.THREE;
     const color = {
       player: 0x6D4AFF, coin: 0xF5C542, goal: 0x3ECF8E, pickup: 0x4FD1C5,
-      spawn: 0xFF8A5C, weapon: 0x9AA7FF, enemy: 0xFF5C5C, cover: 0x6C7B94
+      spawn: 0xFF8A5C, weapon: 0x9AA7FF, enemy: 0xFF5C5C, cover: 0x6C7B94,
+      checkpoint: 0x7FD4FF
     }[p.type] || 0xAAAAAA;
     const mat = new T.MeshStandardMaterial({
       color, metalness: 0.3, roughness: 0.5,
@@ -557,6 +568,9 @@ export class KreoRuntime {
     let geo;
     if (p.type === 'player' || p.type === 'enemy') geo = new T.CapsuleGeometry(0.55, 1.05, 8, 18);
     else if (p.type === 'spawn') geo = new T.CylinderGeometry(0.9, 0.9, 0.08, 24);
+    else if (p.type === 'checkpoint') geo = new T.TorusGeometry(0.9, 0.08, 8, 26);
+    else if (p.type === 'ammo') geo = new T.BoxGeometry(0.5, 0.4, 0.5);
+    else if (p.type === 'health') geo = new T.BoxGeometry(0.5, 0.5, 0.5);
     else geo = new T.OctahedronGeometry(0.6, 0);
     rec.ownedGeom = [geo];
     rec.ownedMat = [mat];
@@ -657,6 +671,14 @@ export class KreoRuntime {
       record: player
     };
     if (player) player.root.visible = false;   // en 1re personne, le corps n'est pas visible
+    this.startPos = pos.clone();
+
+    // Points de reprise : atteints en marchant dessus, ils deviennent le lieu
+    // de réapparition.
+    this.checkpoints = [];
+    for (const rec of this.entities.values()) {
+      if (rec.type === 'checkpoint') this.checkpoints.push(rec);
+    }
   }
 
   /* ---------- boucle ---------- */
@@ -709,6 +731,13 @@ export class KreoRuntime {
   update(dt) {
     this.time += dt;
     if (this.state.won || this.state.lost) { this._render(); return; }
+    if (this._deathT > 0) {
+      this._deathT -= dt;
+      if (this._deathT <= 0) { this._deathT = 0; this._respawn(); }
+      this._render();
+      return;
+    }
+    if (this._invuln > 0) this._invuln -= dt;
     this._updatePlayer(dt);
     this._updateViewmodel(dt);
     this._updateEntities(dt);
@@ -716,6 +745,8 @@ export class KreoRuntime {
     this._updateCombat(dt);
     // une arme automatique vide son chargeur tant que la détente est pressée
     if (this._trigger && this.state.weapon && this.state.weapon.auto) this._fire();
+    this._updateCheckpoints(dt);
+    this._updateWaves(dt);
     this._runHooks('onUpdate', dt);
     this._adaptQuality(dt);
     this._render();
@@ -864,6 +895,98 @@ export class KreoRuntime {
       }
     }
     return false;
+  }
+
+  /**
+   * Vagues : quand tous les ennemis du niveau sont abattus, la suivante arrive
+   * sur les mêmes emplacements, un peu plus coriace. Un niveau sans ennemi
+   * n'a pas de vagues (et ne se termine pas tout seul).
+   */
+  _initWaves() {
+    this._waveSpawns = [];
+    for (const rec of this.entities.values()) {
+      if (rec.type !== 'enemy') continue;
+      this._waveSpawns.push({
+        rec: rec,
+        pos: rec.root.position.clone(),
+        def: rec.def || {}
+      });
+    }
+    this.state.wave = this._waveSpawns.length ? 1 : 0;
+    this.state.waveTotal = this._waveSpawns.length;
+    this._waveT = 0;
+    this._wavePending = false;
+  }
+
+  _updateWaves(dt) {
+    if (!this._waveSpawns.length || this.state.won || this.state.lost) return;
+    // vague en préparation : on laisse un répit au joueur
+    if (this._wavePending) {
+      this._waveT -= dt;
+      if (this._waveT <= 0) {
+        this._wavePending = false;
+        // la vague suivante, pas la même : sans le +1 la partie tournait en
+        // boucle sur la vague 1
+        this._startWave(this.state.wave + 1);
+      }
+      return;
+    }
+    this.state.enemiesLeft = this.enemies.filter((e) => e.alive).length;
+    if (this.enemies.length && this.enemies.some((e) => e.alive)) return;
+    // plus personne : vague suivante
+    this._wavePending = true;
+    this._waveT = 3.2;
+    if (this.host && this.host.onMessage) {
+      this.host.onMessage('Vague ' + (this.state.wave + 1) + ' dans 3 s');
+    }
+  }
+
+  _startWave(n) {
+    const T = this.THREE;
+    this.state.wave = n;
+    const scale = 1 + (n - 1) * 0.28;      // vies et dégâts montent doucement
+    this.enemies = this._waveSpawns.map((w, i) => {
+      const rec = w.rec;
+      rec.root.position.copy(w.pos);
+      rec.root.visible = true;
+      const hp = Math.round((w.def.hp || 100) * scale);
+      return {
+        id: rec.id + '·' + n, root: rec.root, hp: hp, maxHp: hp,
+        speed: (w.def.speed || 2.6) * Math.min(1.5, 1 + (n - 1) * 0.08),
+        radius: 0.75, height: 2.0,
+        attackRange: w.def.attackRange || 26,
+        damage: Math.round((w.def.damage || 8) * Math.min(2, 1 + (n - 1) * 0.12)),
+        cooldown: 1.1 + Math.random() * 0.8,
+        alive: true, hurtT: 0,
+        patrolA: w.pos.clone(), patrolT: Math.random() * 6,
+        patrolDir: new T.Vector3(0, 0, 1),
+        state: 'patrol', stateT: 0, lastSeen: 99, alert: 0,
+        visionRange: w.def.visionRange || 34,
+        fov: (w.def.fov || 110) * Math.PI / 180,
+        marker: rec.marker || null, burst: 0
+      };
+    });
+    this.state.enemiesLeft = this.enemies.length;
+    if (this.host && this.host.onWave) this.host.onWave(n, this.enemies.length);
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+  }
+
+  /** Le joueur touche-t-il un point de reprise ? */
+  _updateCheckpoints(dt) {
+    if (!this.checkpoints.length) return;
+    const p = this.player;
+    for (const cp of this.checkpoints) {
+      const dx = cp.root.position.x - p.pos.x;
+      const dz = cp.root.position.z - p.pos.z;
+      const dy = Math.abs(cp.root.position.y - p.pos.y);
+      if (dx * dx + dz * dz < 2.6 && dy < 3 && this.checkpoint !== cp.root.position) {
+        this.checkpoint = new this.THREE.Vector3(
+          cp.root.position.x, cp.root.position.y + 0.1, cp.root.position.z);
+        this.sfx('pickup');
+        if (this.host && this.host.onCheckpoint) this.host.onCheckpoint(cp.name || 'point de reprise');
+        if (this.host && this.host.onMessage) this.host.onMessage('Point de reprise');
+      }
+    }
   }
 
   _updateEntities(dt) {
@@ -1806,17 +1929,44 @@ export class KreoRuntime {
   }
 
   /* ---------- dégâts / état ---------- */
+  /**
+   * Reprise : le joueur réapparaît au dernier checkpoint atteint (ou au point
+   * de départ), avec ses munitions et une courte invulnérabilité.
+   */
+  _respawn() {
+    if ((this.state.lives || 0) <= 0) {
+      this.state.lost = true;
+      this.sfx('lose');
+      if (this.host && this.host.onLose) this.host.onLose();
+      return;
+    }
+    const p = this.player;
+    const at = this.checkpoint || this.startPos || p.pos;
+    p.pos.copy(at);
+    p.vel.set(0, 0, 0);
+    p.pitch = 0;
+    this.state.health = this.state.maxHealth;
+    this.state.ammo = this.state.ammoMax;
+    this._invuln = 2.2;
+    this.damageFlash = 0;
+    if (this.host && this.host.onRespawn) this.host.onRespawn(this.checkpoint ? 'checkpoint' : 'depart');
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+  }
+
   _damage(n) {
+    if (this._invuln > 0) return;
     this.state.health = Math.max(0, this.state.health - n);
     this.sfx('hurt');
     this.damageFlash = 1;
     this.lastHurt = this.time;
     if (this.host && this.host.onHud) this.host.onHud(this.state);
-    if (this.state.health <= 0 && !this.state.lost) {
-      this.state.lost = true;
-      this.sfx('lose');
-      if (this.host && this.host.onLose) this.host.onLose();
+    if (this.state.health <= 0 && !this.state.lost && !this._deathT) {
+      this.state.lives = Math.max(0, (this.state.lives || 0) - 1);
+      this._deathT = 1.6;
+      this.sfx('hurt');
       this._runHooks('onDeath');
+      if (this.host && this.host.onDeath) this.host.onDeath(this.state.lives);
+      if (this.host && this.host.onHud) this.host.onHud(this.state);
     }
   }
 

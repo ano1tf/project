@@ -661,3 +661,6 @@ kbd {
 .asset-chip .rm { opacity: 0; font-weight: 700; margin-left: 2px; }
 .asset-chip:hover .rm { opacity: .55; }
 .asset-chip .rm:hover { opacity: 1; color: #ff8080; }
+
+.hud-pill.hud-wave:empty, .hud-wave:has(span:empty) { display: none; }
+.hud-wave span { opacity: .9; }

@@ -50,7 +50,7 @@ const TYPE_COLORS = {
   plane: '#7BD88F', torus: '#E879F9', sun: '#FFE066', point: '#FFB86B',
   player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E', model: '#7DD3A0',
   spawn: '#FF8A5C', weapon: '#9AA7FF', enemy: '#FF5C5C', pickup: '#4FD1C5', cover: '#6C7B94',
-  group: '#9BA6B8', mesh: '#B48CFF', terrain: '#7BD88F'
+  group: '#9BA6B8', mesh: '#B48CFF', terrain: '#7BD88F', checkpoint: '#7FD4FF'
 };
 
 /* ============ Modèles 3D importés (GLB / GLTF) ============ */
@@ -406,7 +406,7 @@ function mat(opts) {
 
 const KNOWN_TYPES = new Set(['cube', 'sphere', 'cylinder', 'cone', 'torus', 'plane',
   'mesh', 'terrain', 'model', 'light', 'sun', 'point', 'player', 'coin', 'weapon',
-  'enemy', 'goal', 'group']);
+  'enemy', 'goal', 'checkpoint', 'group']);
 
 function createObject(type, opts) {
   opts = opts || {};
@@ -601,6 +601,20 @@ function createObject(type, opts) {
         new THREE.MeshStandardMaterial({ color: 0xFFE066, emissive: 0xFFAA22, emissiveIntensity: 1.6 }));
       visor.position.set(0, 1.55, -0.4);
       g.add(visor);
+      rec.collidable = false;
+      obj3d = g;
+      break;
+    }
+    case 'checkpoint': {
+      const g = new THREE.Group();
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.12, 28),
+        mat({ color: 0x2E7DD8, emissive: 0x123A66 }));
+      g.add(pad);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.07, 8, 28),
+        mat({ color: 0x7FD4FF, emissive: 0x2E7DD8, emissiveIntensity: 1.2 }));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.14;
+      g.add(ring);
       rec.collidable = false;
       obj3d = g;
       break;
@@ -2217,6 +2231,10 @@ function makeHost() {
       if (am) am.textContent = (st.ammo != null ? st.ammo : 0) + ' / ' + (st.ammoMax || 0);
       const kl = $('#hudKills');
       if (kl) kl.textContent = st.kills || 0;
+      const lv = $('#hudLives');
+      if (lv) lv.textContent = st.lives != null ? st.lives : 3;
+      const wv = $('#hudWave');
+      if (wv) wv.textContent = st.wave ? ('vague ' + st.wave) : '';
       const vig = $('#hudVignette');
       if (vig && runtime) vig.style.opacity = String(Math.min(1, runtime.damageFlash || 0));
       const cr = $('#hudCross');
@@ -2238,6 +2256,10 @@ function makeHost() {
       log('💥 ' + t('ed.loseTitle'), 'err');
     },
     onMessage: function (msg) { toast(msg, '💬'); log('💬 ' + msg); },
+    onDeath: function (lives) { toast(t('ed.hudDeath') + ' · ' + lives + ' ' + t('ed.hudLives'), '💀'); log('💀 ' + t('ed.hudDeath'), 'err'); },
+    onRespawn: function (where) { toast(t('ed.hudRespawn') + ' · ' + where, '↻'); log('↻ ' + t('ed.hudRespawn'), 'warn'); },
+    onCheckpoint: function () { SFX.coin(); },
+    onWave: function (n, count) { toast(t('ed.hudWave') + ' ' + n + ' · ' + count, '🌊'); log('🌊 ' + t('ed.hudWave') + ' ' + n); },
     onError: function (msg, id, hook) {
       toast('⚠️ ' + msg, '⚠️');
       log('⚠️ code · ' + msg, 'err');
@@ -2794,6 +2816,17 @@ const THREE = {
   .hp { width: 190px; height: 8px; border-radius: 5px; background: rgba(255,255,255,.16); overflow: hidden; }
   .hp > i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg,#34d399,#10b981); transition: width .18s; }
   .score { position: absolute; top: 20px; left: 22px; font-size: 15px; letter-spacing: .06em; }
+  .stats { position: absolute; top: 20px; right: 22px; display: flex; gap: 14px; align-items: center; font-size: 14px; letter-spacing: .04em; }
+  .stats #wave { color: #7dd3fc; }
+  #pause { position: fixed; inset: 0; display: none; place-items: center; background: rgba(8,11,18,.8); color: #fff; font-family: system-ui; z-index: 7; backdrop-filter: blur(4px); }
+  #pause.show { display: grid; }
+  #pause .card { text-align: center; min-width: 300px; }
+  #pause h2 { margin: 0 0 4px; font-size: 24px; }
+  #pause p { opacity: .6; margin: 0 0 18px; font-size: 13px; }
+  #pause button { display: block; width: 100%; margin: 8px 0; border: 0; border-radius: 10px; padding: 12px 22px;
+    font: 700 14px system-ui; cursor: pointer; background: rgba(255,255,255,.1); color: #fff; }
+  #pause button:hover { background: rgba(255,255,255,.18); }
+  #pause button.primary { background: linear-gradient(180deg,#5eead4,#22d3ee); color: #06202a; }
   .cross { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; translate: -50% -50%; }
   .cross::before, .cross::after { content: ''; position: absolute; background: rgba(255,255,255,.85); }
   .cross::before { left: 50%; top: 0; width: 1.5px; height: 100%; translate: -50% 0; }
@@ -2818,6 +2851,7 @@ const THREE = {
 <div id="hud" hidden>
   <div id="vig" style="position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(190,20,30,.6) 100%);transition:opacity .12s"></div>
   <div class="score"><span id="score">0</span> · <span id="kills">0</span> KO</div>
+  <div class="stats"><span id="lives">♥ 3</span><span id="wave"></span></div>
   <div class="cross"></div>
   <div class="bar">
     <div class="pill"><div class="hp"><i id="hpbar"></i></div></div>
@@ -2829,6 +2863,13 @@ const THREE = {
   <h1>${escapeHtml(title)}</h1>
   <p>ZQSD / WASD · Souris · Échap pour la souris</p>
   <button id="btnStart">JOUER</button>
+</div></div>
+<div id="pause"><div class="card">
+  <h2>Pause</h2>
+  <p id="pauseSub">Échap pour reprendre</p>
+  <button class="primary" id="btnResume">REPRENDRE</button>
+  <button id="btnRestart">RECOMMENCER</button>
+  <button id="btnSens">Sensibilité : 1.0</button>
 </div></div>
 <div id="over"><div class="card" style="text-align:center">
   <h2 id="overTitle">Partie terminée</h2>
@@ -2894,9 +2935,15 @@ const ui = {
   vig: document.getElementById('vig'),
   over: document.getElementById('over'),
   overTitle: document.getElementById('overTitle'),
-  overScore: document.getElementById('overScore')
+  overScore: document.getElementById('overScore'),
+  lives: document.getElementById('lives'),
+  wave: document.getElementById('wave')
 };
 let msgTimer = 0;
+function showMsg(m) {
+  ui.msg.textContent = m; ui.msg.classList.add('show');
+  clearTimeout(msgTimer); msgTimer = setTimeout(() => ui.msg.classList.remove('show'), 2200);
+}
 
 const rt = new KreoRuntime({
   THREE, scene, canvas, renderer,
@@ -2908,13 +2955,16 @@ const rt = new KreoRuntime({
       ui.kills.textContent = st.kills || 0;
       ui.hpbar.style.width = Math.max(0, Math.min(100, st.health / st.maxHealth * 100)) + '%';
       ui.ammo.textContent = st.ammo != null ? st.ammo + ' / ' + st.ammoMax : '—';
+      if (ui.lives) ui.lives.textContent = '♥ ' + (st.lives != null ? st.lives : 3);
+      if (ui.wave) ui.wave.textContent = st.wave ? ('vague ' + st.wave) : '';
     },
-    onMessage(m) {
-      ui.msg.textContent = m; ui.msg.classList.add('show');
-      clearTimeout(msgTimer); msgTimer = setTimeout(() => ui.msg.classList.remove('show'), 2200);
-    },
+    onMessage(m) { showMsg(m); },
     onWin(m) { ui.overTitle.textContent = 'Victoire'; ui.overScore.textContent = m || ''; ui.over.classList.add('show'); rt.stop(); },
     onLose() { ui.overTitle.textContent = 'Échec'; ui.overScore.textContent = 'Score : ' + rt.state.score; ui.over.classList.add('show'); rt.stop(); },
+    onDeath(lives) { showMsg(lives > 0 ? 'Touché — ' + lives + ' vie(s)' : 'Plus de vie'); },
+    onRespawn() { showMsg('Reprise'); },
+    onCheckpoint() { showMsg('Point de reprise'); },
+    onWave(n) { showMsg('Vague ' + n); },
     onError(e) { console.error('[KREO]', e); },
     onScriptLog(t) { console.log('[script]', t); if (ui.msg) { ui.msg.textContent = t; ui.msg.classList.add('show'); clearTimeout(msgTimer); msgTimer = setTimeout(() => ui.msg.classList.remove('show'), 1600); } }
   }
@@ -2938,6 +2988,7 @@ resize();
 /* ---------- entrées ---------- */
 const keys = {};
 addEventListener('keydown', (e) => {
+  if (paused && e.code !== 'escape') return;
   keys[e.code] = true; feed();
   if (e.code === 'space') e.preventDefault();
   if (e.code === 'escape' && document.pointerLockElement) document.exitPointerLock();
@@ -2959,6 +3010,7 @@ let dragging = false;
  * peut, et on tire dans tous les cas.
  */
 canvas.addEventListener('mousedown', (e) => {
+  if (paused) return;
   if (!document.pointerLockElement && canvas.requestPointerLock) {
     try { canvas.requestPointerLock(); } catch (err) {}
   }
@@ -2973,10 +3025,35 @@ canvas.addEventListener('mouseup', (e) => {
 addEventListener('blur', () => { if (rt && rt.onFireUp) rt.onFireUp(); });
 addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('mousemove', (e) => {
-  if (!document.pointerLockElement) return;
+  if (!document.pointerLockElement || paused) return;
   if (Math.abs(e.movementX) > 220 || Math.abs(e.movementY) > 220) return;
-  rt.input.lookX = e.movementX * 0.0022;
-  rt.input.lookY = e.movementY * 0.0022;
+  rt.input.lookX = e.movementX * 0.0022 * sens;
+  rt.input.lookY = e.movementY * 0.0022 * sens;
+});
+
+/* ---------- pause ---------- */
+let paused = false;
+const pauseEl = document.getElementById('pause');
+function setPaused(v) {
+  paused = !!v;
+  pauseEl.classList.toggle('show', paused);
+  if (paused && document.pointerLockElement) document.exitPointerLock();
+}
+addEventListener('keydown', (e) => {
+  if (e.code === 'escape' || e.code === 'KeyP') {
+    // Échap / P : bascule la pause (Échap libère aussi la souris).
+    setPaused(!paused);
+  }
+});
+document.getElementById('btnResume').addEventListener('click', () => {
+  setPaused(false);
+  canvas.requestPointerLock && canvas.requestPointerLock();
+});
+document.getElementById('btnRestart').addEventListener('click', () => location.reload());
+let sens = 1.0;
+document.getElementById('btnSens').addEventListener('click', (e) => {
+  sens = sens >= 2.5 ? 0.5 : sens + 0.5;
+  e.target.textContent = 'Sensibilité : ' + sens.toFixed(1);
 });
 
 document.getElementById('btnStart').addEventListener('click', () => {
