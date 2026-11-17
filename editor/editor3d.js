@@ -712,20 +712,53 @@ function getTexture(kind) {
 }
 const TEXTURE_KINDS = ['none', 'concrete', 'metal', 'grid', 'checker', 'wood', 'noise'];
 
-function getMaterialProps(rec) {
-  let m = null;
+/* ---------- Matériaux par sous-partie ----------
+   Un GLB contient souvent plusieurs matériaux (peau, métal, tissu). Les
+   éditer ensemble interdit de retoucher une seule partie : on les liste et
+   on édite celui qui est sélectionné. */
+function listSubMaterials(rec) {
+  const out = [];
+  const seen = new Set();
+  if (!rec || !rec.obj3d) return out;
   rec.obj3d.traverse(function (o) {
-    if (!m && o.isMesh && o.material && o.material.color && !(o.material instanceof THREE.MeshBasicMaterial)) m = o.material;
+    if (!o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach(function (m) {
+      if (!m || !m.color || seen.has(m.uuid)) return;
+      seen.add(m.uuid);
+      out.push({ uuid: m.uuid, name: m.name || ('matériau ' + (out.length + 1)), material: m });
+    });
   });
+  return out;
+}
+
+function selectedSubMaterial(rec) {
+  const list = listSubMaterials(rec);
+  if (!list.length) return null;
+  const want = rec.subMaterial;
+  if (want) {
+    const found = list.find(function (e) { return e.uuid === want; });
+    if (found) return found.material;
+  }
+  return list[0].material;
+}
+
+function getMaterialProps(rec) {
+  let m = selectedSubMaterial(rec);
+  if (!m) {
+    rec.obj3d.traverse(function (o) {
+      if (!m && o.isMesh && o.material && o.material.color && !(o.material instanceof THREE.MeshBasicMaterial)) m = o.material;
+    });
+  }
   if (!m) return null;
   return {
-    color: '#' + m.color.getHexString(),
-    metalness: m.metalness,
-    roughness: m.roughness,
-    emissive: '#' + m.emissive.getHexString(),
-    opacity: m.opacity,
-    wireframe: m.wireframe,
-    texture: m.map ? (m.userData ? m.userData.kind : null) : null
+    color: m.color ? '#' + m.color.getHexString() : '#ffffff',
+    metalness: m.metalness != null ? m.metalness : 0,
+    roughness: m.roughness != null ? m.roughness : 0.6,
+    emissive: m.emissive ? '#' + m.emissive.getHexString() : '#000000',
+    opacity: m.opacity != null ? m.opacity : 1,
+    wireframe: !!m.wireframe,
+    texture: m.map && m.userData ? m.userData.kind : null
   };
 }
 
@@ -1663,6 +1696,17 @@ function renderInspector() {
     if (m) {
       $('#inColor').value = m.color;
       if ($('#inTexture')) $('#inTexture').value = m.texture || 'none';
+      const subs = listSubMaterials(rec);
+      const subField = $('#subMatField');
+      const subSel = $('#inSubMat');
+      if (subField) subField.hidden = subs.length < 2;
+      if (subSel && subs.length) {
+        subSel.innerHTML = subs.map(function (e) {
+          return '<option value="' + e.uuid + '">' + escapeHtml(e.name) + '</option>';
+        }).join('');
+        const cur = selectedSubMaterial(rec);
+        if (cur) subSel.value = cur.uuid;
+      }
       if ($('#inSound')) $('#inSound').value = (rec.sound && rec.sound.kind) || 'none';
       if ($('#inSoundEvery')) {
         const ev = (rec.sound && rec.sound.every) || 2;
@@ -1863,11 +1907,34 @@ bindField('#inSoundEvery', function (el) {
   rec.sound.every = parseFloat(el.value);
   if ($('#soundEveryVal')) $('#soundEveryVal').textContent = el.value + ' s';
 });
+if ($('#inSubMat')) $('#inSubMat').addEventListener('change', function (e) {
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+  rec.subMaterial = e.target.value;
+  renderInspector();
+});
+
 bindField('#inTexture', function (el) {
   const rec = findRec(state.selectedId);
   if (!rec) return;
   armSnap();
   const kind = el.value;
+  const only = selectedSubMaterial(rec);
+  if (only) {
+    const lib = getTexture(kind);
+    if (lib) {
+      if (only.map) only.map.dispose();
+      only.map = textureToThree(THREE, lib);
+      only.userData = only.userData || {};
+      only.userData.kind = kind;
+    } else if (only.map) {
+      only.map.dispose();
+      only.map = null;
+      if (only.userData) only.userData.kind = null;
+    }
+    only.needsUpdate = true;
+    return;
+  }
   rec.obj3d.traverse(function (o) {
     if (!o.isMesh || !o.material || !o.material.isMeshStandardMaterial) return;
     const lib = getTexture(kind);
@@ -1887,7 +1954,11 @@ bindField('#inTexture', function (el) {
 });
 bindField('#inColor', function (el) {
   const rec = findRec(state.selectedId);
-  if (rec) forEachMat(rec, function (m) { m.color.set(el.value); });
+  if (!rec) return;
+  const m = selectedSubMaterial(rec);
+  if (m && m.color) { m.color.set(el.value); return; }
+  // repli : objet sans matériau standard, on colore tout
+  forEachMat(rec, function (mm) { if (mm.color) mm.color.set(el.value); });
 });
 bindField('#inMetal', function (el) {
   const rec = findRec(state.selectedId);

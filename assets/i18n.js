@@ -260,6 +260,7 @@ window.KREO_I18N = {
     'ed.rot': 'Rotation',
     'ed.color': 'Couleur',
     'ed.texture': 'Texture',
+    'ed.subMaterial': 'Sous-partie',
     'ed.sound': 'Son',
     'ed.soundEvery': 'Intervalle (s)',
     'ed.behavior': 'Comportement',
