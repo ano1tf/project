@@ -277,6 +277,12 @@ export class KreoRuntime {
     this.particles = [];      // impacts / traçantes
     this.hudFlash = 0;
     this.onFire = () => this._fire();   // branché par le HTML exporté
+    this.onFireDown = () => {
+      this._trigger = true;
+      this._pendingShots = Math.min(2, (this._pendingShots || 0) + 1);
+      this._fire();
+    };
+    this.onFireUp = () => { this._trigger = false; };
 
     /* Viewmodel : l'arme en main. Enfant de la caméra, rendue dans une passe
        séparée avec la profondeur nettoyée — sinon elle traverse les murs. */
@@ -502,8 +508,8 @@ export class KreoRuntime {
     }[p.type] || 0xAAAAAA;
     const mat = new T.MeshStandardMaterial({
       color, metalness: 0.3, roughness: 0.5,
-      emissive: new T.Color(color).multiplyScalar(0.25),
-      transparent: true, opacity: p.type === 'player' || p.type === 'spawn' ? 0.0 : 0.85
+      emissive: new T.Color(color).multiplyScalar(0.35),
+      transparent: true, opacity: p.type === 'player' || p.type === 'spawn' ? 0.0 : 0.95
     });
     let geo;
     if (p.type === 'player' || p.type === 'enemy') geo = new T.CapsuleGeometry(0.55, 1.05, 8, 18);
@@ -511,7 +517,19 @@ export class KreoRuntime {
     else geo = new T.OctahedronGeometry(0.6, 0);
     rec.ownedGeom = [geo];
     rec.ownedMat = [mat];
-    return new T.Mesh(geo, mat);
+    const mesh = new T.Mesh(geo, mat);
+    if (p.type === 'enemy') {
+      // repère flottant : sans lui, un ennemi se confond avec le décor
+      const dGeo = new T.OctahedronGeometry(0.22, 0);
+      const dMat = new T.MeshBasicMaterial({ color: 0xFF4D4D, transparent: true, opacity: 0.95 });
+      const dot = new T.Mesh(dGeo, dMat);
+      dot.position.y = 1.35;
+      mesh.add(dot);
+      rec.ownedGeom.push(dGeo);
+      rec.ownedMat.push(dMat);
+      rec.marker = dot;
+    }
+    return mesh;
   }
 
   /**
@@ -614,6 +632,14 @@ export class KreoRuntime {
       const raw = (now - this._last) / 1000;
       const dt = Math.max(0, Math.min(0.05, isFinite(raw) ? raw : 0));
       this._last = now;
+      // Un clic survenu entre deux images déclenche un tir qui doit être
+      // honoré à l'image suivante : sinon, sur machine lente, des tirs
+      // disparaissent simplement.
+      if (this._pendingShots > 0) {
+        this._pendingShots--;
+        this._nextShot = 0;
+        this._fire();
+      }
       this.update(dt);
       this.requestFrame = requestAnimationFrame(loop);
     };
@@ -645,7 +671,10 @@ export class KreoRuntime {
     this._updateEntities(dt);
     this._updateObjectSounds(dt);
     this._updateCombat(dt);
+    // une arme automatique vide son chargeur tant que la détente est pressée
+    if (this._trigger && this.state.weapon && this.state.weapon.auto) this._fire();
     this._runHooks('onUpdate', dt);
+    this._adaptQuality(dt);
     this._render();
   }
 
@@ -1113,6 +1142,37 @@ export class KreoRuntime {
     r.setRenderTarget(null);
     r.clear();
     r.render(this._postScene, this._postCam);
+  }
+
+  /* ---------- qualité adaptative ----------
+     Sur une machine modeste, mieux vaut un rendu plus simple qu'un jeu à
+     10 images/s. On baisse d'abord le post-traitement, puis la résolution. */
+  _adaptQuality(dt) {
+    if (this.autoQuality === false || !this.renderer) return;
+    this._fpsWin = (this._fpsWin || 0) + dt;
+    this._fpsFrames = (this._fpsFrames || 0) + 1;
+    if (this._fpsWin < 2) return;
+    const fps = this._fpsFrames / this._fpsWin;
+    this._fpsWin = 0;
+    this._fpsFrames = 0;
+    this.quality = this.quality == null ? 2 : this.quality;
+    if (fps < 34 && this.quality > 0) {
+      this.quality--;
+      if (this.quality === 1) this.setPostQuality(0);         // on coupe les effets
+      if (this.quality === 0) {                                // puis la résolution
+        this._pixelRatio = Math.max(0.6, (this._pixelRatio || 1) * 0.75);
+        this.renderer.setPixelRatio(this._pixelRatio);
+      }
+      if (this.host && this.host.onQuality) this.host.onQuality(this.quality);
+    } else if (fps > 55 && this.quality < 2) {
+      this.quality++;
+      if (this.quality === 2) this.setPostQuality(2);
+      if (this.quality === 1) {
+        this._pixelRatio = Math.min(1, (this._pixelRatio || 0.6) / 0.75);
+        this.renderer.setPixelRatio(this._pixelRatio);
+      }
+      if (this.host && this.host.onQuality) this.host.onQuality(this.quality);
+    }
   }
 
   _render() {

@@ -1773,14 +1773,19 @@ function onRtMouseDown(e) {
     if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
       try { canvas.requestPointerLock(); } catch (err) {}
     }
-    if (runtime.onFire) runtime.onFire();
+    // le verrou de souris n'est pas une condition pour tirer
+    if (runtime.onFireDown) runtime.onFireDown();
+    else if (runtime.onFire) runtime.onFire();
   }
   feedKeys();
 }
 function onRtMouseUp(e) {
   if (!rtKeys.mouse) rtKeys.mouse = {};
   rtKeys.mouse[e.button] = false;
-  if (runtime) feedKeys();
+  if (runtime) {
+    if (e.button === 0 && runtime.onFireUp) runtime.onFireUp();
+    feedKeys();
+  }
 }
 function bindRuntimeInput() {
   document.addEventListener('keydown', onRtKeyDown, true);
@@ -2185,6 +2190,8 @@ rt.textureLib = {};
   rt.textureLib[k] = makeTexture(k, 256, 4);
 });
 rt.build();
+// exposé pour le débogage d'un jeu livré (console du navigateur)
+window.KREO_RUNTIME = rt;
 
 function resize() {
   rt.resize(innerWidth, innerHeight, Math.min(devicePixelRatio, 2));
@@ -2210,12 +2217,24 @@ function feed() {
   rt.input.crouch = !!(keys.ControlLeft || keys.ControlRight || keys.KeyC);
 }
 let dragging = false;
+/**
+ * En file://, requestPointerLock échoue silencieusement (origine opaque) :
+ * exiger le verrou pour tirer rendrait le jeu injouable. On verrouille si on
+ * peut, et on tire dans tous les cas.
+ */
 canvas.addEventListener('mousedown', (e) => {
-  if (!document.pointerLockElement) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
-  if (e.button === 0 && rt.onFire) rt.onFire();
+  if (!document.pointerLockElement && canvas.requestPointerLock) {
+    try { canvas.requestPointerLock(); } catch (err) {}
+  }
+  if (e.button === 0 && rt.onFireDown) rt.onFireDown();
+  else if (e.button === 0 && rt.onFire) rt.onFire();
   if (e.button === 2) { rt.input.ads = true; }
 });
-canvas.addEventListener('mouseup', (e) => { if (e.button === 2) rt.input.ads = false; });
+canvas.addEventListener('mouseup', (e) => {
+  if (e.button === 0 && rt.onFireUp) rt.onFireUp();
+  if (e.button === 2) { rt.input.ads = false; }
+});
+addEventListener('blur', () => { if (rt && rt.onFireUp) rt.onFireUp(); });
 addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('mousemove', (e) => {
   if (!document.pointerLockElement) return;

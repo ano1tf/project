@@ -108,3 +108,37 @@ les vrais modules, WebGL non testable en sandbox).
 Voir la réponse : assets sous licence, capture de mouvement, direction
 artistique (DA) unifiée, level design itéré, backend/multijoueur,
 QA et certification. La technique ne représente qu'une partie du chemin.
+
+## Éditeur 3D (état actuel — 16/11/2026)
+
+L'éditeur de `editor/` n'est plus la v0 2D : c'est un éditeur 3D temps réel
+avec un runtime FPS, et il produit un jeu autonome.
+
+### Ce qui est livré
+- **Export jeu `.html`** : un fichier de ~2,3 Mo, double-cliquable, jouable
+  hors ligne (`file://`). three.js + runtime + scène + modèles sont inlinés.
+- **Runtime FPS complet** : vue subjective, viewmodel, sprint/accroupi/glissade,
+  coyote time, franchissement de marche, hitscan avec recul et gerbe,
+  munitions/rechargement, armes en données (pistolet, fusil, fusil à pompe),
+  ennemis IA, projectiles, particules, pickups, dégâts/régénération.
+- **Rendu** : IBL (PMREM) pour les métaux, textures procédurales (béton, métal,
+  grille, damier, bois, bruit), post-traitement (ACES filmique, sRGB, étalonnage,
+  vignette, grain, aberration chromatique pilotée par les dégâts).
+- **Audio procédural** : bus, compresseur, réverbération par IR générée ;
+  11 effets de jeu ; sons assignables par objet avec atténuation de distance.
+- **Niveaux multiples**, **prefabs**, **groupes et sélection multiple**,
+  **parenté persistée**, **débogueur** (colliders, rayons, états, valeurs).
+- **Ciel / soleil / ambiance / exposition** réglables, repris à l'identique
+  dans l'export.
+- **Scripting** : `api` fusionne l'API globale et l'objet courant ; `print()`
+  remonte dans la console ; erreurs attribuées à l'objet et au hook ;
+  14 extraits de code insérés en un clic.
+
+### Ce qui reste volontairement hors périmètre
+- **Assets 3D AAA** (modèles, armes, mocap) : intégrés plus tard par
+  l'utilisateur. Les systèmes qui les consommeront sont en place :
+  import GLB/GLTF, modèles embarqués en data URL, machines à états
+  d'animation par clip, viewmodel découplé.
+- **Comptes, backend, publication par lien, multijoueur** : nécessitent une
+  infrastructure, non commencés.
+- **Éditeur de blocs visuels** : pas encore commencé.
