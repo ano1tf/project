@@ -441,7 +441,9 @@ export class KreoRuntime {
       case 'point': g.add(this._light(p, rec)); break;
       case 'model':
         g.add(this._modelPlaceholder(p, rec));
-        if (p.modelData && T.GLTFLoader && p.modelData.slice(0, 4) === 'data') {
+        // `modelData` est une data URL (HTML autonome) OU un chemin relatif
+        // (`assets/models/x.glb`, export en dossier).
+        if (p.modelData && T.GLTFLoader) {
           // le modèle réel remplace le cube filaire dès qu'il est décodé
           try {
             new T.GLTFLoader().load(p.modelData, (gltf) => {

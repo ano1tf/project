@@ -2990,6 +2990,155 @@ document.getElementById('btnStart').addEventListener('click', () => {
 </html>`;
 }
 
+/* ---------- archive ZIP (sans dépendance) ----------
+   Livrer un dossier de jeu suppose plusieurs fichiers. On les empaquette
+   nous-mêmes (entrées stockées, sans compression) : aucun CDN, aucune
+   dépendance, et le zip reste lisible par tous les outils. */
+function makeZip(files) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  const CRC_TABLE = (function () {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(buf) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  const d = new Date();
+  const stampTime = ((d.getHours() & 0x1F) << 11) | ((d.getMinutes() & 0x3F) << 5) | (Math.floor(d.getSeconds() / 2) & 0x1F);
+  const stampDate = (((d.getFullYear() - 1980) & 0x7F) << 9) | (((d.getMonth() + 1) & 0x0F) << 5) | (d.getDate() & 0x1F);
+  let offset = 0;
+  files.forEach(function (f) {
+    const nameBytes = enc.encode(f.name);
+    const data = typeof f.data === 'string' ? enc.encode(f.data) : new Uint8Array(f.data);
+    const crc = crc32(data);
+    const local = new Uint8Array(30 + nameBytes.length);
+    const dv = new DataView(local.buffer);
+    dv.setUint32(0, 0x04034b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(10, stampTime, true);
+    dv.setUint16(12, stampDate, true);
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, data.length, true);
+    dv.setUint32(22, data.length, true);
+    dv.setUint16(26, nameBytes.length, true);
+    local.set(nameBytes, 30);
+    chunks.push(local, data);
+    const cd = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(cd.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, stampTime, true);
+    cv.setUint16(14, stampDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint32(42, offset, true);
+    cd.set(nameBytes, 46);
+    central.push(cd);
+    offset += local.length + data.length;
+  });
+  const cdSize = central.reduce(function (a, c) { return a + c.length; }, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  return new Blob(chunks.concat(central, [end]), { type: 'application/zip' });
+}
+
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+}
+
+function slugify(s) {
+  return String(s || 'mon-jeu').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'mon-jeu';
+}
+
+/**
+ * Export « dossier » : plusieurs fichiers au lieu d'un HTML géant.
+ *  - index.html, main.js, three.js, runtime.js : le jeu, éditable
+ *  - project.json : la scène, lisible et diffable
+ *  - assets/models/*.glb : les modèles, en fichiers réels (remplaçables)
+ * Sur un navigateur qui sait écrire un dossier, on l'écrit directement ;
+ * sinon on livre un .zip avec la même arborescence.
+ */
+async function exportFolder() {
+  try {
+    toast('ed.exporting', '⏳');
+    const [three, runtimeSrc, gltf] = await Promise.all([grabThreeSource(), grabRuntimeSource(), grabGltfSource()]);
+    three.gltf = gltf;
+    const slug = slugify(state.scene.name);
+
+    const data = JSON.parse(serialize());
+    const files = [];
+    const modelFiles = new Map(); // nom → chemin relatif
+    let i = 0;
+    MODELS.forEach(function (entry, name) {
+      if (!entry || !entry.dataUrl) return;
+      const m = /^data:[^;]*;base64,(.*)$/.exec(entry.dataUrl);
+      if (!m) return;
+      const bin = atob(m[1]);
+      const bytes = new Uint8Array(bin.length);
+      for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+      const safe = name.replace(/[^a-zA-Z0-9_-]+/g, '_') || ('modele' + (++i));
+      const path = 'assets/models/' + safe + '.glb';
+      modelFiles.set(name, path);
+      files.push({ name: path, data: bytes });
+    });
+    // les objets pointent vers les fichiers, plus vers des data URL
+    function patchLevel(level) {
+      (level.objects || []).forEach(function (o) {
+        if (o.type === 'model' && o.model && modelFiles.has(o.model)) o.modelData = modelFiles.get(o.model);
+      });
+      return level;
+    }
+    patchLevel(data);
+    if (Array.isArray(data.scenes)) data.scenes.forEach(function (sc) { if (sc.data) patchLevel(sc.data); });
+
+    const html = buildGameHtml(three, runtimeSrc, JSON.stringify(data), state.scene.name || 'Mon jeu', { externalModels: true });
+    files.push({ name: 'index.html', data: html });
+    files.push({ name: 'project.json', data: JSON.stringify(data, null, 2) });
+    files.push({ name: 'README.txt', data:
+      'KREO — ' + (state.scene.name || 'Mon jeu') + '\n\n' +
+      'Ouvrir index.html dans un navigateur (ou servir ce dossier :\n' +
+      '  python3 -m http.server 8000).\n\n' +
+      'Fichiers\n' +
+      '  index.html    page du jeu\n' +
+      '  project.json  la scène (modifiable, réimportable dans l\'éditeur)\n' +
+      '  assets/       modèles GLB (remplacer un fichier suffit)\n' });
+
+    // Toujours un .zip : il contient l'arborescence réelle, se décompresse
+    // partout (Finder, Explorer, unzip) et ne dépend d'aucune permission.
+    downloadBlob(makeZip(files), slug + '.zip');
+    log('🗜 ' + t('ed.exportZipOk') + ' · ' + files.length + ' fichiers', 'ok');
+    toast('ed.exportZipOk', '🗜');
+  } catch (e) {
+    console.error(e);
+    toast('ed.exportKo', '⚠️');
+    log('export dossier · ' + e.message, 'err');
+  }
+}
+
 async function exportGame() {
   try {
     toast('ed.exporting', '⏳');
@@ -3534,6 +3683,7 @@ if ($('#btnPrefabScene')) $('#btnPrefabScene').addEventListener('click', functio
 if (typeof renderPrefabs === 'function') renderPrefabs();
 if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
 $('#btnExportGame').addEventListener('click', exportGame);
+if ($('#btnExportFolder')) $('#btnExportFolder').addEventListener('click', exportFolder);
 $('#btnImport').addEventListener('click', importFile);
 $('#btnDemo').addEventListener('click', demoScene);
 $('#btnHelp').addEventListener('click', function () { $('#modalHelp').classList.add('open'); });
@@ -3619,6 +3769,7 @@ window.KREO_EDITOR = {
   load: function (json) { rebuildFromData(typeof json === 'string' ? JSON.parse(json) : json); },
   save: save,
   exportGame: exportGame,
+  exportFolder: exportFolder,
   exportProject: exportFile,
   demo: demoScene,
   newProject: newProject
