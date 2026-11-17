@@ -396,7 +396,58 @@ export function nearestVertexOnScreen(mesh, matrixWorld, camera, ndc, maxPx, wid
   return best;
 }
 
-export const MESH_PRIMS = { box: boxMesh, plane: planeMesh, cylinder: cylinderMesh, sphere: sphereMesh };
+/** Sphère UV classique : anneaux quadrangulaires, pratique pour extruder/subdiviser. */
+export function uvSphereMesh(radius = 1, segments = 32, rings = 16) {
+  const verts = [], faces = [];
+  const n = Math.max(8, segments | 0), m = Math.max(4, rings | 0);
+  verts.push([0, radius, 0]); // pôle nord
+  for (let j = 1; j < m; j++) {
+    const phi = Math.PI * j / m;
+    for (let i = 0; i < n; i++) {
+      const theta = 2 * Math.PI * i / n;
+      verts.push([radius * Math.sin(phi) * Math.cos(theta), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta)]);
+    }
+  }
+  const south = verts.length;
+  verts.push([0, -radius, 0]);
+  for (let i = 0; i < n; i++) faces.push([0, 1 + i, 1 + (i + 1) % n]);
+  for (let j = 0; j < m - 2; j++) {
+    const row = 1 + j * n, next = row + n;
+    for (let i = 0; i < n; i++) {
+      const k = (i + 1) % n;
+      faces.push([row + i, next + i, next + k, row + k]);
+    }
+  }
+  const last = 1 + (m - 2) * n;
+  for (let i = 0; i < n; i++) faces.push([last + i, south, last + (i + 1) % n]);
+  return { verts, faces };
+}
+
+/** Tore polygonal, orienté comme le tore de Blender (axe principal Y). */
+export function torusMesh(major = 0.8, minor = 0.25, segments = 32, rings = 12) {
+  const verts = [], faces = [];
+  const n = Math.max(8, segments | 0), m = Math.max(6, rings | 0);
+  for (let i = 0; i < n; i++) {
+    const u = 2 * Math.PI * i / n;
+    for (let j = 0; j < m; j++) {
+      const v = 2 * Math.PI * j / m;
+      const r = major + minor * Math.cos(v);
+      verts.push([r * Math.cos(u), minor * Math.sin(v), r * Math.sin(u)]);
+    }
+  }
+  for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) {
+    const a = i * m + j, b = ((i + 1) % n) * m + j;
+    faces.push([a, b, ((i + 1) % n) * m + (j + 1) % m, i * m + (j + 1) % m]);
+  }
+  return { verts, faces };
+}
+
+export const MESH_PRIMS = {
+  box: boxMesh, plane: planeMesh, cylinder: cylinderMesh,
+  sphere: sphereMesh, icoSphere: sphereMesh, uvSphere: uvSphereMesh,
+  cone: () => cylinderMesh(0.65, 0, 2, 24),
+  torus: torusMesh
+};
 
 /* --------------------------------------------------------------- terrain */
 

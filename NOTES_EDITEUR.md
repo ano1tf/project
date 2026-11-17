@@ -129,6 +129,7 @@ avec un runtime FPS, et il produit un jeu autonome.
 - **Niveaux multiples**, **prefabs embarqués dans le projet** (transportés avec le `.kreo3d.json`), **groupes et sélection multiple**,
   **parenté persistée**, **débogueur** (colliders, rayons, états, valeurs, objectifs, vagues et erreurs de scripts).
 - **Console de commandes** avec `help`, `select`, `tp`, `spawn`, `delete`, `play`/`stop`, `debug`, `stats`, `clean`, `save` et `export` ; historique ↑/↓.
+- **Menu Ajouter (Maj+A)** inspiré de Shift+A dans Blender : primitives de maillage éditables (cube, plan, sphère UV, icosphère, cylindre, cône, tore), objets de jeu, terrain, lumières et import GLB ; recherche intégrée, focus automatique et édition directe (extrusion, inset, subdivision, boucle, soudure, miroir, lissage).
 - **Ciel / soleil / ambiance / exposition** réglables, repris à l'identique
   dans l'export.
 - **Scripting** : `api` fusionne l'API globale et l'objet courant ; `print()`

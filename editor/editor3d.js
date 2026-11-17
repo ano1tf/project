@@ -409,7 +409,7 @@ function mat(opts) {
 
 const KNOWN_TYPES = new Set(['cube', 'sphere', 'cylinder', 'cone', 'torus', 'plane',
   'mesh', 'terrain', 'model', 'light', 'sun', 'point', 'player', 'coin', 'weapon',
-  'enemy', 'goal', 'checkpoint', 'group']);
+  'enemy', 'goal', 'checkpoint', 'pickup', 'group']);
 
 function createObject(type, opts) {
   opts = opts || {};
@@ -562,6 +562,13 @@ function createObject(type, opts) {
     case 'coin': {
       obj3d = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.22, 16, 36), mat({
         color: opts.color || 0xF5C542, metalness: 0.85, roughness: 0.25, emissive: 0x443300
+      }));
+      rec.collidable = false;
+      break;
+    }
+    case 'pickup': {
+      obj3d = new THREE.Mesh(new THREE.OctahedronGeometry(0.65, 0), mat({
+        color: opts.color || 0x4FD1C5, metalness: 0.35, roughness: 0.35, emissive: 0x103D38
       }));
       rec.collidable = false;
       break;
@@ -950,6 +957,7 @@ function addObject(type, opts) {
   markDirty();
   toast('ed.newObj', '＋');
   log('+ ' + rec.name);
+  return rec;
 }
 
 /* ================= Modélisation =================
@@ -1775,14 +1783,14 @@ function renderInspector() {
   $('#inCollidable').checked = rec.collidable !== false;
   $('#speedField').hidden = rec.type !== 'player';
   $('#jumpField').hidden = rec.type !== 'player';
-  $('#valueField').hidden = rec.type !== 'coin';
+  $('#valueField').hidden = rec.type !== 'coin' && rec.type !== 'pickup';
   if (rec.type === 'player') {
     $('#inSpeed').value = rec.speed;
     $('#speedVal').textContent = rec.speed;
     $('#inJump').value = rec.jump;
     $('#jumpVal').textContent = rec.jump;
   }
-  if (rec.type === 'coin') $('#inValue').value = rec.value;
+  if (rec.type === 'coin' || rec.type === 'pickup') $('#inValue').value = rec.value;
 
   const isEnemy = rec.type === 'enemy';
   ['#enemyBlock', '#enemyHpField', '#enemyRangeField', '#enemyVisionField', '#enemySpeedField', '#enemyDmgField'].forEach(function (sel) {
@@ -3828,6 +3836,16 @@ document.addEventListener('keydown', function (e) {
   state.keys[e.code.toLowerCase()] = true;
   if (isTyping(e)) return;
 
+  if (!state.play && e.shiftKey && key === 'a' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    setAddMenuOpen($('#addMenu').hidden);
+    return;
+  }
+  if (key === 'escape' && $('#addMenu') && !$('#addMenu').hidden) {
+    setAddMenuOpen(false);
+    return;
+  }
+
   if (e.code === 'Space') {
     e.preventDefault();
     if (!state.play) togglePlay();
@@ -3997,6 +4015,75 @@ $('#btnReplay2').addEventListener('click', function () { stopPlay(); startPlay()
 $('#btnBackEdit').addEventListener('click', stopPlay);
 $('#btnBackEdit2').addEventListener('click', stopPlay);
 $('#btnDelete').addEventListener('click', function () { deleteSelection(); });
+function setAddMenuOpen(open) {
+  const menu = $('#addMenu'), trigger = $('#btnAddMenu');
+  if (!menu || !trigger || (open && state.play)) return;
+  menu.hidden = !open;
+  trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    const search = $('#addMenuSearch');
+    if (search) { search.value = ''; filterAddMenu(''); search.focus(); }
+  }
+}
+
+function filterAddMenu(query) {
+  const q = String(query || '').trim().toLocaleLowerCase();
+  $$('.add-menu-group').forEach(function (group) {
+    let count = 0;
+    $$('button[data-menu-type],button[data-menu-prim]', group).forEach(function (item) {
+      const hay = (item.textContent + ' ' + (item.getAttribute('data-search') || '')).toLocaleLowerCase();
+      const visible = !q || hay.indexOf(q) !== -1;
+      item.classList.toggle('filtered-out', !visible);
+      if (visible) count++;
+    });
+    group.classList.toggle('filtered-out', count === 0);
+  });
+}
+
+function addFromMenu(item) {
+  if (state.play) return;
+  const prim = item.getAttribute('data-menu-prim');
+  const type = item.getAttribute('data-menu-type');
+  const name = item.querySelector('span:last-child')?.textContent.trim();
+  let created = null;
+  if (prim) {
+    const factory = MESH_PRIMS[prim];
+    if (!factory) { log('Primitive indisponible · ' + prim, 'err'); return; }
+    created = addObject('mesh', { mesh: factory(), name: name || undefined });
+    if (created) meshState.prim = prim;
+  } else if (type === 'model') {
+    pickModel();
+  } else if (type) {
+    created = addObject(type, { name: name || undefined });
+  }
+  // Dans l'esprit du curseur 3D de Blender, le nouvel objet devient le point
+  // d'attention : cadre-le immédiatement pour qu'il soit visible/éditable.
+  if (created) focusSelection();
+  setAddMenuOpen(false);
+}
+
+if ($('#btnAddMenu')) $('#btnAddMenu').addEventListener('click', function () {
+  setAddMenuOpen($('#addMenu').hidden);
+});
+if ($('#btnCloseAddMenu')) $('#btnCloseAddMenu').addEventListener('click', function () { setAddMenuOpen(false); });
+if ($('#addMenuSearch')) {
+  $('#addMenuSearch').addEventListener('input', function (e) { filterAddMenu(e.target.value); });
+  $('#addMenuSearch').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { setAddMenuOpen(false); $('#btnAddMenu').focus(); e.stopPropagation(); }
+    if (e.key === 'Enter') {
+      const first = $('#addMenuContent button:not(.filtered-out)');
+      if (first) { e.preventDefault(); addFromMenu(first); }
+    }
+  });
+}
+$$('#addMenuContent button[data-menu-type], #addMenuContent button[data-menu-prim]').forEach(function (item) {
+  item.addEventListener('click', function () { addFromMenu(item); });
+});
+document.addEventListener('pointerdown', function (e) {
+  const menu = $('#addMenu');
+  if (menu && !menu.hidden && !menu.contains(e.target) && !$('#btnAddMenu').contains(e.target)) setAddMenuOpen(false);
+});
+
 if ($('#btnGroup')) $('#btnGroup').addEventListener('click', groupSelection);
 if ($('#btnAlign')) $('#btnAlign').addEventListener('click', openAlignMenu);
 if ($('#btnArray')) $('#btnArray').addEventListener('click', openArrayDialog);

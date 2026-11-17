@@ -156,6 +156,35 @@ window.KREO_I18N = {
 
     /* ---------- Éditeur ---------- */
     'ed.title': 'Éditeur KREO',
+    'ed.addMenu': 'Ajouter',
+    'ed.addMenuTooltip': 'Ajouter un objet (Maj+A)',
+    'ed.menuCube': 'Cube',
+    'ed.menuPlane': 'Plan',
+    'ed.menuCylinder': 'Cylindre',
+    'ed.menuCone': 'Cône',
+    'ed.menuTorus': 'Tore',
+    'ed.menuPlayer': 'Joueur',
+    'ed.menuEnemy': 'Ennemi',
+    'ed.menuGoal': 'Objectif',
+    'ed.menuCheckpoint': 'Checkpoint',
+    'ed.menuCoin': 'Pièce',
+    'ed.menuWeapon': 'Arme',
+    'ed.menuTerrain': 'Terrain',
+    'ed.addMenuTitle': 'Ajouter à la scène',
+    'ed.addMenuHint': 'Choisis un objet à créer · Maj+A',
+    'ed.addSearch': 'Rechercher un objet…',
+    'ed.addMesh': 'Maillage éditable',
+    'ed.addGameObjects': 'Objets de jeu',
+    'ed.addSceneObjects': 'Environnement & lumières',
+    'ed.uvSphere': 'Sphère UV',
+    'ed.icoSphere': 'Icosphère',
+    'ed.addSpawn': 'Point de départ',
+    'ed.pickup': 'Bonus',
+    'ed.addPickup': 'Bonus',
+    'ed.addSun': 'Soleil',
+    'ed.addPointLight': 'Lumière ponctuelle',
+    'ed.importModel': 'Importer un modèle…',
+    'ed.addMenuPlacement': 'Les objets sont créés dans la scène et sélectionnés pour édition.',
     'ed.back': 'Retour au site',
     'ed.play': 'Jouer',
     'ed.stop': 'Arrêter',
@@ -476,6 +505,35 @@ window.KREO_I18N = {
 
     /* ---------- Editor ---------- */
     'ed.title': 'KREO Editor',
+    'ed.addMenu': 'Add',
+    'ed.addMenuTooltip': 'Add an object (Shift+A)',
+    'ed.menuCube': 'Cube',
+    'ed.menuPlane': 'Plane',
+    'ed.menuCylinder': 'Cylinder',
+    'ed.menuCone': 'Cone',
+    'ed.menuTorus': 'Torus',
+    'ed.menuPlayer': 'Player',
+    'ed.menuEnemy': 'Enemy',
+    'ed.menuGoal': 'Objective',
+    'ed.menuCheckpoint': 'Checkpoint',
+    'ed.menuCoin': 'Coin',
+    'ed.menuWeapon': 'Weapon',
+    'ed.menuTerrain': 'Terrain',
+    'ed.addMenuTitle': 'Add to Scene',
+    'ed.addMenuHint': 'Choose an object to create · Shift+A',
+    'ed.addSearch': 'Search objects…',
+    'ed.addMesh': 'Editable mesh',
+    'ed.addGameObjects': 'Game objects',
+    'ed.addSceneObjects': 'Environment & lights',
+    'ed.uvSphere': 'UV Sphere',
+    'ed.icoSphere': 'Icosphere',
+    'ed.addSpawn': 'Spawn point',
+    'ed.pickup': 'Pickup',
+    'ed.addPickup': 'Pickup',
+    'ed.addSun': 'Sun',
+    'ed.addPointLight': 'Point light',
+    'ed.importModel': 'Import model…',
+    'ed.addMenuPlacement': 'Objects are added to the scene and selected for editing.',
     'ed.back': 'Back to site',
     'ed.play': 'Play',
     'ed.stop': 'Stop',
@@ -581,6 +639,20 @@ window.KREO_I18N = {
       var v = dict[lang][el.getAttribute('data-i18n')];
       if (v != null) el.textContent = v;
     });
+    document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+      var v = dict[lang][el.getAttribute('data-i18n-title')];
+      if (v != null) el.setAttribute('title', v);
+    });
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(function (el) {
+      var v = dict[lang][el.getAttribute('data-i18n-aria-label')];
+      if (v != null) el.setAttribute('aria-label', v);
+    });
+
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(function (el) {
+      var v = dict[lang][el.getAttribute('data-i18n-placeholder')];
+      if (v != null) el.setAttribute('placeholder', v);
+    });
+
     document.querySelectorAll('[data-i18n-html]').forEach(function (el) {
       var v = dict[lang][el.getAttribute('data-i18n-html')];
       if (v != null) el.innerHTML = v;

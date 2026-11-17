@@ -676,3 +676,47 @@ kbd {
   font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
 }
 .console-input input::placeholder { color: rgba(255,255,255,.28); }
+
+/* ============ Menu Ajouter (inspiration Shift+A de Blender) ============ */
+.add-menu-trigger { color: var(--txt); border-color: rgba(139,124,255,.38); background: rgba(139,124,255,.09); }
+.add-menu-trigger kbd { margin-left: 3px; padding: 2px 4px; border: 1px solid var(--line-2); border-radius: 4px; color: var(--faint); font-size: 9px; }
+.add-menu-trigger[aria-expanded="true"] { color: #fff; background: var(--acc); }
+.add-menu {
+  position: fixed; z-index: 80; top: 60px; left: min(280px, 20vw);
+  width: min(570px, calc(100vw - 300px)); max-height: min(690px, calc(100vh - 82px));
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--line-2); border-radius: 13px;
+  background: rgba(29,31,38,.98); box-shadow: 0 22px 70px rgba(0,0,0,.62), 0 2px 8px rgba(0,0,0,.35);
+  backdrop-filter: blur(18px); animation: addMenuIn .12s ease-out;
+}
+.add-menu[hidden] { display: none !important; }
+@keyframes addMenuIn { from { opacity: 0; transform: translateY(-5px) scale(.99); } to { opacity: 1; transform: none; } }
+.add-menu-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px; }
+.add-menu-head strong { display:block; font-size:13px; font-weight:600; }
+.add-menu-head small { display:block; margin-top:3px; color:var(--faint); font-size:10px; }
+.add-menu-close { width:26px; height:26px; border:0; border-radius:7px; background:transparent; color:var(--muted); font-size:20px; line-height:1; }
+.add-menu-close:hover { background:var(--panel-3); color:var(--txt); }
+.add-menu-search { display:flex; align-items:center; gap:8px; margin:0 13px 8px; padding:0 9px; height:35px; flex:none; border:1px solid var(--line-2); border-radius:8px; background:#17191f; }
+.add-menu-search svg { width:15px; height:15px; color:var(--faint); flex:none; }
+.add-menu-search input { width:100%; border:0; outline:0; background:none; font-size:11px; }
+.add-menu-search input::placeholder { color:var(--faint); }
+.add-menu-search kbd { flex:none; color:var(--faint); font-size:9px; }
+.add-menu-content { padding:0 13px 10px; overflow-y:auto; }
+.add-menu-group { padding:8px 0 10px; border-top:1px solid var(--line); }
+.add-menu-group h3 { margin:0 0 7px 2px; color:var(--acc); font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; }
+.add-menu-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+.add-menu-grid button { display:flex; align-items:center; gap:8px; min-width:0; height:34px; padding:0 9px; border:1px solid transparent; border-radius:7px; background:transparent; color:var(--muted); text-align:left; font-size:10.5px; white-space:nowrap; }
+.add-menu-grid button:hover, .add-menu-grid button:focus-visible { outline:0; border-color:rgba(139,124,255,.4); background:rgba(139,124,255,.12); color:var(--txt); }
+.add-glyph { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; flex:none; border-radius:5px; background:var(--panel-3); color:#b8adff; font-size:14px; }
+.add-menu-grid button:hover .add-glyph { background:rgba(139,124,255,.25); color:#fff; }
+.add-menu-foot { display:flex; justify-content:space-between; gap:10px; padding:8px 15px; border-top:1px solid var(--line); background:rgba(0,0,0,.12); color:var(--faint); font-size:9px; }
+.add-menu-foot span:last-child { flex:none; color:var(--muted); }
+.add-menu-group.filtered-out, .add-menu-grid button.filtered-out { display:none; }
+@media (max-width: 760px) {
+  .add-menu { left:8px; width:min(570px,calc(100vw - 16px)); }
+  .add-menu-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .add-menu-trigger kbd { display:none; }
+}
+.add-menu-trigger .tb-label, .add-menu-trigger kbd { display:none; }
+.panel-head .add-menu-trigger { width:25px; height:25px; padding:0; justify-content:center; border:1px solid var(--line-2); border-radius:7px; color:var(--muted); }
+.panel-head .add-menu-trigger:hover { color:var(--txt); border-color:var(--acc); }
