@@ -126,8 +126,9 @@ avec un runtime FPS, et il produit un jeu autonome.
   vignette, grain, aberration chromatique pilotée par les dégâts).
 - **Audio procédural** : bus, compresseur, réverbération par IR générée ;
   11 effets de jeu ; sons assignables par objet avec atténuation de distance.
-- **Niveaux multiples**, **prefabs**, **groupes et sélection multiple**,
-  **parenté persistée**, **débogueur** (colliders, rayons, états, valeurs).
+- **Niveaux multiples**, **prefabs embarqués dans le projet** (transportés avec le `.kreo3d.json`), **groupes et sélection multiple**,
+  **parenté persistée**, **débogueur** (colliders, rayons, états, valeurs, objectifs, vagues et erreurs de scripts).
+- **Console de commandes** avec `help`, `select`, `tp`, `spawn`, `delete`, `play`/`stop`, `debug`, `stats`, `clean`, `save` et `export` ; historique ↑/↓.
 - **Ciel / soleil / ambiance / exposition** réglables, repris à l'identique
   dans l'export.
 - **Scripting** : `api` fusionne l'API globale et l'objet courant ; `print()`

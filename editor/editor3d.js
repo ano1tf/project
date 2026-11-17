@@ -41,7 +41,9 @@ const state = {
   // Niveaux : chaque entrée garde son propre JSON d'objets. Le niveau actif
   // est celui qu'on édite ; l'export les embarque tous.
   scenes: [{ name: 'Ma scène', data: null }],
-  sceneIndex: 0
+  sceneIndex: 0,
+  // Bibliothèque embarquée au projet pour qu'un .kreo3d.json reste autonome.
+  prefabs: []
 };
 const view = { snap: true, grid: true, mode: 'translate' };
 
@@ -307,7 +309,8 @@ function serialize() {
     scene: state.scene,
     objects: Array.from(reg.values()).map(recToProps),
     scenes: scenes,
-    active: state.sceneIndex
+    active: state.sceneIndex,
+    prefabs: state.prefabs
   });
 }
 
@@ -837,10 +840,11 @@ function deleteObject(id, skipHistory) {
 const PREFABS_KEY = 'kreo-prefabs3d';
 
 function loadPrefabs() {
-  try { return JSON.parse(localStorage.getItem(PREFABS_KEY) || '[]'); } catch (e) { return []; }
+  return Array.isArray(state.prefabs) ? state.prefabs : [];
 }
 function storePrefabs(list) {
-  try { localStorage.setItem(PREFABS_KEY, JSON.stringify(list)); } catch (e) {}
+  state.prefabs = list.slice(0, 40);
+  markDirty();
 }
 
 /** Enregistre la sélection (ou tout le niveau) comme prefab. */
@@ -2293,6 +2297,9 @@ function makeHost() {
     onError: function (msg, id, hook) {
       toast('⚠️ ' + msg, '⚠️');
       log('⚠️ code · ' + msg, 'err');
+      // trace conservée : la console d'un jeu livré est souvent fermée
+      scriptErrorLog.push({ t: Date.now(), msg: String(msg), id: id, hook: hook });
+      if (scriptErrorLog.length > 50) scriptErrorLog.shift();
       // on sélectionne l'objet fautif : on voit tout de suite son code
       if (id && !state.play) select(id);
     },
@@ -2460,6 +2467,20 @@ function renderDebug() {
   lines.push('sol ' + (p.grounded ? 'oui' : 'non') + ' · vitesse ' + (p.speedXZ ? p.speedXZ.toFixed(2) : '0') + ' m/s' + (p.crouched ? ' · accroupi' : '') + (p.sliding ? ' · glissade' : ''));
   lines.push('<b>VIE</b> ' + st.health + '/' + st.maxHealth + ' · <b>ARME</b> ' + (st.weapon ? st.weapon.name || st.weapon.id : '—') + ' · ' + st.ammo + '/' + st.ammoMax);
   lines.push('<b>SCORE</b> ' + st.score + ' · tués ' + st.kills + ' · niveau ' + (runtime.levelIndex + 1) + '/' + runtime.levelCount);
+  // Partie en cours : vies, vagues, objectifs. Sans ça, un blocage de partie
+  // (« pourquoi ça ne se termine pas ? ») reste inexplicable.
+  lines.push('<b>PARTIE</b> vies ' + (st.lives != null ? st.lives : '—') +
+    ' · vague ' + (st.wave || 0) + (runtime._wavePending ? ' (suivante dans ' + Math.max(0, runtime._waveT).toFixed(1) + ' s)' : '') +
+    ' · ennemis ' + (st.enemiesLeft != null ? st.enemiesLeft : '—'));
+  if (runtime._objectives && runtime._objectives.length) {
+    lines.push('<b>OBJECTIFS</b> ' + st.objectivesDone + '/' + st.objectivesTotal + ' · ' +
+      runtime._objectives.map(function (o) {
+        return (o.done ? '✓ ' : '· ') + escapeHtml(o.label) + (o.kind === 'kills' ? ' (' + o.target + ' KO)' : '');
+      }).join(' · '));
+  }
+  if (runtime.checkpoint) {
+    lines.push('<b>REPRISE</b> ' + runtime.checkpoint.x.toFixed(1) + ', ' + runtime.checkpoint.z.toFixed(1));
+  }
   const live = Array.from(runtime.entities.values()).filter(function (r) { return r.type === 'enemy'; });
   if (live.length) {
     lines.push('<b>ENNEMIS</b>');
@@ -2474,6 +2495,13 @@ function renderDebug() {
     lines.push('<b>DERNIER RAYON</b> ' + (r.hit ? 'touché à ' + r.dist.toFixed(2) + ' m' : 'libre') +
       (r.hit && r.tag ? ' (' + r.tag + ')' : ''));
   }
+  if (runtime.scriptErrors || scriptErrorLog.length) {
+    lines.push('<b>ERREURS DE SCRIPT</b> ' + (runtime.scriptErrors || 0) +
+      (scriptErrorLog.length ? ' · dernière : ' + escapeHtml(scriptErrorLog[scriptErrorLog.length - 1].msg.slice(0, 90)) : ''));
+  }
+  const byType = {};
+  runtime.entities.forEach(function (r) { byType[r.type] = (byType[r.type] || 0) + 1; });
+  lines.push('<b>SCÈNE</b> ' + Object.keys(byType).sort().map(function (k) { return k + ' ×' + byType[k]; }).join(' · '));
   if (debugWatch) {
     lines.push('<b>SCRIPT</b> ' + escapeHtml(debugWatch));
   }
@@ -2482,6 +2510,8 @@ function renderDebug() {
 }
 
 let debugWatch = '';
+/** Erreurs de script rencontrées pendant l'aperçu (consultables après coup). */
+const scriptErrorLog = [];
 
 function toggleDebug() {
   const el = $('#dbgOverlay');
@@ -3266,6 +3296,139 @@ async function exportFolder() {
   }
 }
 
+/* ================= Console de commandes =================
+   Taper `tp 0 2 0` ou `select Tour` doit être plus rapide que de chercher
+   l'objet dans l'arbre. Les commandes parlent aux mêmes fonctions que l'UI :
+   aucune logique dupliquée, donc aucun risque de divergence. */
+const COMMANDS = {
+  help: function () {
+    return ['Commandes :',
+      '  select <nom|id>      sélectionner un objet',
+      '  tp <x> <y> <z>       téléporter le joueur / l\'objet sélectionné',
+      '  spawn <type> [nom]   créer un objet (cube, enemy, goal, checkpoint…)',
+      '  delete               supprimer la sélection',
+      '  play / stop          lancer ou arrêter l\'aperçu',
+      '  debug                basculer l\'overlay de diagnostic',
+      '  stats                résumé de la scène',
+      '  clean                supprimer les maillages personnalisés vides',
+      '  save                 enregistrer le projet',
+      '  export               exporter le jeu (HTML autonome)'
+    ].join('\n');
+  },
+  select: function (args) {
+    const q = args.join(' ').toLowerCase();
+    if (!q) return 'usage : select <nom|id>';
+    const list = Array.from(reg.values());
+    const hit = list.find(function (r) { return r.id === q; }) ||
+      list.find(function (r) { return (r.name || '').toLowerCase() === q; }) ||
+      list.find(function (r) { return (r.name || '').toLowerCase().indexOf(q) !== -1; });
+    if (!hit) return 'aucun objet pour « ' + q + ' »';
+    select(hit.id);
+    focusSelection();
+    return 'sélectionné · ' + hit.name + ' (' + hit.type + ')';
+  },
+  tp: function (args) {
+    const n = args.map(Number);
+    if (n.length < 3 || n.some(function (v) { return !isFinite(v); })) return 'usage : tp <x> <y> <z>';
+    const rec = findRec(state.selectedId);
+    if (state.play && runtime) {
+      runtime.player.pos.set(n[0], n[1], n[2]);
+      runtime.player.vel.set(0, 0, 0);
+      return 'joueur téléporté en ' + n.join(', ');
+    }
+    if (!rec) return 'aucune sélection : sélectionne un objet ou lance l\'aperçu';
+    pushHistory();
+    rec.obj3d.position.set(n[0], n[1], n[2]);
+    if (rec.parent && rec.parentOffset) rec.parentOffset = [n[0], n[1], n[2]];
+    syncMultiTransform();
+    armSnap();
+    renderInspector();
+    return rec.name + ' → ' + n.join(', ');
+  },
+  spawn: function (args) {
+    const type = (args[0] || 'cube').toLowerCase();
+    if (!KNOWN_TYPES.has(type)) return 'type inconnu · ' + type;
+    pushHistory();
+    const target = camera.position.clone();
+    target.y = 0;
+    const id = addObject(type, { name: args.slice(1).join(' ') || undefined, position: [target.x, 0, target.z] });
+    if (id) select(id);
+    return 'créé · ' + type + ' ' + (args.slice(1).join(' ') || '');
+  },
+  delete: function () {
+    if (!state.selectedId) return 'aucune sélection';
+    const r = findRec(state.selectedId);
+    const name = r ? r.name : '';
+    deleteSelection();
+    return 'supprimé · ' + name;
+  },
+  play: function () { if (!state.play) startPlay(); return 'aperçu lancé'; },
+  stop: function () { if (state.play) stopPlay(); return 'aperçu arrêté'; },
+  debug: function () { toggleDebug(); return 'debug basculé'; },
+  stats: function () {
+    const byType = {};
+    reg.forEach(function (r) { byType[r.type] = (byType[r.type] || 0) + 1; });
+    const meshes = Array.from(reg.values()).filter(function (r) { return r.mesh; });
+    return Object.keys(byType).sort().map(function (k) { return k + ' ×' + byType[k]; }).join(' · ') +
+      '\nmaillages ' + meshes.length + ' · sommets ' +
+      meshes.reduce(function (a, r) { return a + (r.mesh.verts ? r.mesh.verts.length : 0); }, 0) +
+      ' · niveaux ' + state.scenes.length;
+  },
+  clean: function () {
+    // objets sans géométrie visible : modèles perdus, maillages vidés
+    let removed = 0;
+    Array.from(reg.values()).forEach(function (r) {
+      if (r.type === 'mesh' && r.mesh && (!r.mesh.verts || !r.mesh.verts.length)) { deleteObject(r.id, true); removed++; }
+    });
+    return removed + ' objet(s) vide(s) supprimé(s)';
+  },
+  save: function () { save(); return 'projet enregistré'; },
+  export: function () { exportGame(); return 'export lancé'; }
+};
+
+function runCommand(line) {
+  const raw = String(line || '').trim();
+  if (!raw) return '';
+  const parts = raw.split(/\s+/);
+  const name = parts[0].toLowerCase();
+  const fn = COMMANDS[name];
+  if (!fn) return 'commande inconnue · ' + name + ' (tape help)';
+  try {
+    return String(fn(parts.slice(1)) || '');
+  } catch (e) {
+    return 'erreur · ' + e.message;
+  }
+}
+
+function initConsole() {
+  const input = $('#consoleInput');
+  if (!input) return;
+  const hist = [];
+  let hi = -1;
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      const v = input.value;
+      if (!v.trim()) return;
+      hist.push(v); hi = -1;
+      log('› ' + v, 'warn');
+      const out = runCommand(v);
+      if (out) out.split('\n').forEach(function (l) { log('  ' + l); });
+      input.value = '';
+      e.stopPropagation();
+    } else if (e.key === 'ArrowUp') {
+      if (!hist.length) return;
+      hi = hi < 0 ? hist.length - 1 : Math.max(0, hi - 1);
+      input.value = hist[hi]; e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      if (hi < 0) return;
+      hi = Math.min(hist.length - 1, hi + 1);
+      input.value = hist[hi]; e.preventDefault();
+    }
+  });
+  // les raccourcis clavier de l'éditeur ne doivent pas tirer pendant la saisie
+  input.addEventListener('keyup', function (e) { e.stopPropagation(); });
+}
+
 async function exportGame() {
   try {
     toast('ed.exporting', '⏳');
@@ -3333,6 +3496,12 @@ function importFile() {
 }
 
 function rebuildFromData(data, keepHistory, keepSceneList) {
+  // Les prefabs appartiennent au projet, pas à un niveau. Lors d'un simple
+  // changement de niveau on conserve la bibliothèque ; lors d'un import on
+  // restaure celle du fichier (ou migre l'ancienne bibliothèque locale).
+  if (!keepSceneList) {
+    state.prefabs = Array.isArray(data.prefabs) ? data.prefabs : [];
+  }
   // Purge
   Array.from(reg.values()).forEach(function (rec) {
     scene3d.remove(rec.obj3d);
@@ -3414,6 +3583,7 @@ function rebuildFromData(data, keepHistory, keepSceneList) {
   renderHierarchy();
   renderInspector();
   if (typeof renderScenes === 'function') renderScenes();
+  if (typeof renderPrefabs === 'function') renderPrefabs();
   markDirty();
 }
 
@@ -3460,7 +3630,8 @@ function demoScene() {
   ];
   rebuildFromData({
     scene: { name: 'Démo KREO', fog: true, fogColor: '#B9C9E2' },
-    objects: objs
+    objects: objs,
+    prefabs: state.prefabs
   });
   toast('ed.demoLoaded', '⭐');
   log('⭐ ' + t('ed.demoLoaded'), 'ok');
@@ -3809,6 +3980,7 @@ if ($('#btnPrefab')) $('#btnPrefab').addEventListener('click', function () { sav
 if ($('#btnPrefabScene')) $('#btnPrefabScene').addEventListener('click', function () { savePrefab(true); });
 if (typeof renderPrefabs === 'function') renderPrefabs();
 if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+initConsole();
 $('#btnExportGame').addEventListener('click', exportGame);
 if ($('#btnExportFolder')) $('#btnExportFolder').addEventListener('click', exportFolder);
 $('#btnImport').addEventListener('click', importFile);
@@ -3928,6 +4100,12 @@ setInterval(function () {
     if (raw) {
       const data = JSON.parse(raw);
       if (data && Array.isArray(data.objects) && (!data.objects.length || data.objects[0].position)) {
+        // Migration unique d'anciens projets : leur bibliothèque séparée devient
+        // partie intégrante du fichier. Les projets neufs restent isolés.
+        if (!Array.isArray(data.prefabs)) {
+          try { data.prefabs = JSON.parse(localStorage.getItem(PREFABS_KEY) || '[]'); }
+          catch (e) { data.prefabs = []; }
+        }
         rebuildFromData(data);
         loaded = true;
         log('📂 ' + (state.scene.name || ''));

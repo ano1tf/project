@@ -664,3 +664,15 @@ kbd {
 
 .hud-pill.hud-wave:empty, .hud-wave:has(span:empty) { display: none; }
 .hud-wave span { opacity: .9; }
+
+/* --- console de commandes ------------------------------------------------ */
+.console-input {
+  display: flex; align-items: center; gap: 7px; padding: 5px 10px;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+.console-input .ci-prompt { opacity: .45; font-weight: 700; font-size: 12px; }
+.console-input input {
+  flex: 1; background: none; border: 0; outline: none; color: inherit;
+  font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+}
+.console-input input::placeholder { color: rgba(255,255,255,.28); }
