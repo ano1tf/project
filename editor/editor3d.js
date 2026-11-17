@@ -10,6 +10,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { KreoRuntime, makeNoiseTexture } from './runtime.js';
 
 const $ = (s, c) => (c || document).querySelector(s);
 const $$ = (s, c) => Array.from((c || document).querySelectorAll(s));
@@ -33,7 +34,8 @@ const view = { snap: true, grid: true, mode: 'translate' };
 const TYPE_COLORS = {
   cube: '#8B7CFF', sphere: '#22B8CF', cylinder: '#F5A623', cone: '#F26D6D',
   plane: '#7BD88F', torus: '#E879F9', sun: '#FFE066', point: '#FFB86B',
-  player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E', model: '#7DD3A0'
+  player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E', model: '#7DD3A0',
+  spawn: '#FF8A5C', weapon: '#9AA7FF', enemy: '#FF5C5C', pickup: '#4FD1C5', cover: '#6C7B94'
 };
 
 /* ============ Modèles 3D importés (GLB / GLTF) ============ */
@@ -348,6 +350,48 @@ function createObject(type, opts) {
       rec.collidable = false;
       break;
     }
+    case 'spawn': {
+      const g = new THREE.Group();
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.06, 28),
+        new THREE.MeshStandardMaterial({ color: 0xFF8A5C, emissive: 0x7A3010, emissiveIntensity: 0.8, transparent: true, opacity: 0.9 }));
+      g.add(ring);
+      const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.8, 12),
+        new THREE.MeshStandardMaterial({ color: 0xFF8A5C, emissive: 0x7A3010 }));
+      arrow.position.y = 1.1;
+      arrow.rotation.x = Math.PI;
+      g.add(arrow);
+      rec.collidable = false;
+      obj3d = g;
+      break;
+    }
+    case 'weapon': {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.85),
+        new THREE.MeshStandardMaterial({ color: 0x9AA7FF, metalness: 0.6, roughness: 0.35, emissive: 0x1A2050 }));
+      body.position.y = 0.9;
+      g.add(body);
+      const mag = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.3, 0.2),
+        new THREE.MeshStandardMaterial({ color: 0x555C77, metalness: 0.4, roughness: 0.6 }));
+      mag.position.set(0, 0.72, 0.1);
+      g.add(mag);
+      rec.collidable = false;
+      obj3d = g;
+      break;
+    }
+    case 'enemy': {
+      const g = new THREE.Group();
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0xFF5C5C, metalness: 0.35, roughness: 0.5, emissive: 0x3A0808 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.0, 8, 16), bodyMat);
+      body.position.y = 1.0;
+      g.add(body);
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0xFFE066, emissive: 0xFFAA22, emissiveIntensity: 1.6 }));
+      visor.position.set(0, 1.55, -0.4);
+      g.add(visor);
+      rec.collidable = false;
+      obj3d = g;
+      break;
+    }
     case 'goal': {
       const g = new THREE.Group();
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.4, 12), mat({ color: 0x444C63, metalness: 0.4, roughness: 0.5 }));
@@ -437,8 +481,12 @@ function recToProps(rec) {
       intensity: rec.light.intensity
     } : null,
     script: rec.script,
+    // Les modèles importés sont désormais EMBARQUÉS (data URL) : sans ça, un
+    // projet rouvert ou exporté remplaçait chaque modèle par un cube filaire.
     model: rec.model || null,
-    anim: rec.anim || 0
+    modelData: (rec.model && MODELS.get(rec.model)) ? MODELS.get(rec.model).dataUrl : null,
+    anim: rec.anim || 0,
+    tags: rec.tags || []
   };
 }
 
@@ -910,11 +958,8 @@ canvas.addEventListener('dblclick', function () {
 });
 
 canvas.addEventListener('pointermove', function (e) {
-  // En jeu : glisser = regard autour du joueur
-  if (state.play && downPos) {
-    play.camYaw -= (e.movementX || 0) * 0.0045;
-    play.camPitch = clamp(play.camPitch + (e.movementY || 0) * 0.0032, -0.15, 1.15);
-  }
+  // en jeu, la souris est gérée par le runtime (pointer lock)
+  if (state.play) return;
   const r = canvas.getBoundingClientRect();
   pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
   pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
@@ -927,35 +972,82 @@ canvas.addEventListener('pointermove', function (e) {
 });
 
 /* ================= Mode jeu ================= */
+// État minimal de l'éditeur pour le jeu (le gameplay vit dans runtime.js)
 const play = {
-  playerRec: null,
-  pos: new THREE.Vector3(),
-  vel: new THREE.Vector3(),
-  yaw: 0,
-  grounded: false,
-  camYaw: 0,
-  camPitch: 0.42,
-  coins: [],
-  boxes: [],
-  saved: null
+  playerRec: null,   // capsule violette = point de spawn
+  saved: null,       // positions d'édition à restaurer en sortie
+  hintTimer: 0
 };
 
-function collectBoxes() {
-  play.boxes = [];
-  reg.forEach(function (rec) {
-    if (!rec.collidable || !rec.obj3d.visible) return;
-    const box = new THREE.Box3().setFromObject(rec.obj3d);
-    play.boxes.push({ rec: rec, box: box });
-  });
+/* ================= Mode jeu — délégué au RUNTIME =================
+   Le gameplay n'est plus écrit ici : il vit dans runtime.js, le même
+   fichier que l'export HTML embarque. Ce qui est testé est ce qui sort.
+   ================================================================ */
+let runtime = null;
+
+function makeHost() {
+  return {
+    onHud: function (st) {
+      const el = $('#hudScore');
+      if (el) el.textContent = Math.round(st.score);
+      const hp = $('#hudHealth');
+      if (hp) {
+        hp.textContent = Math.round(st.health);
+        hp.parentElement.classList.toggle('low', st.health <= 30);
+      }
+      const am = $('#hudAmmo');
+      if (am) am.textContent = (st.ammo != null ? st.ammo : 0) + ' / ' + (st.ammoMax || 0);
+      const kl = $('#hudKills');
+      if (kl) kl.textContent = st.kills || 0;
+      const vig = $('#hudVignette');
+      if (vig && runtime) vig.style.opacity = String(Math.min(1, runtime.damageFlash || 0));
+      const cr = $('#hudCross');
+      if (cr && runtime) cr.style.opacity = runtime.input.ads ? '0.35' : '1';
+    },
+    onWin: function (msg) {
+      state.won = true;
+      SFX.win();
+      const total = runtime ? runtime.entities.size : 0;
+      $('#winScore').textContent = t('ed.scoreLabel') + ' : ' + state.score;
+      $('#winCoins').textContent = msg || '';
+      $('#winOverlay').hidden = false;
+      log('🏆 ' + t('ed.winTitle'), 'ok');
+    },
+    onLose: function () {
+      state.lost = true;
+      SFX.lose();
+      $('#loseOverlay').hidden = false;
+      log('💥 ' + t('ed.loseTitle'), 'err');
+    },
+    onMessage: function (msg) { toast(msg, '💬'); log('💬 ' + msg); },
+    onError: function (msg) { toast('⚠️ ' + msg, '⚠️'); log('code error · ' + msg, 'err'); },
+    onPickup: function (kind) { SFX.coin(); },
+    onHudExtra: null,
+    onShot: function () { SFX.shoot ? SFX.shoot() : SFX.hit(); },
+    onEnemyShot: function () { SFX.hit(); },
+    onImpact: function (point, normal, color) {
+      // petite gerbe additive : lisible sans coûter un système de particules
+      if (!runtime) return;
+      const T = THREE;
+      const geo = new T.SphereGeometry(0.09, 6, 5);
+      const mat = new T.MeshBasicMaterial({ color: color || 0xFFFFFF, transparent: true, opacity: 1 });
+      const mesh = new T.Mesh(geo, mat);
+      mesh.position.copy(point);
+      if (normal) mesh.position.addScaledVector(normal, 0.02);
+      scene3d.add(mesh);
+      runtime.particles.push({ mesh, life: 0.28, maxLife: 0.28 });
+    }
+  };
 }
 
+/** Le joueur "éditeur" (capsule violette) devient le point de spawn. */
 function startPlay() {
   if (state.play) return;
-  // Joueur requis
+
   let playerRec = null;
   reg.forEach(function (rec) { if (rec.type === 'player' && rec.obj3d.visible && !playerRec) playerRec = rec; });
   if (!playerRec) {
-    playerRec = createObject('player', { position: [0, 2, 10], name: t('ed.addPlayer') });
+    playerRec = addObject('player', { position: [0, 2, 10], name: t('ed.addPlayer') });
     toast('ed.noPlayer', 'ℹ️');
     log(t('ed.noPlayer'), 'warn');
   }
@@ -964,37 +1056,50 @@ function startPlay() {
   state.won = false;
   state.lost = false;
   state.score = 0;
-  state.keys = {};
 
-  // Astuce de jeu (auto-masquée)
+  // 1) sauvegarde de l'état d'édition
+  if (!play.saved) {
+    play.saved = {};
+    reg.forEach(function (rec) {
+      play.saved[rec.id] = { pos: rec.obj3d.position.clone(), rot: rec.obj3d.rotation.clone() };
+    });
+  }
+
+  // 2) la scène est sérialisée AVANT d'être masquée : sinon le runtime
+  //    hérite de visible=false et ne dessine rien du tout.
+  const snapshot = serialize();
+
+  // 3) les objets d'édition sont masqués : le runtime crée les siens
+  reg.forEach(function (rec) { rec.obj3d.visible = false; });
+  grid.visible = false;
+  tHelper.visible = false;
+
+  // 4) runtime
+  runtime = new KreoRuntime({
+    THREE: THREE,
+    scene: scene3d,
+    canvas: canvas,
+    renderer: renderer,
+    data: JSON.parse(snapshot),
+    host: makeHost()
+  });
+  // textures procédurales disponibles pour les matériaux
+  runtime.textures = { noise: makeNoiseTexture(THREE, 64, 6, 0.55) };
+  runtime.build();
+  runtime.resize(canvas.clientWidth, canvas.clientHeight, Math.min(window.devicePixelRatio, 2));
+
+  // le joueur éditeur disparaît : le runtime le remplace
+  if (play.playerRec) play.playerRec.obj3d.visible = false;
+
+  // 4) entrées
+  bindRuntimeInput();
+  runtime.start();
+
   const hintEl = $('#playHint');
   hintEl.hidden = false;
   hintEl.classList.remove('fade-out');
   clearTimeout(play.hintTimer);
   play.hintTimer = setTimeout(function () { hintEl.classList.add('fade-out'); }, 5200);
-
-  play.playerRec = playerRec;
-  play.pos.copy(playerRec.obj3d.position);
-  play.vel.set(0, 0, 0);
-  play.yaw = playerRec.obj3d.rotation.y;
-  play.grounded = false;
-  play.camYaw = 0;
-  play.camPitch = 0.42;
-
-  // Pièces
-  play.coins = [];
-  reg.forEach(function (rec) {
-    if (rec.type === 'coin' && rec.obj3d.visible) {
-      play.coins.push({ rec: rec, got: false });
-    }
-  });
-
-  // Sauvegarde des états
-  play.saved = { playerPos: playerRec.obj3d.position.clone(), playerRot: playerRec.obj3d.rotation.clone() };
-
-  collectBoxes();
-  compileCode();
-  runHooks('onStart');
 
   transform.detach();
   orbit.enabled = false;
@@ -1011,14 +1116,20 @@ function startPlay() {
 function stopPlay() {
   if (!state.play) return;
   state.play = false;
-  // Restaurer
-  if (play.playerRec) {
-    play.playerRec.obj3d.position.copy(play.saved.playerPos);
-    play.playerRec.obj3d.rotation.copy(play.saved.playerRot);
-    play.playerRec.obj3d.visible = true;
-  }
-  play.coins.forEach(function (c) { c.rec.obj3d.visible = true; });
-  play.coins = [];
+
+  if (runtime) { runtime.dispose(); runtime = null; }
+  unbindRuntimeInput();
+
+  // restauration de la scène d'édition
+  reg.forEach(function (rec) {
+    rec.obj3d.visible = true;
+    const s = play.saved && play.saved[rec.id];
+    if (s) { rec.obj3d.position.copy(s.pos); rec.obj3d.rotation.copy(s.rot); }
+  });
+  if (play.playerRec) play.playerRec.obj3d.visible = true;
+  play.saved = null;
+  grid.visible = view.grid;
+  tHelper.visible = !!state.selectedId;
 
   orbit.enabled = true;
   if (state.selectedId) {
@@ -1041,247 +1152,81 @@ function togglePlay() {
 }
 
 function updateHUD() {
-  $('#hudScore').textContent = state.score;
-  const total = play.coins.length;
-  const got = play.coins.filter(function (c) { return c.got; }).length;
-  $('#hudCoins').textContent = got + ' / ' + total;
+  if (runtime) runtime.host.onHud(runtime.state);
 }
 
-function winGame(msg) {
-  if (state.won || state.lost) return;
-  state.won = true;
-  SFX.win();
-  const total = play.coins.length;
-  const got = play.coins.filter(function (c) { return c.got; }).length;
-  $('#winScore').textContent = t('ed.scoreLabel') + ' : ' + state.score;
-  $('#winCoins').textContent = t('ed.coinsLabel') + ' : ' + got + ' / ' + total;
-  $('#winOverlay').hidden = false;
-  log('🏆 ' + t('ed.winTitle'), 'ok');
+/* ---- Entrées du mode jeu (envoyées au runtime) ---- */
+const rtKeys = { _down: {} };
+function onRtKeyDown(e) {
+  if (!runtime || !state.play) return;
+  const el = e.target;
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+  rtKeys._down[e.code] = true;
+  feedKeys();
+  if (e.code === 'space') { e.preventDefault(); }
+  if (e.code === 'escape') { stopPlay(); }
 }
-function loseGame() {
-  if (state.won || state.lost) return;
-  state.lost = true;
-  SFX.lose();
-  $('#loseOverlay').hidden = false;
-  log('💥 ' + t('ed.loseTitle'), 'err');
+function onRtKeyUp(e) {
+  rtKeys._down[e.code] = false;
+  if (runtime) feedKeys();
 }
-
-function updatePlay(dt) {
-  const p = play;
-  const rec = p.playerRec;
-  if (!rec) return;
-  const keys = state.keys;
-
-  // Flèches = tourner la caméra · glisser la souris = regard
-  let turn = 0;
-  if (keys['arrowleft']) turn += 1;
-  if (keys['arrowright']) turn -= 1;
-  p.camYaw += turn * dt * 2.1;
-
-  // ZQSD / WASD = se déplacer par rapport à la caméra
-  let fwd = 0, strafe = 0;
-  if (keys['w'] || keys['z'] || keys['arrowup']) fwd += 1;
-  if (keys['s'] || keys['arrowdown']) fwd -= 1;
-  if (keys['a'] || keys['q']) strafe -= 1;
-  if (keys['d']) strafe += 1;
-
-  const speed = rec.speed || 6;
-  const sin = Math.sin(p.camYaw), cos = Math.cos(p.camYaw);
-  const dirX = -sin * fwd + cos * strafe;
-  const dirZ = -cos * fwd - sin * strafe;
-  const targetVx = dirX * speed;
-  const targetVz = dirZ * speed;
-  p.vel.x += (targetVx - p.vel.x) * Math.min(1, dt * 12);
-  p.vel.z += (targetVz - p.vel.z) * Math.min(1, dt * 12);
-  if (Math.abs(p.vel.x) < 0.01) p.vel.x = 0;
-  if (Math.abs(p.vel.z) < 0.01) p.vel.z = 0;
-
-  // Saut
-  if ((keys[' '] || keys['space']) && p.grounded) {
-    p.vel.y = rec.jump || 9;
-    p.grounded = false;
-    SFX.jump();
-  }
-
-  // Gravité
-  p.vel.y -= 26 * dt;
-  if (p.vel.y < -55) p.vel.y = -55;
-
-  // Rotation du modèle vers la direction
-  if (Math.abs(p.vel.x) + Math.abs(p.vel.z) > 0.6) {
-    const targetYaw = Math.atan2(p.vel.x, p.vel.z);
-    let diff = targetYaw - rec.obj3d.rotation.y;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-    rec.obj3d.rotation.y += diff * Math.min(1, dt * 10);
-  }
-
-  // Collisions par AABB (résolution par axe)
-  const r = 0.55, h = 2.15;
-  const old = p.pos.clone();
-
-  // X
-  p.pos.x += p.vel.x * dt;
-  if (hitsBox(p.pos, r, h)) { p.pos.x = old.x; p.vel.x = 0; }
-  // Z
-  p.pos.z += p.vel.z * dt;
-  if (hitsBox(p.pos, r, h)) { p.pos.z = old.z; p.vel.z = 0; }
-  // Y
-  p.pos.y += p.vel.y * dt;
-  p.grounded = false;
-  if (hitsBox(p.pos, r, h)) {
-    if (p.vel.y <= 0) {
-      // poser au-dessus de la boîte
-      p.pos.y = old.y;
-      p.grounded = true;
-    } else {
-      p.pos.y = old.y;
+function feedKeys() {
+  if (!runtime) return;
+  const d = rtKeys._down;
+  runtime.input.forward = !!d.KeyW || !!d.KeyZ;
+  runtime.input.back = !!d.KeyS;
+  runtime.input.left = !!d.KeyA || !!d.KeyQ;
+  runtime.input.right = !!d.KeyD;
+  runtime.input.jump = !!d.Space;
+  runtime.input.run = !!d.ShiftLeft || !!d.ShiftRight;
+  runtime.input.ads = !!(rtKeys.mouse && rtKeys.mouse.right);
+}
+function onRtMouseMove(e) {
+  if (!runtime || !state.play) return;
+  if (document.pointerLockElement !== canvas) return;
+  if (Math.abs(e.movementX) > 220 || Math.abs(e.movementY) > 220) return;
+  runtime.input.lookX = e.movementX * 0.0022;
+  runtime.input.lookY = e.movementY * 0.0022;
+}
+function onRtMouseDown(e) {
+  if (!runtime || !state.play) return;
+  rtKeys.mouse = rtKeys.mouse || {};
+  rtKeys.mouse[e.button] = true;
+  if (e.button === 0) {
+    if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
+      try { canvas.requestPointerLock(); } catch (err) {}
     }
-    p.vel.y = 0;
+    if (runtime.onFire) runtime.onFire();
   }
-  // Sol du monde
-  if (p.pos.y <= 0) {
-    p.pos.y = 0;
-    if (p.vel.y <= 0) { p.vel.y = 0; p.grounded = true; }
+  feedKeys();
+}
+function onRtMouseUp(e) {
+  if (!rtKeys.mouse) rtKeys.mouse = {};
+  rtKeys.mouse[e.button] = false;
+  if (runtime) feedKeys();
+}
+function bindRuntimeInput() {
+  document.addEventListener('keydown', onRtKeyDown, true);
+  document.addEventListener('keyup', onRtKeyUp, true);
+  document.addEventListener('mousemove', onRtMouseMove);
+  document.addEventListener('mousedown', onRtMouseDown);
+  document.addEventListener('mouseup', onRtMouseUp);
+  if (canvas.requestPointerLock) {
+    try { canvas.requestPointerLock(); } catch (e) {}
   }
-
-  rec.obj3d.position.copy(p.pos);
-
-  // Chute
-  if (p.pos.y < -30) {
-    SFX.hit();
-    loseGame();
-    return;
-  }
-
-  // Pièces
-  for (const c of p.coins) {
-    if (c.got) continue;
-    const cp = c.rec.obj3d.position;
-    if (p.pos.distanceTo(cp) < 1.6) {
-      c.got = true;
-      c.rec.obj3d.visible = false;
-      state.score += c.rec.value || 10;
-      SFX.coin();
-      updateHUD();
-    }
-    // Animation de rotation
-    c.rec.obj3d.rotation.y += dt * 2.4;
-  }
-
-  // Objectif
-  reg.forEach(function (r2) {
-    if (r2.type === 'goal' && r2.obj3d.visible) {
-      r2.obj3d.rotation.y += dt * 0.9;
-      const gp = r2.obj3d.position;
-      if (Math.abs(p.pos.x - gp.x) < 1.8 && Math.abs(p.pos.z - gp.z) < 1.8 && Math.abs(p.pos.y - gp.y) < 3.2) {
-        winGame(r2.name);
-      }
-    }
-  });
-
-  // Hooks
-  runHooks('onUpdate', rec, null, dt);
-  // Collisions hooks
-  for (const b of p.boxes) {
-    if (hitsBox(p.pos, r, h, b.box)) runHooks('onCollide', b.rec, rec, dt);
-  }
-
-  // Caméra de suivi (souris = regard)
-  const camDist = 9.5;
-  const camH = 2.1 + p.camPitch * 7;
-  const tx = p.pos.x + Math.sin(p.camYaw) * camDist;
-  const tz = p.pos.z + Math.cos(p.camYaw) * camDist;
-  const ty = p.pos.y + camH;
-  camera.position.lerp(new THREE.Vector3(tx, ty, tz), Math.min(1, dt * 5));
-  camera.lookAt(p.pos.x, p.pos.y + 1.7, p.pos.z);
+}
+function unbindRuntimeInput() {
+  document.removeEventListener('keydown', onRtKeyDown, true);
+  document.removeEventListener('keyup', onRtKeyUp, true);
+  document.removeEventListener('mousemove', onRtMouseMove);
+  document.removeEventListener('mousedown', onRtMouseDown);
+  document.removeEventListener('mouseup', onRtMouseUp);
+  if (document.exitPointerLock) { try { document.exitPointerLock(); } catch (e) {} }
 }
 
-function hitsBox(pos, r, h, only) {
-  const min = new THREE.Vector3(pos.x - r, pos.y, pos.z - r);
-  const max = new THREE.Vector3(pos.x + r, pos.y + h, pos.z + r);
-  const playerBox = new THREE.Box3(min, max);
-  if (only) return playerBox.intersectsBox(only);
-  for (const b of play.boxes) {
-    if (playerBox.intersectsBox(b.box)) return true;
-  }
-  return false;
-}
-
-/* ================= Hooks de code ================= */
-const hooks = {};
-function compileCode() {
-  for (const k of Object.keys(hooks)) delete hooks[k];
-  reg.forEach(function (rec) {
-    if (!rec.script) return;
-    hooks[rec.id] = {};
-    ['onStart', 'onUpdate', 'onCollide'].forEach(function (name) {
-      const src = (rec.script[name] || '').trim();
-      if (!src) return;
-      try {
-        hooks[rec.id][name] = new Function('scene', 'dt', 'player', 'self', 'other', src);
-      } catch (e) {
-        toast('⚠️ ' + (e.message || 'code'), '⚠️');
-        log('code error · ' + rec.name + ' · ' + e.message, 'err');
-      }
-    });
-  });
-}
-
-function makeProxy(rec) {
-  const o = rec.obj3d;
-  return {
-    get id() { return rec.id; },
-    get type() { return rec.type; },
-    get name() { return rec.name; },
-    get visible() { return o.visible; }, set visible(v) { o.visible = !!v; },
-    position: {
-      get x() { return o.position.x; }, set x(v) { o.position.x = Number(v) || 0; },
-      get y() { return o.position.y; }, set y(v) { o.position.y = Number(v) || 0; },
-      get z() { return o.position.z; }, set z(v) { o.position.z = Number(v) || 0; }
-    },
-    rotation: {
-      get x() { return THREE.MathUtils.radToDeg(o.rotation.x); }, set x(v) { o.rotation.x = THREE.MathUtils.degToRad(Number(v) || 0); },
-      get y() { return THREE.MathUtils.radToDeg(o.rotation.y); }, set y(v) { o.rotation.y = THREE.MathUtils.degToRad(Number(v) || 0); },
-      get z() { return THREE.MathUtils.radToDeg(o.rotation.z); }, set z(v) { o.rotation.z = THREE.MathUtils.degToRad(Number(v) || 0); }
-    }
-  };
-}
-
-function makeApi() {
-  return {
-    get: function (id) {
-      const rec = findRec(id);
-      return rec ? makeProxy(rec) : null;
-    },
-    get player() {
-      return play.playerRec ? makeProxy(play.playerRec) : null;
-    },
-    get score() { return state.score; },
-    message: function (msg) { toast(String(msg), '💬'); log('💬 ' + msg); },
-    addScore: function (n) {
-      state.score += (Number(n) || 0);
-      updateHUD();
-    },
-    win: function (msg) { winGame(msg); },
-    lose: function (msg) { loseGame(); }
-  };
-}
-
-function runHooks(name, selfRec, otherRec, dt) {
-  reg.forEach(function (rec) {
-    const h = hooks[rec.id] && hooks[rec.id][name];
-    if (!h) return;
-    const playerProxy = play.playerRec ? makeProxy(play.playerRec) : null;
-    try {
-      h(makeApi(), dt || 0, playerProxy, selfRec ? makeProxy(selfRec) : makeProxy(rec), otherRec ? makeProxy(otherRec) : null);
-    } catch (e) {
-      hooks[rec.id][name] = null;
-      toast('⚠️ ' + (e.message || 'code'), '⚠️');
-      log('code error · ' + rec.name + ' · ' + e.message, 'err');
-    }
-  });
-}
+/* Compat : d'anciens chemins appellent encore winGame / loseGame */
+function winGame(msg) { if (runtime) runtime.win(msg); else makeHost().onWin(msg); }
+function loseGame() { if (runtime) runtime.state.lost = true; makeHost().onLose(); }
 
 /* ================= Sauvegarde ================= */
 const KEY = 'kreo-project3d';
@@ -1296,6 +1241,330 @@ function save() {
     log('💾 ' + t('ed.saveOk'), 'ok');
   } catch (e) {
     toast('⚠️', '⚠️');
+  }
+}
+
+/* ================= Export : jeu HTML autonome =================
+   Un seul fichier .html, double-cliquable, 100 % hors ligne :
+   three.js + le runtime + la scène + les modèles, tout inline.
+   ============================================================= */
+let THREE_SOURCE = null;
+async function grabThreeSource() {
+  if (THREE_SOURCE) return THREE_SOURCE;
+  const core = await (await fetch('../assets/vendor/three/three.core.js')).text();
+  const mod = await (await fetch('../assets/vendor/three/three.module.js')).text();
+  THREE_SOURCE = { core: core, mod: mod };
+  return THREE_SOURCE;
+}
+
+/** Le module runtime est lu depuis le fichier : une seule source de vérité. */
+let RUNTIME_SOURCE = null;
+async function grabRuntimeSource() {
+  if (RUNTIME_SOURCE) return RUNTIME_SOURCE;
+  RUNTIME_SOURCE = await (await fetch('runtime.js?raw=1')).text();
+  return RUNTIME_SOURCE;
+}
+
+/**
+ * Fusionne trois sources ES modules en un seul script : renomme dans les
+ * suivantes toute déclaration qui existe déjà, pour éviter les collisions
+ * (`_m1$1`, `clamp`...). Retourne le bundle `three.core` + `three.module` séparé
+ * du runtime, car le runtime doit pouvoir être patché autrement.
+ */
+function mergeModules(sources) {
+  const DECL = /^(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm;
+  const names = (src) => {
+    const out = new Set();
+    let m;
+    const re = new RegExp(DECL.source, 'gm');
+    while ((m = re.exec(src))) out.add(m[1]);
+    return out;
+  };
+  const taken = new Set();
+  const out = [];
+  for (let i = 0; i < sources.length; i++) {
+    let src = sources[i];
+    if (i > 0) {
+      const own = names(src);
+      let renamed = false;
+      for (const name of own) {
+        if (!taken.has(name)) continue;
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        src = src.replace(new RegExp('\\b' + escaped + '\\b', 'g'), 'kt' + i + '_' + name.replace(/\$/g, '_'));
+        renamed = true;
+      }
+      if (renamed) { /* rien d'autre à faire : remplacement global */ }
+    }
+    for (const n of names(src)) taken.add(n);
+    out.push(src);
+  }
+  return out.join('\n');
+}
+
+function buildGameHtml(three, runtimeSrc, projectJson, title) {
+  // three.module.js importe './three.core.js' : on inline les deux dans un
+  // même module, l'import devient inutile.
+  // three.module.js ne ré-exporte pas tout three.core.js : on garde ses
+  // déclarations ET on neutralise son bloc `export` final.
+  let __n = 0;
+  const core = three.core.replace(/^export \{/gm, () => 'const __core_exports_unused' + (__n++) + ' = {');
+  const mod = three.mod
+    .replace(/^import \{[^}]*\} from '\.\/three\.core\.js';$/m, '')
+    .replace(/^export \{[^}]*\} from '\.\/three\.core\.js';$/m, '')
+    .replace(/^export \{[^}]*\};?$/gm, '');
+  // le runtime importe three : on le rend autonome
+  const rt = runtimeSrc
+    .replace(/^export const RUNTIME_VERSION[^\n]*$/m, 'const RUNTIME_VERSION = "1.0.0";')
+    .replace(/^export function /gm, 'function ')
+    .replace(/^export class /gm, 'class ')
+    .replace(/^export default [^\n]*$/m, '');
+
+  // trois sources → un seul module sans collision de noms
+  const bundledBody = mergeModules([core, mod, rt]);
+  // le runtime et le jeu utilisent `THREE.*` / `new THREE.Scene()` : on
+  // reconstruit un objet namespace à la fin du bundle.
+  const bundled = bundledBody + `
+const THREE = {
+  Scene, PerspectiveCamera, WebGLRenderer, Color, Vector2, Vector3, Vector4,
+  Group, Mesh, Object3D, Box3, Box2, Sphere, Plane, Ray, Raycaster, Matrix4,
+  Euler, Quaternion, MathUtils, Clock, Layers, Frustum,
+  BufferGeometry, BufferAttribute, InstancedMesh, LineSegments, Line, Points,
+  BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry, TorusGeometry,
+  CapsuleGeometry, OctahedronGeometry, PlaneGeometry, RingGeometry,
+  CircleGeometry, IcosahedronGeometry, DodecahedronGeometry, TorusKnotGeometry,
+  MeshStandardMaterial, MeshPhysicalMaterial, MeshBasicMaterial,
+  MeshLambertMaterial, MeshPhongMaterial, LineBasicMaterial, PointsMaterial,
+  SpriteMaterial, ShadowMaterial, Sprite,
+  AmbientLight, HemisphereLight, DirectionalLight, PointLight, SpotLight, RectAreaLight,
+  Fog, FogExp2, CanvasTexture, Texture, DataTexture,
+  CubeTexture, TextureLoader, CubeTextureLoader, RGBAFormat, RGFormat,
+  UnsignedByteType, HalfFloatType, FloatType, UnsignedShortType,
+  LinearFilter, NearestFilter, LinearMipmapLinearFilter,
+  RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping,
+  SRGBColorSpace, LinearSRGBColorSpace, NoColorSpace,
+  ACESFilmicToneMapping, NeutralToneMapping, AgXToneMapping, ReinhardToneMapping,
+  LinearToneMapping, NoToneMapping, CineonToneMapping, CustomToneMapping,
+  PCFShadowMap, PCFSoftShadowMap, BasicShadowMap, VSMShadowMap,
+  FrontSide, BackSide, DoubleSide, NormalBlending, AdditiveBlending,
+  MultiplyBlending, SubtractiveBlending, NoBlending, CustomBlending,
+  EquirectangularReflectionMapping, EquirectangularRefractionMapping,
+  CubeReflectionMapping, CubeRefractionMapping, UVMapping,
+  AnimationMixer, AnimationClip, AnimationAction, LoopOnce, LoopRepeat, LoopPingPong,
+  PropertyBinding, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack,
+  ColorKeyframeTrack, NumberKeyframeTrack, StringKeyframeTrack,
+  Box3Helper, GridHelper, AxesHelper, ArrowHelper, CameraHelper,
+  SpotLightHelper, DirectionalLightHelper, PointLightHelper, HemisphereLightHelper,
+  SkeletonHelper, PolarGridHelper, PlaneHelper,
+  SkinnedMesh, Skeleton, Bone, Audio, AudioListener, PositionalAudio, AudioContext,
+  EventDispatcher, Loader, FileLoader, ImageLoader, ImageBitmapLoader,
+  ObjectLoader, MaterialLoader, BufferGeometryLoader, LoaderUtils,
+  Path, Shape, ShapeGeometry, ShapeUtils, Curve, CurvePath, CatmullRomCurve3,
+  SplineCurve, LineCurve3, QuadraticBezierCurve3, CubicBezierCurve3,
+  Interpolant, LinearInterpolant, CubicInterpolant, DiscreteInterpolant,
+  Triangle, Line3,
+  LOD, BatchedMesh, InstancedBufferAttribute, InstancedBufferGeometry,
+  WebGLRenderTarget, WebGLCubeRenderTarget, CubeCamera,
+  PMREMGenerator, DepthTexture, DataArrayTexture, CompressedTexture,
+  REVISION
+};
+`;
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)} — KREO</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #hud { position: fixed; inset: 0; pointer-events: none; font: 600 13px/1.2 system-ui, sans-serif; color: #fff; }
+  .bar { position: absolute; bottom: 22px; left: 22px; display: flex; gap: 10px; align-items: center; }
+  .pill { background: rgba(12,16,24,.66); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(8px); }
+  .hp { width: 190px; height: 8px; border-radius: 5px; background: rgba(255,255,255,.16); overflow: hidden; }
+  .hp > i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg,#34d399,#10b981); transition: width .18s; }
+  .score { position: absolute; top: 20px; left: 22px; font-size: 15px; letter-spacing: .06em; }
+  .cross { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; translate: -50% -50%; }
+  .cross::before, .cross::after { content: ''; position: absolute; background: rgba(255,255,255,.85); }
+  .cross::before { left: 50%; top: 0; width: 1.5px; height: 100%; translate: -50% 0; }
+  .cross::after { top: 50%; left: 0; height: 1.5px; width: 100%; translate: 0 -50%; }
+  #start { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8,11,18,.82); color: #fff; font-family: system-ui, sans-serif; z-index: 5; }
+  #start .card { text-align: center; }
+  #start h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -.02em; }
+  #start p { opacity: .65; margin: 0 0 22px; font-size: 14px; }
+  #start button { border: 0; border-radius: 12px; padding: 14px 34px; font: 700 15px system-ui; cursor: pointer;
+    background: linear-gradient(180deg,#5eead4,#22d3ee); color: #06202a; }
+  #msg { position: fixed; left: 50%; top: 22%; translate: -50% 0; font: 600 15px system-ui; color: #fff;
+    background: rgba(12,16,24,.8); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .25s; }
+  #msg.show { opacity: 1; }
+  #over { position: fixed; inset: 0; display: none; place-items: center; background: rgba(8,11,18,.85); color: #fff; font-family: system-ui; z-index: 6; }
+  #over.show { display: grid; }
+  #over h2 { font-size: 28px; margin: 0 0 10px; }
+  #over button { margin-top: 18px; border: 0; border-radius: 10px; padding: 12px 26px; font: 700 14px system-ui; cursor: pointer; background: #22d3ee; color: #06202a; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud" hidden>
+  <div id="vig" style="position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(190,20,30,.6) 100%);transition:opacity .12s"></div>
+  <div class="score"><span id="score">0</span> · <span id="kills">0</span> KO</div>
+  <div class="cross"></div>
+  <div class="bar">
+    <div class="pill"><div class="hp"><i id="hpbar"></i></div></div>
+    <div class="pill"><span id="ammo">—</span></div>
+  </div>
+</div>
+<div id="msg"></div>
+<div id="start"><div class="card">
+  <h1>${escapeHtml(title)}</h1>
+  <p>ZQSD / WASD · Souris · Échap pour la souris</p>
+  <button id="btnStart">JOUER</button>
+</div></div>
+<div id="over"><div class="card" style="text-align:center">
+  <h2 id="overTitle">Partie terminée</h2>
+  <p id="overScore"></p>
+  <button onclick="location.reload()">REJOUER</button>
+</div></div>
+<script type="module">
+${bundled}
+
+/* ---------- projet ---------- */
+const PROJECT = ${projectJson};
+
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xb9c9e2, 60, 260);
+(function sky() {
+  const c = document.createElement('canvas'); c.width = 2; c.height = 256;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#6E9BD8'); grad.addColorStop(.55, '#A8C4E4'); grad.addColorStop(1, '#DCE7F2');
+  g.fillStyle = grad; g.fillRect(0, 0, 2, 256);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  scene.background = tex;
+})();
+scene.add(new THREE.HemisphereLight(0xddebff, 0x3a4455, 0.9));
+scene.add(new THREE.AmbientLight(0xffffff, 0.32));
+const sun = new THREE.DirectionalLight(0xfff2de, 2.3);
+sun.position.set(20, 32, 14); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+sun.shadow.camera.far = 200; sun.shadow.bias = -0.0004;
+scene.add(sun);
+
+const ui = {
+  score: document.getElementById('score'),
+  kills: document.getElementById('kills'),
+  hpbar: document.getElementById('hpbar'),
+  ammo: document.getElementById('ammo'),
+  msg: document.getElementById('msg'),
+  vig: document.getElementById('vig'),
+  over: document.getElementById('over'),
+  overTitle: document.getElementById('overTitle'),
+  overScore: document.getElementById('overScore')
+};
+let msgTimer = 0;
+
+const rt = new KreoRuntime({
+  THREE, scene, canvas, renderer,
+  data: PROJECT,
+  host: {
+    onHud(st) {
+      if (ui.vig) ui.vig.style.opacity = String(Math.min(1, rt.damageFlash || 0));
+      ui.score.textContent = Math.round(st.score);
+      ui.kills.textContent = st.kills || 0;
+      ui.hpbar.style.width = Math.max(0, Math.min(100, st.health / st.maxHealth * 100)) + '%';
+      ui.ammo.textContent = st.ammo != null ? st.ammo + ' / ' + st.ammoMax : '—';
+    },
+    onMessage(m) {
+      ui.msg.textContent = m; ui.msg.classList.add('show');
+      clearTimeout(msgTimer); msgTimer = setTimeout(() => ui.msg.classList.remove('show'), 2200);
+    },
+    onWin(m) { ui.overTitle.textContent = 'Victoire'; ui.overScore.textContent = m || ''; ui.over.classList.add('show'); rt.stop(); },
+    onLose() { ui.overTitle.textContent = 'Échec'; ui.overScore.textContent = 'Score : ' + rt.state.score; ui.over.classList.add('show'); rt.stop(); },
+    onError(e) { console.error('[KREO]', e); }
+  }
+});
+rt.textures = { noise: makeNoiseTexture(THREE, 64, 6, 0.55) };
+rt.build();
+
+function resize() {
+  rt.resize(innerWidth, innerHeight, Math.min(devicePixelRatio, 2));
+}
+addEventListener('resize', resize);
+resize();
+
+/* ---------- entrées ---------- */
+const keys = {};
+addEventListener('keydown', (e) => {
+  keys[e.code] = true; feed();
+  if (e.code === 'space') e.preventDefault();
+  if (e.code === 'escape' && document.pointerLockElement) document.exitPointerLock();
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; feed(); });
+function feed() {
+  rt.input.forward = !!(keys.KeyW || keys.KeyZ);
+  rt.input.back = !!keys.KeyS;
+  rt.input.left = !!(keys.KeyA || keys.KeyQ);
+  rt.input.right = !!keys.KeyD;
+  rt.input.jump = !!keys.Space;
+  rt.input.run = !!(keys.ShiftLeft || keys.ShiftRight);
+}
+let dragging = false;
+canvas.addEventListener('mousedown', (e) => {
+  if (!document.pointerLockElement) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
+  if (e.button === 0 && rt.onFire) rt.onFire();
+  if (e.button === 2) { rt.input.ads = true; }
+});
+canvas.addEventListener('mouseup', (e) => { if (e.button === 2) rt.input.ads = false; });
+addEventListener('contextmenu', (e) => e.preventDefault());
+addEventListener('mousemove', (e) => {
+  if (!document.pointerLockElement) return;
+  if (Math.abs(e.movementX) > 220 || Math.abs(e.movementY) > 220) return;
+  rt.input.lookX = e.movementX * 0.0022;
+  rt.input.lookY = e.movementY * 0.0022;
+});
+
+document.getElementById('btnStart').addEventListener('click', () => {
+  document.getElementById('start').style.display = 'none';
+  document.getElementById('hud').hidden = false;
+  canvas.requestPointerLock && canvas.requestPointerLock();
+  rt.start();
+});
+</script>
+</body>
+</html>`;
+}
+
+async function exportGame() {
+  try {
+    toast('ed.exporting', '⏳');
+    const [three, runtimeSrc] = await Promise.all([grabThreeSource(), grabRuntimeSource()]);
+    const html = buildGameHtml(three, runtimeSrc, serialize(), state.scene.name || 'Mon jeu');
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const slug = (state.scene.name || 'mon-jeu').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    a.download = (slug || 'mon-jeu') + '.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('ed.exportOk', '🎮');
+    log('🎮 ' + t('ed.exportOk'), 'ok');
+  } catch (e) {
+    console.error(e);
+    toast('ed.exportKo', '⚠️');
+    log('export error · ' + e.message, 'err');
   }
 }
 
@@ -1357,6 +1626,24 @@ function rebuildFromData(data, keepHistory) {
   scene3d.fog = state.scene.fog !== false ? new THREE.Fog(new THREE.Color(state.scene.fogColor || '#B9C9E2'), 60, 260) : null;
 
   (data.objects || []).forEach(function (p) {
+    // modèle embarqué : on le réenregistre avant de créer l'objet
+    if (p.type === 'model' && p.model && p.modelData && !MODELS.has(p.model)) {
+      const entry = { gltf: null, url: p.modelData, dataUrl: p.modelData };
+      MODELS.set(p.model, entry);
+      gltfLoader.loadAsync(p.modelData).then(function (gltf) {
+        entry.gltf = gltf;
+        entry.animations = (gltf.animations || []).length;
+        entry.gltf.scene.traverse(function (o) {
+          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
+        });
+        // remplace le placeholder par le vrai modèle
+        const rec = Array.from(reg.values()).find(function (r) { return r.model === p.model && r.obj3d; });
+        if (rec) {
+          while (rec.obj3d.children.length) rec.obj3d.remove(rec.obj3d.children[0]);
+          rec.obj3d.add(cloneSkinned(gltf.scene));
+        }
+      }).catch(function () { /* placeholder conservé */ });
+    }
     createObject(p.type, p);
   });
 
@@ -1436,7 +1723,14 @@ async function importModel(file) {
         o.frustumCulled = false;
       }
     });
-    MODELS.set(name, { gltf: gltf, url: url, animations: (gltf.animations || []).length });
+    // data URL : la scène devient autonome (sauvegarde ET export)
+    const dataUrl = await new Promise(function (resolve) {
+      const fr = new FileReader();
+      fr.onload = function () { resolve(String(fr.result)); };
+      fr.onerror = function () { resolve(null); };
+      fr.readAsDataURL(file);
+    });
+    MODELS.set(name, { gltf: gltf, url: url, dataUrl: dataUrl, animations: (gltf.animations || []).length });
 
     pushHistory();
     const rec = addObject('model', { model: name, name: name });
@@ -1491,20 +1785,17 @@ function animate(now) {
   const dt = Math.min(0.04, (now - lastTime) / 1000);
   lastTime = now;
 
-  if (state.play && !state.won && !state.lost) {
-    updatePlay(dt);
-  } else if (!state.play) {
+  if (!state.play) {
     orbit.update();
+    // animations des modèles importés en mode édition
+    reg.forEach(function (rec) {
+      const m = rec.obj3d && rec.obj3d.userData && rec.obj3d.userData.mixer;
+      if (m) m.update(dt);
+    });
+    if (selBox) selBox.update();
+    renderer.render(scene3d, camera);
   }
-
-  // animations des modèles importés (mode édition comme en jeu)
-  reg.forEach(function (rec) {
-    const m = rec.obj3d && rec.obj3d.userData && rec.obj3d.userData.mixer;
-    if (m) m.update(dt);
-  });
-
-  if (selBox) selBox.update();
-  renderer.render(scene3d, camera);
+  // en jeu, c'est le runtime qui possède la boucle et le rendu
 
   // FPS
   fpsAcc += 1 / Math.max(dt, 0.0001);
@@ -1627,6 +1918,7 @@ $('#btnWire').addEventListener('click', function () {
 $('#btnNew').addEventListener('click', newProject);
 $('#btnSave').addEventListener('click', save);
 $('#btnExport').addEventListener('click', exportFile);
+$('#btnExportGame').addEventListener('click', exportGame);
 $('#btnImport').addEventListener('click', importFile);
 $('#btnDemo').addEventListener('click', demoScene);
 $('#btnHelp').addEventListener('click', function () { $('#modalHelp').classList.add('open'); });
@@ -1672,6 +1964,28 @@ $('#langToggle').addEventListener('click', function () {
   window.kreoApplyLang(next);
   $('#langLabel').textContent = next.toUpperCase();
 });
+/* API publique de l'éditeur : sert aux tests de rendu, aux extensions et à
+   l'intégration (landing page, futurs plugins). Volontairement stable. */
+window.KREO_EDITOR = {
+  version: '3.0',
+  get runtime() { return runtime; },
+  get playing() { return state.play; },
+  get objects() { return Array.from(reg.values()).map(function (r) { return { id: r.id, type: r.type, name: r.name }; }); },
+  get selected() { return state.selectedId; },
+  select: select,
+  add: function (type, opts) { pushHistory(); const r = createObject(type, opts || {}); if (r) { renderHierarchy(); markDirty(); } return r ? r.id : null; },
+  remove: deleteObject,
+  play: startPlay,
+  stop: stopPlay,
+  serialize: serialize,
+  load: function (json) { rebuildFromData(typeof json === 'string' ? JSON.parse(json) : json); },
+  save: save,
+  exportGame: exportGame,
+  exportProject: exportFile,
+  demo: demoScene,
+  newProject: newProject
+};
+
 window.addEventListener('kreo:editor-render', function () {
   $('#langLabel').textContent = window.kreoCurrentLang().toUpperCase();
   if (window.kreoT) document.title = window.kreoT('ed.title');

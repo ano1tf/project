@@ -528,3 +528,18 @@ kbd {
 #viewport.dropping {
   box-shadow: inset 0 0 0 2px #7DD3A0, inset 0 0 60px rgba(125, 211, 160, 0.18);
 }
+
+/* HUD jeu — pilules santé / munitions / éliminations */
+.hud { gap: 8px; flex-wrap: wrap; }
+.hud-health span { color: #6EE7A8; }
+.hud-health.low span { color: #FF6B6B; animation: hudPulse .7s ease-in-out infinite; }
+@keyframes hudPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* Viseur + vignette de dégâts du mode jeu */
+.hud-cross { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; translate: -50% -50%; pointer-events: none; }
+.hud-cross::before, .hud-cross::after { content: ''; position: absolute; background: rgba(255,255,255,.9); box-shadow: 0 0 4px rgba(0,0,0,.6); }
+.hud-cross::before { left: 50%; top: 0; width: 1.5px; height: 100%; translate: -50% 0; }
+.hud-cross::after { top: 50%; left: 0; height: 1.5px; width: 100%; translate: 0 -50%; }
+.hud-vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(190,20,30,.55) 100%);
+  transition: opacity .12s linear; }

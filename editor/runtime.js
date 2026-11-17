@@ -1,0 +1,1213 @@
+/* ============================================================
+   KREO — RUNTIME (runtime.js)
+   Le moteur de jeu, séparé de l'éditeur.
+
+   Ce fichier est la SOURCE UNIQUE du gameplay :
+   - l'éditeur l'importe pour son bouton « Jouer » ;
+   - l'export HTML autonome l'embarque tel quel.
+
+   Conséquence : ce qu'on teste dans l'éditeur est exactement ce qui
+   tourne dans le jeu publié. Aucune divergence possible.
+
+   API publique :
+     const rt = new KreoRuntime({ THREE, scene, canvas, data })
+     rt.renderer          WebGLRenderer (partagé en mode éditeur)
+     rt.start() / rt.stop() / rt.dispose()
+     rt.camera, rt.player, rt.entities
+   ============================================================ */
+
+export const RUNTIME_VERSION = '1.0.0';
+
+/* ---------------------------------------------------------- utilitaires */
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function hashNoise(x, y) {
+  const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+/* Textures procédurales partagées (aucun asset externe requis). */
+export function makeNoiseTexture(THREE, size = 64, repeat = 4, contrast = 0.5) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const img = g.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.round(255 * (contrast + (Math.random() - 0.5)));
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = clamp(v, 0, 255);
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeat, repeat);
+  return tex;
+}
+
+/* ---------------------------------------------------------- physique simple */
+/* Boîtes alignées sur les axes (AABB) + hauteurs de sol.
+   Volontairement simple : c'est ce qui reste rapide avec 500 colliders
+   et ce qui suffit pour des niveaux « couloirs ». Les pentes viendront
+   avec le TriMesh plus tard. */
+export class AABBWorld {
+  constructor() {
+    this.boxes = [];          // { min, max, tag }
+    this.solidTags = new Set();
+  }
+  clear() { this.boxes.length = 0; }
+
+  add(box, tag) {
+    this.boxes.push({ min: box.min.clone(), max: box.max.clone(), tag: tag || null });
+  }
+
+  /** Rayon vertical/horizontal : renvoie la distance du premier impact. */
+  raycast(origin, dir, maxDist) {
+    let best = maxDist;
+    for (const b of this.boxes) {
+      const t = rayBox(origin, dir, b.min, b.max);
+      if (t !== null && t >= 0 && t < best) best = t;
+    }
+    return best < maxDist ? best : null;
+  }
+
+  /** Point d'impact + normale approximative (pour décals/impacts). */
+  raycastHit(origin, dir, maxDist) {
+    let best = maxDist, hitBox = null;
+    for (const b of this.boxes) {
+      const t = rayBox(origin, dir, b.min, b.max);
+      if (t !== null && t >= 0 && t < best) { best = t; hitBox = b; }
+    }
+    if (!hitBox) return null;
+    const p = origin.clone().addScaledVector(dir, best);
+    // normale = axe dont on est le plus proche
+    const c = hitBox.min.clone().add(hitBox.max).multiplyScalar(0.5);
+    const half = hitBox.max.clone().sub(hitBox.min).multiplyScalar(0.5);
+    const d = p.clone().sub(c);
+    const ax = Math.abs(d.x / Math.max(half.x, 1e-4));
+    const ay = Math.abs(d.y / Math.max(half.y, 1e-4));
+    const az = Math.abs(d.z / Math.max(half.z, 1e-4));
+    const n = new (p.constructor)(0, 0, 0);
+    if (ax >= ay && ax >= az) n.x = Math.sign(d.x) || 1;
+    else if (ay >= az) n.y = Math.sign(d.y) || 1;
+    else n.z = Math.sign(d.z) || 1;
+    return { point: p, normal: n, dist: best, tag: hitBox.tag };
+  }
+
+  /** Hauteur du sol sous (x,z) — -Infinity si rien. */
+  groundAt(x, z, fromY) {
+    let best = -Infinity;
+    for (const b of this.boxes) {
+      if (x < b.min.x || x > b.max.x || z < b.min.z || z > b.max.z) continue;
+      if (b.max.y <= fromY + 0.35 && b.max.y > best) best = b.max.y;
+    }
+    return best;
+  }
+
+  /** true si la boîte du joueur (capsule approximée) touche un solide. */
+  intersects(cx, cy, cz, r, h, skipTag) {
+    for (const b of this.boxes) {
+      if (skipTag && b.tag === skipTag) continue;
+      if (cx + r > b.min.x && cx - r < b.max.x &&
+          cz + r > b.min.z && cz - r < b.max.z &&
+          cy + h > b.min.y && cy < b.max.y) return b;
+    }
+    return null;
+  }
+}
+
+/* Intersection rayon / AABB (slab method). null si pas d'impact. */
+function rayBox(o, d, mn, mx) {
+  let tmin = 0, tmax = Infinity;
+  for (const ax of ['x', 'y', 'z']) {
+    const inv = 1 / (d[ax] || 1e-9);
+    let t1 = (mn[ax] - o[ax]) * inv;
+    let t2 = (mx[ax] - o[ax]) * inv;
+    if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+    tmin = Math.max(tmin, t1);
+    tmax = Math.min(tmax, t2);
+    if (tmax < tmin) return null;
+  }
+  return tmin;
+}
+
+/* ---------------------------------------------------------- runtime */
+/**
+ * @param {Object} o
+ * @param {Object}  o.THREE   module three (injecté : éditeur = import map, export = inline)
+ * @param {Object}  o.scene   scène three dans laquelle le runtime ajoute ses objets
+ * @param {Element} o.canvas  canvas de rendu
+ * @param {Object}  o.data    projet sérialisé { scene, objects[] }
+ * @param {Object} [o.host]   adaptateur UI (HUD, overlays, toast) — optionnel
+ * @param {Object} [o.renderer] réutilise un renderer existant (mode éditeur)
+ */
+export class KreoRuntime {
+  constructor(o) {
+    this.THREE = o.THREE;
+    this.data = o.data || { scene: {}, objects: [] };
+    this.scene = o.scene || new this.THREE.Scene();
+    this.canvas = o.canvas;
+    this.host = o.host || null;
+
+    this.renderer = o.renderer || new this.THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+    this.camera = new this.THREE.PerspectiveCamera(75, 1, 0.05, 500);
+    this.world = new AABBWorld();
+    this.entities = new Map();       // id → record vivant
+    this.running = false;
+    this.time = 0;
+    this.input = {};
+
+    this._hooks = new Map();
+    this._tmpV = new this.THREE.Vector3();
+    this._ray = new this.THREE.Raycaster();
+
+    this.state = {
+      score: 0, health: 100, maxHealth: 100,
+      ammo: 0, ammoMax: 0, weapon: null,
+      won: false, lost: false, kills: 0, wave: 1
+    };
+
+    /* ---- combat ---- */
+    this.enemies = [];        // IA vivante
+    this.projectiles = [];    // projectiles en vol (ennemis)
+    this.particles = [];      // impacts / traçantes
+    this.hudFlash = 0;
+    this.onFire = () => this._fire();   // branché par le HTML exporté
+
+    /* Viewmodel : l'arme en main. Enfant de la caméra, rendue dans une passe
+       séparée avec la profondeur nettoyée — sinon elle traverse les murs. */
+    this.vm = new this.THREE.Group();
+    this.vmScene = new this.THREE.Scene();
+    this.recoilKick = 0;
+    this.recoilRot = 0;
+    this.bobT = 0;
+    this._vmBuilt = false;
+
+    /* Armes : données pures, donc modifiables par script. */
+    this.weapons = {
+      pistol: { id: 'pistol', name: 'Pistolet', damage: 26, rate: 0.24, mag: 12, reserve: 96, spread: 0.012, pellets: 1, recoil: 0.018, range: 140, auto: false },
+      rifle: { id: 'rifle', name: 'Fusil', damage: 20, rate: 0.095, mag: 30, reserve: 180, spread: 0.016, pellets: 1, recoil: 0.011, range: 180, auto: true },
+      shotgun: { id: 'shotgun', name: 'Fusil à pompe', damage: 12, rate: 0.8, mag: 6, reserve: 42, spread: 0.07, pellets: 9, recoil: 0.04, range: 60, auto: false }
+    };
+  }
+
+  /* ---------- construction ---------- */
+  /** Crée les objets de jeu depuis les données. Idempotent. */
+  build() {
+    const T = this.THREE;
+    this.clear();
+    const objects = this.data.objects || [];
+    for (const p of objects) {
+      const rec = this._makeRecord(p);
+      if (rec) this.entities.set(p.id, rec);
+    }
+    this._rebuildWorld();
+    this._spawnPlayer();
+    this._spawnEnemies();
+    if (!this._vmBuilt) { this._buildViewmodel(); this._vmBuilt = true; }
+    // arme de départ : la première posée dans la scène, sinon le pistolet
+    const wRec = Array.from(this.entities.values()).find((r) => r.type === 'weapon');
+    this.giveWeapon((wRec && wRec.def.weapon) || (wRec ? 'rifle' : 'pistol'));
+    return this;
+  }
+
+  clear() {
+    for (const rec of this.entities.values()) this._disposeRec(rec);
+    this.entities.clear();
+    this.world.clear();
+  }
+
+  _disposeRec(rec) {
+    if (rec.root && rec.root.parent) rec.root.parent.remove(rec.root);
+    if (rec.mixer) rec.mixer.stopAllAction();
+    if (rec.ownedGeom) rec.ownedGeom.forEach((g) => g.dispose && g.dispose());
+    if (rec.ownedMat) rec.ownedMat.forEach((m) => m.dispose && m.dispose());
+  }
+
+  _makeRecord(p) {
+    const T = this.THREE;
+    const g = new T.Group();
+    const pos = p.position || [0, 0, 0];
+    g.position.set(pos[0], pos[1], pos[2]);
+    g.rotation.set(
+      T.MathUtils.degToRad((p.rotation || [0, 0, 0])[0]),
+      T.MathUtils.degToRad((p.rotation || [0, 0, 0])[1]),
+      T.MathUtils.degToRad((p.rotation || [0, 0, 0])[2])
+    );
+    const sc = p.scale || [1, 1, 1];
+    g.scale.set(sc[0], sc[1], sc[2]);
+    g.visible = p.visible !== false;
+
+    const rec = {
+      id: p.id, type: p.type, name: p.name, def: p,
+      root: g, ownedGeom: null, ownedMat: null,
+      collidable: p.collidable !== false,
+      tags: p.tags || [],
+      alive: true, hp: p.hp != null ? p.hp : 100,
+      script: p.script || null,
+      mixer: null, actions: [], currentClip: null
+    };
+
+    switch (p.type) {
+      case 'cube':
+      case 'sphere':
+      case 'cylinder':
+      case 'cone':
+      case 'torus':
+      case 'plane': g.add(this._primitive(p, rec)); break;
+      case 'sun':
+      case 'point': g.add(this._light(p, rec)); break;
+      case 'model': g.add(this._modelPlaceholder(p, rec)); break;
+      case 'player':
+      case 'coin':
+      case 'goal':
+      case 'pickup':
+      case 'spawn':
+      case 'weapon':
+      case 'enemy':
+      case 'cover':
+        g.add(this._marker(p, rec));
+        break;
+      default: break;
+    }
+
+    g.traverse((o) => {
+      if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+    });
+    this.scene.add(g);
+    return rec;
+  }
+
+  _mat(p) {
+    const T = this.THREE;
+    const m = p.material || {};
+    const params = {
+      color: new T.Color(m.color || '#8FA3C8'),
+      metalness: m.metalness != null ? m.metalness : 0.08,
+      roughness: m.roughness != null ? m.roughness : 0.62
+    };
+    if (m.emissive && m.emissive !== '#000000') params.emissive = new T.Color(m.emissive);
+    if (m.opacity != null && m.opacity < 1) { params.transparent = true; params.opacity = m.opacity; }
+    if (m.wireframe) params.wireframe = true;
+    const mat = new T.MeshStandardMaterial(params);
+    // textures : la propriété existe déjà dans les données, elle n'était
+    // simplement jamais lue au chargement.
+    if (m.texture && this.textures && this.textures[m.texture]) {
+      mat.map = this.textures[m.texture];
+      if (m.uvScale) { mat.map = mat.map.clone(); mat.map.needsUpdate = true; mat.map.repeat.set(m.uvScale[0], m.uvScale[1]); }
+    }
+    return mat;
+  }
+
+  _primitive(p, rec) {
+    const T = this.THREE;
+    let geo;
+    switch (p.type) {
+      case 'sphere': geo = new T.SphereGeometry(1.2, 32, 24); break;
+      case 'cylinder': geo = new T.CylinderGeometry(1, 1, 2, 32); break;
+      case 'cone': geo = new T.ConeGeometry(1.2, 2.2, 32); break;
+      case 'plane': geo = new T.BoxGeometry(16, 0.5, 16); break;
+      case 'torus': geo = new T.TorusGeometry(1, 0.38, 20, 48); break;
+      default: geo = new T.BoxGeometry(2, 2, 2);
+    }
+    const mesh = new T.Mesh(geo, this._mat(p));
+    rec.ownedGeom = [geo];
+    rec.ownedMat = [mesh.material];
+    return mesh;
+  }
+
+  _light(p, rec) {
+    const T = this.THREE;
+    const l = p.light || {};
+    let light;
+    if (p.type === 'sun') {
+      light = new T.DirectionalLight(new T.Color(l.color || '#FFF2DE'), l.intensity != null ? l.intensity : 2.2);
+      light.castShadow = true;
+      light.shadow.mapSize.set(1024, 1024);
+      light.shadow.camera.left = -40; light.shadow.camera.right = 40;
+      light.shadow.camera.top = 40; light.shadow.camera.bottom = -40;
+      light.shadow.bias = -0.0004;
+      // la direction vient de la position de l'objet
+      light.position.set(0.35, 1, 0.25).normalize().multiplyScalar(40);
+    } else {
+      light = new T.PointLight(new T.Color(l.color || '#FFD9A0'), l.intensity != null ? l.intensity : 60, l.distance || 45, 2);
+    }
+    rec.light = light;
+    light.castShadow = p.type === 'point' ? false : light.castShadow;
+    return light;
+  }
+
+  _marker(p, rec) {
+    const T = this.THREE;
+    const color = {
+      player: 0x6D4AFF, coin: 0xF5C542, goal: 0x3ECF8E, pickup: 0x4FD1C5,
+      spawn: 0xFF8A5C, weapon: 0x9AA7FF, enemy: 0xFF5C5C, cover: 0x6C7B94
+    }[p.type] || 0xAAAAAA;
+    const mat = new T.MeshStandardMaterial({
+      color, metalness: 0.3, roughness: 0.5,
+      emissive: new T.Color(color).multiplyScalar(0.25),
+      transparent: true, opacity: p.type === 'player' || p.type === 'spawn' ? 0.0 : 0.85
+    });
+    let geo;
+    if (p.type === 'player' || p.type === 'enemy') geo = new T.CapsuleGeometry(0.55, 1.05, 8, 18);
+    else if (p.type === 'spawn') geo = new T.CylinderGeometry(0.9, 0.9, 0.08, 24);
+    else geo = new T.OctahedronGeometry(0.6, 0);
+    rec.ownedGeom = [geo];
+    rec.ownedMat = [mat];
+    return new T.Mesh(geo, mat);
+  }
+
+  _modelPlaceholder(p, rec) {
+    const T = this.THREE;
+    const geo = new T.BoxGeometry(1.6, 1.6, 1.6);
+    const mat = new T.MeshStandardMaterial({ color: 0x7DD3A0, wireframe: true });
+    rec.ownedGeom = [geo];
+    rec.ownedMat = [mat];
+    return new T.Mesh(geo, mat);
+  }
+
+  /** Reconstruit la physique depuis les objets visibles et collisionnables. */
+  _rebuildWorld() {
+    const T = this.THREE;
+    this.world.clear();
+    const box = new T.Box3();
+    for (const rec of this.entities.values()) {
+      if (!rec.collidable || !rec.root.visible) continue;
+      if (rec.type === 'player' || rec.type === 'coin' || rec.type === 'goal') continue;
+      if (!rec.root.children.length) continue;
+      box.setFromObject(rec.root);
+      if (!isFinite(box.min.x) || !isFinite(box.max.x)) continue;
+      this.world.add(box, rec.id);
+    }
+  }
+
+  /* ---------- joueur ---------- */
+  _spawnPlayer() {
+    const T = this.THREE;
+    let spawn = null;
+    for (const rec of this.entities.values()) if (rec.type === 'spawn') { spawn = rec; break; }
+    let player = null;
+    for (const rec of this.entities.values()) if (rec.type === 'player') { player = rec; break; }
+
+    const pos = spawn ? spawn.root.position.clone()
+      : player ? player.root.position.clone()
+        : new T.Vector3(0, 0, 12);
+
+    this.player = {
+      pos: pos.clone(),
+      vel: new T.Vector3(),
+      yaw: 0,
+      pitch: 0,
+      grounded: false,
+      height: 1.75,
+      radius: 0.4,
+      eye: 1.62,
+      walkSpeed: 6.2,
+      runSpeed: 9.4,
+      jumpSpeed: 8.4,
+      gravity: 24,
+      record: player
+    };
+    if (player) player.root.visible = false;   // en 1re personne, le corps n'est pas visible
+  }
+
+  /* ---------- boucle ---------- */
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this._last = performance.now();
+    this._compile();
+    this._runHooks('onStart');
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+    const loop = (now) => {
+      if (!this.running) return;
+      const dt = Math.min(0.05, (now - this._last) / 1000);
+      this._last = now;
+      this.update(dt);
+      this.requestFrame = requestAnimationFrame(loop);
+    };
+    this.requestFrame = requestAnimationFrame(loop);
+  }
+
+  stop() {
+    this.running = false;
+    if (this.requestFrame) cancelAnimationFrame(this.requestFrame);
+  }
+
+  dispose() {
+    this.stop();
+    this.clear();
+  }
+
+  resize(w, h, pr) {
+    this.camera.aspect = w / Math.max(1, h);
+    this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(pr || 1);
+    this.renderer.setSize(w, h, false);
+  }
+
+  update(dt) {
+    this.time += dt;
+    if (this.state.won || this.state.lost) { this._render(); return; }
+    this._updatePlayer(dt);
+    this._updateViewmodel(dt);
+    this._updateEntities(dt);
+    this._updateCombat(dt);
+    this._runHooks('onUpdate', dt);
+    this._render();
+  }
+
+  _updatePlayer(dt) {
+    const p = this.player;
+    const inp = this.input;
+
+    // regard
+    if (inp.lookX) p.yaw -= inp.lookX;
+    if (inp.lookY) p.pitch = clamp(p.pitch - inp.lookY, -1.45, 1.45);
+    inp.lookX = 0; inp.lookY = 0;
+
+    // déplacement relatif à la caméra
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+    const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+    let mf = 0, ms = 0;
+    if (inp.forward) mf += 1;
+    if (inp.back) mf -= 1;
+    if (inp.right) ms += 1;
+    if (inp.left) ms -= 1;
+    const len = Math.hypot(mf, ms) || 1;
+    mf /= len; ms /= len;
+    const speed = (inp.run ? p.runSpeed : p.walkSpeed) * (inp.ads ? 0.55 : 1);
+    const wishX = (fx * mf + rx * ms) * speed;
+    const wishZ = (fz * mf + rz * ms) * speed;
+    const accel = p.grounded ? 14 : 4;
+    p.vel.x += (wishX - p.vel.x) * Math.min(1, dt * accel);
+    p.vel.z += (wishZ - p.vel.z) * Math.min(1, dt * accel);
+
+    if (inp.jump && p.grounded) { p.vel.y = p.jumpSpeed; p.grounded = false; }
+    p.vel.y = Math.max(-60, p.vel.y - p.gravity * dt);
+
+    const r = p.radius, h = p.height;
+    const old = p.pos.clone();
+
+    // axe X
+    p.pos.x += p.vel.x * dt;
+    if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) { p.pos.x = old.x; p.vel.x = 0; }
+    // axe Z
+    p.pos.z += p.vel.z * dt;
+    if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) { p.pos.z = old.z; p.vel.z = 0; }
+    // axe Y
+    p.pos.y += p.vel.y * dt;
+    p.grounded = false;
+    if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) {
+      p.pos.y = old.y;
+      if (p.vel.y <= 0) p.grounded = true;
+      p.vel.y = 0;
+    }
+    const ground = this.world.groundAt(p.pos.x, p.pos.z, p.pos.y);
+    if (p.pos.y <= 0 || (ground > -Infinity && p.pos.y <= ground + 0.02)) {
+      p.pos.y = Math.max(p.pos.y, ground > -Infinity ? ground : 0);
+      if (p.vel.y <= 0) { p.vel.y = 0; p.grounded = true; }
+    }
+
+    // chute hors carte
+    if (p.pos.y < -40) this._damage(999);
+
+    // caméra première personne
+    const shake = (this.damageFlash || 0) * 0.035;
+    this.camera.position.set(
+      p.pos.x + (Math.random() - 0.5) * shake,
+      p.pos.y + p.eye + (Math.random() - 0.5) * shake,
+      p.pos.z
+    );
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.set(p.pitch, p.yaw, (Math.random() - 0.5) * shake * 0.6);
+  }
+
+  _updateEntities(dt) {
+    for (const rec of this.entities.values()) {
+      if (rec.mixer) rec.mixer.update(dt);
+      if (rec.type === 'coin') rec.root.rotation.y += dt * 2.4;
+      if (rec.type === 'goal') rec.root.rotation.y += dt * 0.9;
+    }
+  }
+
+  /* ---------- viewmodel (arme en main) ---------- */
+  _buildViewmodel() {
+    const T = this.THREE;
+    const cam = this.camera;
+    const vm = this.vm;
+    // Position écran : en bas à droite, à 58° de FOV dédié.
+    vm.position.set(0.19, -0.20, -0.55);
+    vm.scale.setScalar(0.95);
+    cam.add(vm);
+    this.scene.add(cam);        // la caméra doit être dans le graphe pour le viewmodel
+
+    // lumières du calque : studio indépendant de la scène
+    this.vmScene.add(new T.HemisphereLight(0xB8CCE8, 0x2A2E36, 1.7));
+    const key = new T.DirectionalLight(0xFFF0DC, 2.6);
+    key.position.set(-1.1, 1.1, 1.0);
+    this.vmScene.add(key);
+    const rim = new T.DirectionalLight(0xBBD0F0, 1.8);
+    rim.position.set(1.5, 0.5, 0.7);
+    this.vmScene.add(rim);
+    this.vmFlash = new T.PointLight(0xFFC878, 0, 3, 2);
+    this.vmFlash.position.set(0.1, 0.02, -0.5);
+    this.vmScene.add(this.vmFlash);
+
+    // caméra du calque : même pose, FOV plus étroit
+    this.vmCamera = new T.PerspectiveCamera(58, 16 / 9, 0.01, 6);
+
+    // matériaux
+    const grain = typeof makeNoiseTexture === 'function' ? makeNoiseTexture(T, 64, 3, 0.55) : null;
+    const makeMat = (color, rough, metal, glow) => {
+      const c = new T.Color(color);
+      const m = new T.MeshStandardMaterial({
+        color: c, roughness: rough, metalness: metal,
+        emissive: c, emissiveIntensity: glow
+      });
+      if (grain) m.roughnessMap = grain;
+      return m;
+    };
+    const steel = makeMat(0x6E747D, 0.5, 0.45, 0.30);
+    const poly = makeMat(0x282C33, 0.66, 0.35, 0.34);
+    const grip = makeMat(0x1C1F25, 0.95, 0.0, 0.36);
+    const accent = new T.MeshStandardMaterial({ color: 0x2FD8FF, emissive: 0x1E9FC0, emissiveIntensity: 0.7, roughness: 0.4 });
+
+    const add = (geo, material, x, y, z, rx) => {
+      const m = new T.Mesh(geo, material);
+      m.position.set(x, y, z);
+      if (rx) m.rotation.x = rx;
+      vm.add(m);
+      return m;
+    };
+
+    // --- pistolet
+    this.vmModels = {};
+    const pistol = new T.Group();
+    {
+      const b = (w, h, d, mat, x, y, z, rx) => {
+        const m = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
+        m.position.set(x, y, z);
+        if (rx) m.rotation.x = rx;
+        pistol.add(m);
+        return m;
+      };
+      b(0.040, 0.050, 0.215, poly, 0, -0.004, -0.085);
+      b(0.046, 0.032, 0.230, steel, 0, 0.030, -0.090);
+      b(0.042, 0.014, 0.226, poly, 0, 0.048, -0.090);
+      b(0.010, 0.012, 0.010, accent, 0, 0.058, -0.196);
+      const guard = new T.Mesh(new T.TorusGeometry(0.019, 0.0055, 8, 14, Math.PI * 1.5), poly);
+      guard.position.set(0, -0.030, -0.048);
+      guard.rotation.set(Math.PI / 2, 0, -Math.PI * 0.75);
+      pistol.add(guard);
+      b(0.007, 0.022, 0.009, grip, 0, -0.034, -0.040);
+      b(0.044, 0.115, 0.058, grip, 0, -0.078, 0.014, 0.28);
+      b(0.0145, 0.0145, 0.055, poly, 0, 0.010, -0.212, Math.PI / 2);
+    }
+    this.vmModels.pistol = pistol;
+
+    // --- fusil
+    const rifle = new T.Group();
+    {
+      const b = (w, h, d, mat, x, y, z, rx) => {
+        const m = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
+        m.position.set(x, y, z);
+        if (rx) m.rotation.x = rx;
+        rifle.add(m);
+        return m;
+      };
+      b(0.055, 0.085, 0.44, steel, 0, 0, -0.16);
+      const barrel = new T.Mesh(new T.CylinderGeometry(0.016, 0.016, 0.26, 10), poly);
+      barrel.position.set(0, 0.02, -0.50);
+      barrel.rotation.x = Math.PI / 2;
+      rifle.add(barrel);
+      b(0.040, 0.100, 0.062, grip, 0, -0.145, -0.055, 0.18);
+      b(0.042, 0.115, 0.055, grip, 0, -0.105, 0.030, 0.34);
+      b(0.050, 0.075, 0.120, poly, 0, -0.010, 0.130);
+      const scope = new T.Mesh(new T.CylinderGeometry(0.021, 0.021, 0.12, 10), poly);
+      scope.position.set(0, 0.085, -0.18);
+      scope.rotation.x = Math.PI / 2;
+      rifle.add(scope);
+      b(0.020, 0.012, 0.070, accent, 0, 0.062, -0.28);
+    }
+    this.vmModels.rifle = rifle;
+
+    // --- fusil à pompe
+    const shotgun = new T.Group();
+    {
+      const b = (w, h, d, mat, x, y, z, rx) => {
+        const m = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
+        m.position.set(x, y, z);
+        if (rx) m.rotation.x = rx;
+        shotgun.add(m);
+        return m;
+      };
+      b(0.075, 0.105, 0.52, steel, 0, 0, -0.18);
+      const tube = new T.Mesh(new T.CylinderGeometry(0.022, 0.022, 0.30, 10), poly);
+      tube.position.set(0, 0.032, -0.52);
+      tube.rotation.x = Math.PI / 2;
+      shotgun.add(tube);
+      b(0.060, 0.055, 0.160, grip, 0, -0.062, -0.32);
+      b(0.055, 0.110, 0.080, grip, 0, -0.085, 0.060, 0.2);
+      b(0.020, 0.012, 0.060, accent, 0, 0.070, -0.30);
+    }
+    this.vmModels.shotgun = shotgun;
+
+    // --- bras droit
+    const armMat = makeMat(0x2A3648, 0.95, 0.0, 0.30);
+    const gloveMat = makeMat(0x22262D, 0.9, 0.02, 0.32);
+    const arm = new T.Group();
+    {
+      const wrist = new T.Vector3(0.052, -0.130, 0.01);
+      const end = new T.Vector3(0.115, -0.62, 0.03);
+      const dir = end.clone().sub(wrist);
+      const len = dir.length();
+      const limb = new T.Mesh(new T.CylinderGeometry(0.045, 0.058, len, 12), armMat);
+      limb.position.copy(wrist).addScaledVector(dir, 0.5);
+      limb.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize());
+      arm.add(limb);
+      const hand = new T.Mesh(new T.BoxGeometry(0.056, 0.09, 0.078), gloveMat);
+      hand.position.set(0.008, -0.088, -0.005);
+      hand.rotation.set(0.22, 0.05, -0.06);
+      arm.add(hand);
+    }
+    this.vmArm = arm;
+
+    // tout est ajouté dans la scène du calque via la caméra (voir plus bas)
+    vm.add(arm);
+    for (const k of Object.keys(this.vmModels)) {
+      const g = this.vmModels[k];
+      g.visible = false;
+      vm.add(g);
+    }
+
+    this._selectViewmodel();
+  }
+
+  _selectViewmodel() {
+    const w = this.state.weapon;
+    const key = w ? w.id : 'pistol';
+    for (const k of Object.keys(this.vmModels)) this.vmModels[k].visible = (k === key);
+  }
+
+  _updateViewmodel(dt) {
+    const vm = this.vm;
+    const p = this.player;
+    // balancement : fonction de la vitesse au sol
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    this.bobT += dt * (2.2 + speed * 1.1);
+    const bobAmp = Math.min(1, speed / p.runSpeed) * 0.012 * (this.input.ads ? 0.35 : 1);
+    // recul : décroît vite, revient à zéro
+    this.recoilKick *= Math.pow(0.0015, dt);
+    this.recoilRot *= Math.pow(0.0015, dt);
+    const ads = this.input.ads ? 1 : 0;
+    const baseX = 0.19 * (1 - ads);
+    const baseY = -0.062 + (-0.20 + 0.062) * (1 - ads);
+    const baseZ = -0.48 + (-0.55 + 0.48) * (1 - ads);
+    vm.position.set(
+      baseX + Math.sin(this.bobT) * bobAmp,
+      baseY + Math.cos(this.bobT * 2) * bobAmp * 0.8,
+      baseZ + this.recoilKick
+    );
+    vm.rotation.set(-this.recoilRot, 0.02, -0.03);
+    // le point lumineux suit le recul
+    this.vmFlash.intensity *= Math.pow(0.002, dt);
+    // FOV accordé à la visée
+    const targetFov = 76 - ads * 16;
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 10);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Rend la scène, puis l'arme en main par-dessus (profondeur nettoyée). */
+  _render() {
+    const r = this.renderer;
+    r.setRenderTarget(null);
+    // la caméra est dans la scène à cause du viewmodel : on la retire
+    // temporairement du rendu principal en masquant ses enfants
+    const vmVisible = this.vm.visible;
+    this.vm.visible = false;
+    r.render(this.scene, this.camera);
+    this.vm.visible = vmVisible;
+
+    if (this.vm.visible && this.vmScene) {
+      // caméra du calque : même pose, FOV plus étroit
+      const c = this.camera;
+      const vc = this.vmCamera;
+      vc.position.copy(c.position);
+      vc.quaternion.copy(c.quaternion);
+      vc.aspect = c.aspect;
+      vc.fov = 58;
+      vc.updateProjectionMatrix();
+      vc.updateMatrixWorld(true);
+      vc.matrixWorldInverse.copy(vc.matrixWorld).invert();
+      // le viewmodel est enfant de la caméra du jeu : on le détache
+      // logiquement en annulant la transformation de la caméra
+      this.vmRoot = this.vmRoot || new this.THREE.Group();
+      if (this.vm.parent !== this.vmRoot) {
+        this.vmRoot.add(this.vm);
+        this.vmScene.add(this.vmRoot);
+      }
+      this.vmRoot.position.copy(c.position);
+      this.vmRoot.quaternion.copy(c.quaternion);
+      this.vmRoot.updateMatrixWorld(true);
+      const prevAuto = r.autoClear;
+      r.autoClear = false;
+      r.clearDepth();
+      r.render(this.vmScene, vc);
+      r.autoClear = prevAuto;
+    }
+  }
+
+  /* ---------- combat ---------- */
+  /** Équipe une arme (par id du catalogue ou objet complet). */
+  giveWeapon(id) {
+    const w = typeof id === 'string' ? this.weapons[id] : id;
+    if (!w) return null;
+    this.state.weapon = w;
+    this.state.ammo = w.mag;
+    this.state.ammoMax = w.mag;
+    this._selectViewmodel();
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+    return w;
+  }
+
+  /** Tir : hitscan + dispersion + recul. Appelé par le clic ou par un script. */
+  _fire() {
+    if (!this.running || this.state.won || this.state.lost) return null;
+    const w = this.state.weapon;
+    if (!w) return null;
+    const now = this.time;
+    if (this._nextShot && now < this._nextShot) return null;
+    if (this.state.ammo <= 0) { this.reload(); return null; }
+    this._nextShot = now + w.rate;
+    this.state.ammo--;
+
+    const p = this.player;
+    const T = this.THREE;
+    const origin = new T.Vector3(p.pos.x, p.pos.y + p.eye, p.pos.z);
+    const base = new T.Vector3(0, 0, -1).applyEuler(this.camera.rotation);
+    let bestHit = null;
+
+    for (let i = 0; i < w.pellets; i++) {
+      const dir = base.clone();
+      // dispersion : petit cône aléatoire
+      const sp = w.spread * (this.input.ads ? 0.55 : 1);
+      dir.x += (Math.random() - 0.5) * sp * 2;
+      dir.y += (Math.random() - 0.5) * sp * 2;
+      dir.z += (Math.random() - 0.5) * sp * 2;
+      dir.normalize();
+
+      const worldHit = this.world.raycastHit(origin, dir, w.range);
+      const enemyHit = this._rayEnemies(origin, dir, worldHit ? worldHit.dist : w.range);
+      if (enemyHit && (!worldHit || enemyHit.dist < worldHit.dist)) {
+        enemyHit.enemy.hp -= w.damage;
+        enemyHit.enemy.hurtT = 0.18;
+        if (!bestHit) bestHit = { point: enemyHit.point, enemy: enemyHit.enemy };
+        if (enemyHit.enemy.hp <= 0) this.kill(enemyHit.enemy.id);
+        this._spawnImpact(enemyHit.point, null, 0xFFCF6A);
+      } else if (worldHit) {
+        if (!bestHit) bestHit = { point: worldHit.point };
+        this._spawnImpact(worldHit.point, worldHit.normal, 0xCFE0FF);
+      }
+    }
+
+    // recul caméra
+    p.pitch = clamp(p.pitch + w.recoil * (0.7 + Math.random() * 0.6), -1.45, 1.45);
+    p.yaw += (Math.random() - 0.5) * w.recoil * 0.7;
+    this.recoilKick = Math.min(0.075, 0.02 + w.recoil * 1.6);
+    this.recoilRot = Math.min(0.30, 0.08 + w.recoil * 4);
+    this.vmFlash.intensity = 26;
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+    if (this.host && this.host.onShot) this.host.onShot(w);
+    return bestHit;
+  }
+
+  reload() {
+    const w = this.state.weapon;
+    if (!w || this._reloading) return;
+    this._reloading = true;
+    setTimeout(() => {
+      this.state.ammo = w.mag;
+      this._reloading = false;
+      if (this.host && this.host.onHud) this.host.onHud(this.state);
+    }, 900);
+  }
+
+  _rayEnemies(origin, dir, maxDist) {
+    const T = this.THREE;
+    let best = null;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const c = e.root.position.clone();
+      c.y += e.height * 0.55;
+      // sphère englobante pour la précision du tir
+      const toC = c.clone().sub(origin);
+      const along = toC.dot(dir);
+      if (along < 0 || along > maxDist) continue;
+      const perp = toC.clone().addScaledVector(dir, -along).length();
+      if (perp > e.radius) continue;
+      if (!best || along < best.dist) {
+        best = { enemy: e, dist: along, point: origin.clone().addScaledVector(dir, along) };
+      }
+    }
+    return best;
+  }
+
+  _spawnImpact(point, normal, color) {
+    if (!this.host || !this.host.onImpact) return;
+    this.host.onImpact(point, normal, color);
+  }
+
+  _spawnEnemies() {
+    const T = this.THREE;
+    this.enemies = [];
+    for (const rec of this.entities.values()) {
+      if (rec.type !== 'enemy') continue;
+      this.enemies.push({
+        id: rec.id, root: rec.root, hp: rec.hp,
+        maxHp: rec.def.hp || 100,
+        speed: rec.def.speed || 2.6,
+        radius: 0.75,
+        height: rec.def.attackRange ? 2.2 : 2.0,
+        attackRange: rec.def.attackRange || 26,
+        damage: rec.def.damage || 8,
+        cooldown: 1.1 + Math.random() * 0.8,
+        alive: true, hurtT: 0,
+        patrolA: rec.root.position.clone(),
+        patrolT: Math.random() * 6,
+        state: 'seek'
+      });
+    }
+  }
+
+  _updateCombat(dt) {
+    const T = this.THREE;
+    const p = this.player;
+    const eye = new T.Vector3(p.pos.x, p.pos.y + p.eye, p.pos.z);
+
+    // --- ennemis : poursuite + tir à distance
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      e.patrolT += dt;
+      const toP = eye.clone().sub(e.root.position).setY(0);
+      const dist = toP.length();
+      toP.normalize();
+
+      // regard vers le joueur
+      const targetYaw = Math.atan2(toP.x, toP.z);
+      let diff = targetYaw - e.root.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      e.root.rotation.y += diff * Math.min(1, dt * 4);
+
+      // avance jusqu'à la distance de tir, puis tient la position
+      if (dist > e.attackRange * 0.7) {
+        const step = e.speed * dt;
+        const nx = e.root.position.x + toP.x * step;
+        const nz = e.root.position.z + toP.z * step;
+        if (!this.world.intersects(nx, e.root.position.y, nz, 0.5, 1.8)) {
+          e.root.position.x = nx;
+          e.root.position.z = nz;
+        }
+      }
+
+      // tir
+      e.cooldown -= dt;
+      const hasLOS = !this.world.raycast(e.root.position.clone().setY(e.root.position.y + 1.4), toP, dist - 1);
+      if (e.cooldown <= 0 && dist < e.attackRange && hasLOS) {
+        e.cooldown = 1.4 + Math.random() * 1.1;
+        this._enemyShot(e, eye);
+      }
+      if (e.hurtT > 0) {
+        e.hurtT -= dt;
+        if (e.root.children[0] && e.root.children[0].material) {
+          e.root.children[0].material.emissiveIntensity = 0.3 + e.hurtT * 6;
+        }
+      }
+    }
+
+    // --- projectiles ennemis (boules lentes, esquivables)
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const pr = this.projectiles[i];
+      pr.life -= dt;
+      pr.mesh.position.addScaledVector(pr.dir, pr.speed * dt);
+      const d = pr.mesh.position.distanceTo(eye);
+      const hitWorld = this.world.raycast(pr.mesh.position, pr.dir, 0.6);
+      if (d < 0.85) {
+        this._damage(pr.damage);
+        this._spawnImpact(pr.mesh.position, null, 0xFF6B6B);
+        this._removeProjectile(i);
+      } else if (hitWorld || pr.life <= 0) {
+        this._spawnImpact(pr.mesh.position, null, 0xFF6B6B);
+        this._removeProjectile(i);
+      }
+    }
+
+    // --- particules d'impact
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const pa = this.particles[i];
+      pa.life -= dt;
+      if (pa.life <= 0) {
+        if (pa.mesh.parent) pa.mesh.parent.remove(pa.mesh);
+        pa.mesh.geometry.dispose();
+        pa.mesh.material.dispose();
+        this.particles.splice(i, 1);
+        continue;
+      }
+      pa.mesh.scale.setScalar(Math.max(0.05, pa.life / pa.maxLife));
+      if (pa.mesh.material) pa.mesh.material.opacity = Math.min(1, pa.life / pa.maxLife);
+    }
+
+    // --- pièces / bonus au contact
+    for (const rec of this.entities.values()) {
+      if (!rec.alive || !rec.root.visible) continue;
+      if (rec.type !== 'coin' && rec.type !== 'pickup' && rec.type !== 'weapon') continue;
+      const d = rec.root.position.distanceTo(new T.Vector3(p.pos.x, p.pos.y + 0.9, p.pos.z));
+      if (d > 1.7) continue;
+      if (rec.type === 'coin') { this.addScore(rec.def.value || 10); }
+      if (rec.type === 'weapon') { this.giveWeapon(rec.def.weapon || 'rifle'); }
+      if (rec.type === 'pickup') {
+        if (rec.def.kind === 'health') this.heal(rec.def.value || 25);
+        else this.addScore(rec.def.value || 25);
+      }
+      rec.root.visible = false;
+      rec.alive = false;
+      this._rebuildWorld();
+      if (this.host && this.host.onPickup) this.host.onPickup(rec.type);
+    }
+
+    // --- régénération de vie (après 4 s sans dégâts)
+    if (this.time - (this.lastHurt || 0) > 4 && this.state.health < this.state.maxHealth) {
+      this.state.health = Math.min(this.state.maxHealth, this.state.health + 9 * dt);
+      if (this.host && this.host.onHud) this.host.onHud(this.state);
+    }
+    if (this.damageFlash > 0) this.damageFlash = Math.max(0, this.damageFlash - dt * 1.8);
+
+    // --- objectif
+    for (const rec of this.entities.values()) {
+      if (rec.type !== 'goal' || !rec.root.visible) continue;
+      const d = rec.root.position.distanceTo(new T.Vector3(p.pos.x, p.pos.y, p.pos.z));
+      if (d < 2.2) this.win('Objectif atteint');
+    }
+  }
+
+  _enemyShot(e, eye) {
+    const T = this.THREE;
+    const from = e.root.position.clone().setY(e.root.position.y + 1.45);
+    const dir = eye.clone().sub(from).normalize();
+    // imprécision volontaire : le joueur doit pouvoir bouger pour esquiver
+    dir.x += (Math.random() - 0.5) * 0.06;
+    dir.y += (Math.random() - 0.5) * 0.04;
+    dir.z += (Math.random() - 0.5) * 0.06;
+    dir.normalize();
+    const geo = new T.SphereGeometry(0.13, 8, 6);
+    const mat = new T.MeshBasicMaterial({ color: 0xFF7A5C });
+    const mesh = new T.Mesh(geo, mat);
+    mesh.position.copy(from);
+    this.scene.add(mesh);
+    this.projectiles.push({ mesh, dir, speed: 22, damage: e.damage, life: 3.2 });
+    if (this.host && this.host.onEnemyShot) this.host.onEnemyShot(from);
+  }
+
+  _removeProjectile(i) {
+    const pr = this.projectiles[i];
+    if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh);
+    pr.mesh.geometry.dispose();
+    pr.mesh.material.dispose();
+    this.projectiles.splice(i, 1);
+  }
+
+  /* ---------- dégâts / état ---------- */
+  _damage(n) {
+    this.state.health = Math.max(0, this.state.health - n);
+    this.damageFlash = 1;
+    this.lastHurt = this.time;
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+    if (this.state.health <= 0 && !this.state.lost) {
+      this.state.lost = true;
+      if (this.host && this.host.onLose) this.host.onLose();
+      this._runHooks('onDeath');
+    }
+  }
+
+  heal(n) {
+    this.state.health = Math.min(this.state.maxHealth, this.state.health + n);
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+  }
+
+  addScore(n) {
+    this.state.score += n;
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+  }
+
+  win(msg) {
+    if (this.state.won) return;
+    this.state.won = true;
+    if (this.host && this.host.onWin) this.host.onWin(msg || '');
+  }
+
+  /* ---------- API de script ---------- */
+  _compile() {
+    this._hooks.clear();
+    for (const rec of this.entities.values()) {
+      const s = rec.script;
+      if (!s) continue;
+      const h = {};
+      for (const name of ['onStart', 'onUpdate', 'onCollide', 'onDeath']) {
+        const src = (s[name] || '').trim();
+        if (!src) continue;
+        try {
+          h[name] = new Function('scene', 'dt', 'player', 'self', 'other', src);
+        } catch (e) {
+          if (this.host && this.host.onError) this.host.onError(rec.name + ' · ' + e.message);
+        }
+      }
+      if (Object.keys(h).length) this._hooks.set(rec.id, h);
+    }
+  }
+
+  _runHooks(name, dt) {
+    const api = this.api();
+    const playerProxy = this.makeProxy(null);
+    for (const [id, h] of this._hooks) {
+      const fn = h[name];
+      if (!fn) continue;
+      const rec = this.entities.get(id);
+      try {
+        fn(api, dt || 0, playerProxy, this.makeProxy(rec), null);
+      } catch (e) {
+        h[name] = null;
+        if (this.host && this.host.onError) this.host.onError((rec ? rec.name : id) + ' · ' + e.message);
+      }
+    }
+  }
+
+  /**
+   * Proxy exposé au code utilisateur. Il ne se limite plus à position/rotation :
+   * c'est l'API qui rend un jeu possible (dégâts, spawn, sons, timers).
+   */
+  makeProxy(rec) {
+    const rt = this;
+    const T = this.THREE;
+    if (!rec) {
+      const p = rt.player;
+      return {
+        isPlayer: true,
+        get position() { return p.pos; },
+        set position(v) { if (v && v.isVector3) p.pos.copy(v); },
+        get health() { return rt.state.health; },
+        set health(v) { rt.state.health = clamp(Number(v) || 0, 0, rt.state.maxHealth); },
+        damage(n) { rt._damage(Number(n) || 0); },
+        heal(n) { rt.heal(Number(n) || 0); },
+        teleport(x, y, z) { p.pos.set(x, y, z); p.vel.set(0, 0, 0); },
+        lookAt(x, y, z) {
+          const d = new T.Vector3(x - p.pos.x, y - (p.pos.y + p.eye), z - p.pos.z).normalize();
+          p.yaw = Math.atan2(-d.x, -d.z);
+          p.pitch = Math.asin(clamp(d.y, -1, 1));
+        },
+        get grounded() { return p.grounded; }
+      };
+    }
+    const o = rec.root;
+    return {
+      id: rec.id,
+      type: rec.type,
+      name: rec.name,
+      get visible() { return o.visible; },
+      set visible(v) { o.visible = !!v; },
+      get alive() { return rec.alive; },
+      get health() { return rec.hp; },
+      set health(v) { rec.hp = Number(v) || 0; if (rec.hp <= 0) rt.kill(rec.id); },
+      damage(n) { rec.hp -= Number(n) || 0; if (rec.hp <= 0) rt.kill(rec.id); },
+      kill() { rt.kill(rec.id); },
+      position: {
+        get x() { return o.position.x; }, set x(v) { o.position.x = Number(v) || 0; },
+        get y() { return o.position.y; }, set y(v) { o.position.y = Number(v) || 0; },
+        get z() { return o.position.z; }, set z(v) { o.position.z = Number(v) || 0; }
+      },
+      rotation: {
+        get x() { return T.MathUtils.radToDeg(o.rotation.x); }, set x(v) { o.rotation.x = T.MathUtils.degToRad(Number(v) || 0); },
+        get y() { return T.MathUtils.radToDeg(o.rotation.y); }, set y(v) { o.rotation.y = T.MathUtils.degToRad(Number(v) || 0); },
+        get z() { return T.MathUtils.radToDeg(o.rotation.z); }, set z(v) { o.rotation.z = T.MathUtils.degToRad(Number(v) || 0); }
+      },
+      playAnim(name) {
+        if (!rec.mixer) return false;
+        const clip = rec.clips && rec.clips.find((c) => c.name === name);
+        if (!clip) return false;
+        const action = rec.mixer.clipAction(clip);
+        if (rec.currentClip && rec.currentClip !== action) rec.currentClip.fadeOut(0.18);
+        action.reset().fadeIn(0.18).play();
+        rec.currentClip = action;
+        return true;
+      }
+    };
+  }
+
+  kill(id) {
+    const rec = this.entities.get(id);
+    if (!rec || !rec.alive) return;
+    rec.alive = false;
+    rec.root.visible = false;
+    for (const e of this.enemies) if (e.id === id) e.alive = false;
+    this.state.kills++;
+    this._runHooksFor(id, 'onDeath', 0);
+    this._rebuildWorld();
+    if (this.host && this.host.onHud) this.host.onHud(this.state);
+  }
+
+  _runHooksFor(id, name, dt) {
+    const h = this._hooks.get(id);
+    if (!h || !h[name]) return;
+    const rec = this.entities.get(id);
+    try { h[name](this.api(), dt, this.makeProxy(null), this.makeProxy(rec), null); }
+    catch (e) { if (this.host && this.host.onError) this.host.onError(e.message); }
+  }
+
+  api() {
+    const rt = this;
+    return {
+      get: (id) => { const rec = rt.entities.get(id); return rec ? rt.makeProxy(rec) : null; },
+      get player() { return rt.makeProxy(null); },
+      get score() { return rt.state.score; },
+      get health() { return rt.state.health; },
+      get entities() { return Array.from(rt.entities.values()).filter((r) => r.alive).map((r) => rt.makeProxy(r)); },
+      /** Trouve le premier objet portant ce tag ou ce type. */
+      find(kind) {
+        for (const rec of rt.entities.values()) {
+          if (!rec.alive) continue;
+          if (rec.type === kind || (rec.tags && rec.tags.includes(kind))) return rt.makeProxy(rec);
+        }
+        return null;
+      },
+      /** Tous les objets d'un type. */
+      all(type) {
+        return Array.from(rt.entities.values())
+          .filter((r) => r.alive && r.type === type)
+          .map((r) => rt.makeProxy(r));
+      },
+      addScore: (n) => rt.addScore(Number(n) || 0),
+      damage: (n) => rt._damage(Number(n) || 0),
+      heal: (n) => rt.heal(Number(n) || 0),
+      win: (msg) => rt.win(msg),
+      lose: () => { rt.state.lost = true; if (rt.host && rt.host.onLose) rt.host.onLose(); },
+      message: (msg) => { if (rt.host && rt.host.onMessage) rt.host.onMessage(String(msg)); },
+      /** Raycast dans le monde : { point, normal, dist } ou null. */
+      raycast: (ox, oy, oz, dx, dy, dz, maxDist) => {
+        const d = new rt.THREE.Vector3(dx, dy, dz).normalize();
+        const hit = rt.world.raycastHit(new rt.THREE.Vector3(ox, oy, oz), d, maxDist || 100);
+        if (!hit) return null;
+        return { point: hit.point, normal: hit.normal, dist: hit.dist, entity: hit.tag ? rt.entities.get(hit.tag) : null };
+      },
+      /** Raycast depuis la caméra (le joueur). */
+      shoot(maxDist) {
+        const p = rt.player;
+        const dir = new rt.THREE.Vector3(0, 0, -1).applyEuler(rt.camera.rotation);
+        const origin = new rt.THREE.Vector3(p.pos.x, p.pos.y + p.eye, p.pos.z);
+        const hit = rt.world.raycastHit(origin, dir, maxDist || 120);
+        if (!hit) return null;
+        return { point: hit.point, normal: hit.normal, dist: hit.dist, entity: hit.tag ? rt.makeProxy(rt.entities.get(hit.tag)) : null };
+      }
+    };
+  }
+}
+
+export default KreoRuntime;
