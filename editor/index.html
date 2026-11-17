@@ -362,6 +362,14 @@
             <div class="range-row"><input type="range" id="inJump" min="3" max="18" step="0.5"><span id="jumpVal"></span></div>
           </div>
           <div class="field" id="valueField" hidden><label data-i18n="ed.coinValue">Valeur</label><input type="number" id="inValue" min="1" step="1"></div>
+          <div class="field" id="weaponKindField" hidden><label data-i18n="ed.weaponKind">Arme</label>
+            <select id="inWeaponKind">
+              <option value="pistol" data-i18n="ed.wepPistol">Pistolet</option>
+              <option value="rifle" data-i18n="ed.wepRifle">Fusil</option>
+              <option value="shotgun" data-i18n="ed.wepShotgun">Fusil à pompe</option>
+            </select>
+          </div>
+          <div class="field" id="goalKillsField" hidden><label data-i18n="ed.goalKills">Objectif : éliminations (0 = atteindre le lieu)</label><input type="number" id="inGoalKills" min="0" step="1"></div>
 
           <div class="insp-section" id="enemyBlock" hidden data-i18n="ed.enemyAI">Intelligence ennemie</div>
           <div class="field" id="enemyHpField" hidden><label data-i18n="ed.hp">Points de vie</label>

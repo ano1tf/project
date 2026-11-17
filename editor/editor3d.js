@@ -732,7 +732,8 @@ function recToProps(rec) {
     sound: rec.sound || null,
     def: rec.def ? {
       hp: rec.def.hp, speed: rec.def.speed, damage: rec.def.damage,
-      attackRange: rec.def.attackRange, visionRange: rec.def.visionRange, fov: rec.def.fov
+      attackRange: rec.def.attackRange, visionRange: rec.def.visionRange, fov: rec.def.fov,
+      weapon: rec.def.weapon, kills: rec.def.kills
     } : null,
     tags: rec.tags || []
   };
@@ -1799,6 +1800,19 @@ function renderInspector() {
     setR('#inEnemyDmg', d.damage || 8, '#enemyDmgVal');
   }
 
+  // Arme ramassable : quel type d'arme elle donne
+  const wepField = $('#weaponKindField');
+  if (wepField) wepField.hidden = rec.type !== 'weapon';
+  if (rec.type === 'weapon' && $('#inWeaponKind')) {
+    $('#inWeaponKind').value = (rec.def && rec.def.weapon) || 'rifle';
+  }
+  // Objectif : atteindre un lieu, ou abattre N ennemis
+  const gkField = $('#goalKillsField');
+  if (gkField) gkField.hidden = rec.type !== 'goal';
+  if (rec.type === 'goal' && $('#inGoalKills')) {
+    $('#inGoalKills').value = (rec.def && rec.def.kills) || 0;
+  }
+
   // Primitive rapide pour les maillages
   const primBlock = $('#meshPrimBlock');
   if (primBlock) primBlock.hidden = rec.type !== 'mesh' && rec.type !== 'terrain';
@@ -1924,6 +1938,20 @@ function bindEnemyField(sel, key, out, asInt) {
 }
 bindEnemyField('#inEnemyHp', 'hp', '#enemyHpVal', true);
 bindEnemyField('#inEnemyRange', 'attackRange', '#enemyRangeVal', true);
+if ($('#inWeaponKind')) $('#inWeaponKind').addEventListener('change', function (e) {
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+  rec.def = rec.def || {};
+  rec.def.weapon = e.target.value;
+  markDirty();
+});
+bindField('#inGoalKills', function (el) {
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+  rec.def = rec.def || {};
+  const v = parseInt(el.value, 10) || 0;
+  if (v > 0) rec.def.kills = v; else delete rec.def.kills;
+});
 bindEnemyField('#inEnemyVision', 'visionRange', '#enemyVisionVal', true);
 bindEnemyField('#inEnemySpeed', 'speed', '#enemySpeedVal', false);
 bindEnemyField('#inEnemyDmg', 'damage', '#enemyDmgVal', true);
@@ -2259,6 +2287,8 @@ function makeHost() {
     onDeath: function (lives) { toast(t('ed.hudDeath') + ' · ' + lives + ' ' + t('ed.hudLives'), '💀'); log('💀 ' + t('ed.hudDeath'), 'err'); },
     onRespawn: function (where) { toast(t('ed.hudRespawn') + ' · ' + where, '↻'); log('↻ ' + t('ed.hudRespawn'), 'warn'); },
     onCheckpoint: function () { SFX.coin(); },
+    onWeaponChange: function (w) { toast((w && w.name) || '—', '🔫'); log('🔫 ' + ((w && w.name) || '—')); },
+    onObjective: function (label, done, total) { toast(t('ed.hudObjective') + ' ' + done + '/' + total, '🎯'); log('🎯 ' + label + ' · ' + done + '/' + total, 'ok'); },
     onWave: function (n, count) { toast(t('ed.hudWave') + ' ' + n + ' · ' + count, '🌊'); log('🌊 ' + t('ed.hudWave') + ' ' + n); },
     onError: function (msg, id, hook) {
       toast('⚠️ ' + msg, '⚠️');
@@ -2813,6 +2843,7 @@ const THREE = {
   #hud { position: fixed; inset: 0; pointer-events: none; font: 600 13px/1.2 system-ui, sans-serif; color: #fff; }
   .bar { position: absolute; bottom: 22px; left: 22px; display: flex; gap: 10px; align-items: center; }
   .pill { background: rgba(12,16,24,.66); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(8px); }
+  #wepName { font-size: 12px; letter-spacing: .04em; opacity: .85; }
   .hp { width: 190px; height: 8px; border-radius: 5px; background: rgba(255,255,255,.16); overflow: hidden; }
   .hp > i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg,#34d399,#10b981); transition: width .18s; }
   .score { position: absolute; top: 20px; left: 22px; font-size: 15px; letter-spacing: .06em; }
@@ -2856,6 +2887,7 @@ const THREE = {
   <div class="bar">
     <div class="pill"><div class="hp"><i id="hpbar"></i></div></div>
     <div class="pill"><span id="ammo">—</span></div>
+    <div class="pill" id="wepName">—</div>
   </div>
 </div>
 <div id="msg"></div>
@@ -2937,7 +2969,8 @@ const ui = {
   overTitle: document.getElementById('overTitle'),
   overScore: document.getElementById('overScore'),
   lives: document.getElementById('lives'),
-  wave: document.getElementById('wave')
+  wave: document.getElementById('wave'),
+  wepName: document.getElementById('wepName')
 };
 let msgTimer = 0;
 function showMsg(m) {
@@ -2957,6 +2990,7 @@ const rt = new KreoRuntime({
       ui.ammo.textContent = st.ammo != null ? st.ammo + ' / ' + st.ammoMax : '—';
       if (ui.lives) ui.lives.textContent = '♥ ' + (st.lives != null ? st.lives : 3);
       if (ui.wave) ui.wave.textContent = st.wave ? ('vague ' + st.wave) : '';
+      if (ui.wepName && st.weapon) ui.wepName.textContent = st.weapon.name || '—';
     },
     onMessage(m) { showMsg(m); },
     onWin(m) { ui.overTitle.textContent = 'Victoire'; ui.overScore.textContent = m || ''; ui.over.classList.add('show'); rt.stop(); },
@@ -2965,6 +2999,7 @@ const rt = new KreoRuntime({
     onRespawn() { showMsg('Reprise'); },
     onCheckpoint() { showMsg('Point de reprise'); },
     onWave(n) { showMsg('Vague ' + n); },
+    onObjective(label, done, total) { showMsg('Objectif · ' + done + '/' + total); },
     onError(e) { console.error('[KREO]', e); },
     onScriptLog(t) { console.log('[script]', t); if (ui.msg) { ui.msg.textContent = t; ui.msg.classList.add('show'); clearTimeout(msgTimer); msgTimer = setTimeout(() => ui.msg.classList.remove('show'), 1600); } }
   }
@@ -2994,6 +3029,21 @@ addEventListener('keydown', (e) => {
   if (e.code === 'escape' && document.pointerLockElement) document.exitPointerLock();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; feed(); });
+/* Changement d'arme : touches 1/2/3 pour un accès direct, molette pour
+   défiler la ceinture. */
+addEventListener('keydown', (e) => {
+  if (paused) return;
+  const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code];
+  if (n != null && rt.state.owned && rt.state.owned.length > n) {
+    rt.selectWeapon(n);
+    showMsg(rt.state.weapon.name);
+  }
+});
+addEventListener('wheel', (e) => {
+  if (paused || !rt.state.owned || rt.state.owned.length < 2) return;
+  rt.cycleWeapon(e.deltaY > 0 ? 1 : -1);
+  showMsg(rt.state.weapon.name);
+}, { passive: true });
 function feed() {
   rt.input.forward = !!(keys.KeyW || keys.KeyZ);
   rt.input.back = !!keys.KeyS;

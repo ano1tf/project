@@ -290,7 +290,9 @@ export class KreoRuntime {
 
     this.state = {
       score: 0, health: 100, maxHealth: 100,
-      ammo: 0, ammoMax: 0, weapon: null,
+      ammo: 0, ammoMax: 0, weapon: null, weaponIndex: 0,
+      owned: [],            // armes possédées, dans l'ordre de la ceinture
+      objectivesDone: 0, objectivesTotal: 0,
       won: false, lost: false, kills: 0, wave: 1,
       lives: 3, wave: 0, waveTotal: 0, enemiesLeft: 0
     };
@@ -371,12 +373,14 @@ export class KreoRuntime {
     this._spawnPlayer();
     this._spawnEnemies();
     this._initWaves();
+    this._initObjectives();
     this.projectiles.forEach((pr) => { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); });
     this.projectiles.length = 0;
     if (!this._vmBuilt) { this._buildViewmodel(); this._vmBuilt = true; }
-    // arme de départ : la première posée dans la scène, sinon le pistolet
-    const wRec = Array.from(this.entities.values()).find((r) => r.type === 'weapon');
-    this.giveWeapon((wRec && wRec.def.weapon) || (wRec ? 'rifle' : 'pistol'));
+    // Arme de départ : le pistolet, toujours. Une arme posée dans le décor est
+    // un ramassage — si elle servait d'arme de départ, on ne pourrait jamais
+    // en changer et la ceinture resterait à une seule arme.
+    this.giveWeapon('pistol');
     return this;
   }
 
@@ -971,6 +975,42 @@ export class KreoRuntime {
     if (this.host && this.host.onHud) this.host.onHud(this.state);
   }
 
+  /** Recense les objectifs du niveau (position à atteindre, ou quota de KO). */
+  _initObjectives() {
+    this._objectives = [];
+    for (const rec of this.entities.values()) {
+      if (rec.type !== 'goal') continue;
+      const target = rec.def && rec.def.kills;
+      this._objectives.push({
+        rec: rec,
+        kind: target ? 'kills' : 'reach',
+        target: target || 0,
+        done: false,
+        label: rec.name || 'Objectif'
+      });
+    }
+    this.state.objectivesTotal = this._objectives.length;
+    this.state.objectivesDone = 0;
+  }
+
+  _completeObjective(o) {
+    if (o.done) return;
+    o.done = true;
+    this.state.objectivesDone++;
+    this.sfx('pickup');
+    this.addScore(50);
+    if (o.rec && o.rec.root) o.rec.root.visible = false;
+    const left = this._objectives.filter((x) => !x.done).length;
+    if (this.host && this.host.onObjective) {
+      this.host.onObjective(o.label, this.state.objectivesDone, this.state.objectivesTotal);
+    }
+    if (left === 0) {
+      this.win('Tous les objectifs atteints · ' + this.state.kills + ' KO');
+    } else if (this.host && this.host.onMessage) {
+      this.host.onMessage('Objectif · ' + left + ' restant' + (left > 1 ? 's' : ''));
+    }
+  }
+
   /** Le joueur touche-t-il un point de reprise ? */
   _updateCheckpoints(dt) {
     if (!this.checkpoints.length) return;
@@ -1542,14 +1582,43 @@ export class KreoRuntime {
 
   /* ---------- combat ---------- */
   /** Équipe une arme (par id du catalogue ou objet complet). */
-  giveWeapon(id) {
+  /**
+   * Ramasser / recevoir une arme. Une arme déjà possédée n'est pas dupliquée :
+   * on reprend son chargeur et on la sélectionne.
+   */
+  giveWeapon(id, opts) {
+    const o = opts || {};
     const w = typeof id === 'string' ? this.weapons[id] : id;
     if (!w) return null;
+    if (!this.state.owned) this.state.owned = [];
+    if (this.state.owned.indexOf(w.id) === -1) this.state.owned.push(w.id);
+    // munitions par arme : changer d'arme ne doit pas vider le chargeur
+    this._ammoOf = this._ammoOf || {};
+    if (this._ammoOf[w.id] == null || o.refill) this._ammoOf[w.id] = w.mag;
     this.state.weapon = w;
-    this.state.ammo = w.mag;
+    this.state.weaponIndex = this.state.owned.indexOf(w.id);
+    this.state.ammo = this._ammoOf[w.id];
     this.state.ammoMax = w.mag;
     this._selectViewmodel();
     if (this.host && this.host.onHud) this.host.onHud(this.state);
+    return w;
+  }
+
+  /** Bascule vers l'arme suivante / précédente de la ceinture. */
+  cycleWeapon(dir) {
+    const owned = this.state.owned || [];
+    if (owned.length < 2) return null;
+    const step = dir < 0 ? -1 : 1;
+    const i = (this.state.weaponIndex + step + owned.length) % owned.length;
+    return this.selectWeapon(i);
+  }
+
+  selectWeapon(i) {
+    const owned = this.state.owned || [];
+    const id = owned[i];
+    if (!id) return null;
+    const w = this.giveWeapon(id);
+    if (this.host && this.host.onWeaponChange) this.host.onWeaponChange(w, this.state);
     return w;
   }
 
@@ -1563,6 +1632,7 @@ export class KreoRuntime {
     if (this.state.ammo <= 0) { this.reload(); return null; }
     this._nextShot = now + w.rate;
     this.state.ammo--;
+    if (this._ammoOf) this._ammoOf[w.id] = this.state.ammo;
 
     const p = this.player;
     const T = this.THREE;
@@ -1619,6 +1689,7 @@ export class KreoRuntime {
     this.sfx('reload');
     setTimeout(() => {
       this.state.ammo = w.mag;
+      if (this._ammoOf) this._ammoOf[w.id] = w.mag;
       this._reloading = false;
       if (this.host && this.host.onHud) this.host.onHud(this.state);
     }, 900);
@@ -1893,11 +1964,20 @@ export class KreoRuntime {
     }
     if (this.damageFlash > 0) this.damageFlash = Math.max(0, this.damageFlash - dt * 1.8);
 
-    // --- objectif
-    for (const rec of this.entities.values()) {
-      if (rec.type !== 'goal' || !rec.root.visible) continue;
-      const d = rec.root.position.distanceTo(new T.Vector3(p.pos.x, p.pos.y, p.pos.z));
-      if (d < 2.2) this.win('Objectif atteint');
+    // --- objectifs : un niveau peut en avoir plusieurs, à valider dans
+    // n'importe quel ordre. La partie se gagne quand tous sont faits.
+    if (this._objectives.length) {
+      const here = new T.Vector3(p.pos.x, p.pos.y, p.pos.z);
+      for (const o of this._objectives) {
+        if (o.done) continue;
+        // un objectif peut exiger des éliminations au lieu d'un déplacement
+        if (o.kind === 'kills') {
+          if (this.state.kills >= o.target) this._completeObjective(o);
+          continue;
+        }
+        if (!o.rec.root.visible) continue;
+        if (o.rec.root.position.distanceTo(here) < 2.2) this._completeObjective(o);
+      }
     }
   }
 
