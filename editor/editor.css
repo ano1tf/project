@@ -380,6 +380,19 @@ input, select, textarea { font-family: 'Inter'; color: var(--txt); }
   transition: border-color 0.13s ease;
 }
 .field input:focus, .vec-row input:focus { border-color: var(--acc); background: var(--bg); }
+.field select {
+  width: 100%; height: 32px; padding: 0 8px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--txt); font-size: 12px;
+  outline: none; cursor: pointer; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--faint) 50%),
+                    linear-gradient(135deg, var(--faint) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.field select:focus { border-color: var(--acc); }
+.field select option { background: #131722; color: #e8eefc; }
 .field input[type="color"] {
   width: 100%; height: 32px; padding: 3px;
   border: 1px solid var(--line); border-radius: 8px;
@@ -568,3 +581,9 @@ kbd {
 .pf-count { opacity: .45; font-size: 10px; }
 .pf-del { border: 0; background: none; color: inherit; opacity: .4; cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
 .pf-del:hover { opacity: 1; color: #ff6b6b; }
+
+/* Référence d'API sous l'éditeur de code */
+.api-ref { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.api-chip { font: 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 4px 6px; border-radius: 5px;
+  background: rgba(120,200,255,.06); border: 1px solid rgba(255,255,255,.1); color: #a9b8cf; cursor: pointer; }
+.api-chip:hover { background: rgba(120,200,255,.18); color: #eaf4ff; }

@@ -368,6 +368,7 @@ function createObject(type, opts) {
     type: type,
     name: opts.name || t('ed.add' + CAP(type)),
     script: opts.script || { onStart: '', onUpdate: '', onCollide: '' },
+    sound: opts.sound || null,
     collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus'].indexOf(type) !== -1,
     value: opts.value != null ? opts.value : 10,
     speed: opts.speed != null ? opts.speed : 6,
@@ -612,6 +613,7 @@ function recToProps(rec) {
     model: rec.model || null,
     modelData: (rec.model && MODELS.get(rec.model)) ? MODELS.get(rec.model).dataUrl : null,
     anim: rec.anim || 0,
+    sound: rec.sound || null,
     tags: rec.tags || []
   };
 }
@@ -928,6 +930,12 @@ function renderInspector() {
     if (m) {
       $('#inColor').value = m.color;
       if ($('#inTexture')) $('#inTexture').value = m.texture || 'none';
+      if ($('#inSound')) $('#inSound').value = (rec.sound && rec.sound.kind) || 'none';
+      if ($('#inSoundEvery')) {
+        const ev = (rec.sound && rec.sound.every) || 2;
+        $('#inSoundEvery').value = ev;
+        if ($('#soundEveryVal')) $('#soundEveryVal').textContent = ev + ' s';
+      }
       $('#inMetal').value = m.metalness;
       $('#metalVal').textContent = Number(m.metalness).toFixed(2);
       $('#inRough').value = m.roughness;
@@ -959,10 +967,51 @@ function renderInspector() {
   if (rec.type === 'coin') $('#inValue').value = rec.value;
 
   // Code
+  renderApiRef();
   rec.script = rec.script || { onStart: '', onUpdate: '', onCollide: '' };
   $('#codeEditor').value = rec.script[view.codeTarget || 'onStart'] || '';
   $$('.code-tab').forEach(function (tab) {
     tab.classList.toggle('active', tab.getAttribute('data-code') === (view.codeTarget || 'onStart'));
+  });
+}
+
+/* ---------- Référence d'API cliquable ----------
+   Sans ça, l'API de script n'existe que dans la tête de son auteur. Chaque
+   puce insère un exemple fonctionnel dans l'onglet courant. */
+const API_SNIPPETS = [
+  { label: 'api.pos', code: 'api.pos.x += 2;' },
+  { label: 'api.pos.y', code: 'api.pos.y = 3;' },
+  { label: 'api.rot.y', code: 'api.rot.y += 45;' },
+  { label: 'api.visible', code: 'api.visible = false;' },
+  { label: 'api.playAnim', code: "api.playAnim('idle');" },
+  { label: 'api.setState', code: "api.setState('run');" },
+  { label: 'api.sound', code: "api.sound('alarm');" },
+  { label: 'api.kill', code: 'api.kill();' },
+  { label: 'world.give', code: "world.give('shotgun');" },
+  { label: 'world.score', code: 'world.addScore(10);' },
+  { label: 'world.msg', code: "world.message('Bonjour');" },
+  { label: 'world.win', code: 'world.win();' },
+  { label: 'world.level', code: 'world.nextLevel();' },
+  { label: 'input.key', code: "if (input.key('KeyE')) { world.message('E'); }" }
+];
+
+function renderApiRef() {
+  const host = $('#apiRef');
+  if (!host || host.dataset.ready === '1') return;
+  host.dataset.ready = '1';
+  host.innerHTML = API_SNIPPETS.map(function (snip, i) {
+    return '<button class="api-chip" data-snip="' + i + '">' + escapeHtml(snip.label) + '</button>';
+  }).join('');
+  $$('.api-chip', host).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const snip = API_SNIPPETS[parseInt(btn.getAttribute('data-snip'), 10)];
+      const ta = $('#codeEditor');
+      if (!ta || !snip) return;
+      const pos = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+      ta.value = ta.value.slice(0, pos) + snip.code + ta.value.slice(pos);
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = pos + snip.code.length;
+    });
   });
 }
 
@@ -1027,6 +1076,21 @@ function forEachMat(rec, fn) {
   });
 }
 
+bindField('#inSound', function (el) {
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+  armSnap();
+  rec.sound = Object.assign({ every: 2, range: 18 }, rec.sound || {});
+  rec.sound.kind = el.value === 'none' ? null : el.value;
+  takeSnap();
+});
+bindField('#inSoundEvery', function (el) {
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+  rec.sound = Object.assign({ kind: null, every: 2, range: 18 }, rec.sound || {});
+  rec.sound.every = parseFloat(el.value);
+  if ($('#soundEveryVal')) $('#soundEveryVal').textContent = el.value + ' s';
+});
 bindField('#inTexture', function (el) {
   const rec = findRec(state.selectedId);
   if (!rec) return;
@@ -1510,6 +1574,21 @@ async function grabThreeSource() {
   return THREE_SOURCE;
 }
 
+let GLTF_SOURCE = null;
+async function grabGltfSource() {
+  if (GLTF_SOURCE) return GLTF_SOURCE;
+  const raw = await (await fetch('../assets/vendor/three/addons/loaders/GLTFLoader.js')).text();
+  // on retire imports et exports : la fusion s'occupe du reste
+  GLTF_SOURCE = raw
+    .replace(/^import \{[\s\S]*?\} from '[^']*';$/gm, '')
+    .replace(/^import '[^']*';$/gm, '')
+    .replace(/^export \{[^}]*\};?$/gm, '')
+    .replace(/^export class /gm, 'class ')
+    .replace(/^export const /gm, 'const ')
+    .replace(/^export function /gm, 'function ');
+  return GLTF_SOURCE;
+}
+
 /** Le module runtime est lu depuis le fichier : une seule source de vérité. */
 let RUNTIME_SOURCE = null;
 async function grabRuntimeSource() {
@@ -1640,7 +1719,10 @@ function buildGameHtml(three, runtimeSrc, projectJson, title) {
     .replace(/^export default [^\n]*$/m, '');
 
   // trois sources → un seul module sans collision de noms
-  const bundledBody = mergeModules([core, mod, rt]);
+  // GLTFLoader est nécessaire au runtime pour recharger les modèles
+  // embarqués (data URL) : on l'inline aussi dans le bundle du jeu.
+  const gltfSrc = three.gltf || '';
+  const bundledBody = mergeModules([core, mod, rt, gltfSrc].filter(Boolean));
   // le runtime et le jeu utilisent `THREE.*` / `new THREE.Scene()` : on
   // reconstruit un objet namespace à la fin du bundle.
   const bundled = bundledBody + `
@@ -1690,7 +1772,8 @@ const THREE = {
   NoColorSpace, CanvasTexture, OrthographicCamera, WebGLRenderTarget,
   ShaderMaterial, PlaneGeometry, MeshBasicMaterial, FloatType, RGBAFormat,
   LinearFilter, NearestFilter, DoubleSide, BackSide, FrontSide, RepeatWrapping,
-  SRGBColorSpace, REVISION
+  SRGBColorSpace, GLTFLoader, LoopOnce, LoopRepeat, LoopPingPong,
+  AnimationMixer, AnimationClip, REVISION
 };
 `;
 
@@ -1874,7 +1957,8 @@ document.getElementById('btnStart').addEventListener('click', () => {
 async function exportGame() {
   try {
     toast('ed.exporting', '⏳');
-    const [three, runtimeSrc] = await Promise.all([grabThreeSource(), grabRuntimeSource()]);
+    const [three, runtimeSrc, gltf] = await Promise.all([grabThreeSource(), grabRuntimeSource(), grabGltfSource()]);
+    three.gltf = gltf;
     const html = buildGameHtml(three, runtimeSrc, serialize(), state.scene.name || 'Mon jeu');
     const blob = new Blob([html], { type: 'text/html' });
     const a = document.createElement('a');

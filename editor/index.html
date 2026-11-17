@@ -242,6 +242,20 @@
             <div class="range-row"><input type="range" id="inRough" min="0" max="1" step="0.05"><span id="roughVal"></span></div>
           </div>
           <div class="field"><label data-i18n="ed.emissive">Émissif</label><input type="color" id="inEmissive"></div>
+          <div class="field"><label data-i18n="ed.sound">Son</label>
+            <select id="inSound">
+              <option value="none">—</option>
+              <option value="alarm">Alarme</option>
+              <option value="fire">Feu</option>
+              <option value="water">Eau</option>
+              <option value="machine">Machine</option>
+              <option value="wind">Vent</option>
+              <option value="beep">Bip</option>
+            </select>
+          </div>
+          <div class="field"><label data-i18n="ed.soundEvery">Intervalle (s)</label>
+            <div class="range-row"><input type="range" id="inSoundEvery" min="0.3" max="12" step="0.1"><span id="soundEveryVal"></span></div>
+          </div>
           <div class="field"><label data-i18n="ed.opacity">Opacité</label>
             <div class="range-row"><input type="range" id="inOpacity" min="10" max="100" step="5"><span id="opacityVal"></span></div>
           </div>
@@ -278,6 +292,7 @@
             <button class="code-tab" data-code="onCollide">onCollide</button>
           </div>
           <textarea id="codeEditor" spellcheck="false"></textarea>
+          <div class="api-ref" id="apiRef"></div>
           <button class="primary-btn wide" id="btnApplyCode"><span data-i18n="ed.apply">Appliquer le code</span></button>
           <button class="ghost-btn wide" id="btnResetCode"><span data-i18n="ed.resetCode">Réinitialiser</span></button>
         </div>

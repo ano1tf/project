@@ -376,7 +376,9 @@ export class KreoRuntime {
       tags: p.tags || [],
       alive: true, hp: p.hp != null ? p.hp : 100,
       script: p.script || null,
-      mixer: null, actions: [], currentClip: null
+      mixer: null, actions: [], currentClip: null,
+      states: null, stateName: null, stateTime: 0,
+      sound: p.sound || null, soundTimer: 0
     };
 
     switch (p.type) {
@@ -388,7 +390,26 @@ export class KreoRuntime {
       case 'plane': g.add(this._primitive(p, rec)); break;
       case 'sun':
       case 'point': g.add(this._light(p, rec)); break;
-      case 'model': g.add(this._modelPlaceholder(p, rec)); break;
+      case 'model':
+        g.add(this._modelPlaceholder(p, rec));
+        if (p.modelData && T.GLTFLoader && p.modelData.slice(0, 4) === 'data') {
+          // le modèle réel remplace le cube filaire dès qu'il est décodé
+          try {
+            new T.GLTFLoader().load(p.modelData, (gltf) => {
+              while (g.children.length) g.remove(g.children[0]);
+              const root = gltf.scene;
+              root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+              g.add(root);
+              if (gltf.animations && gltf.animations.length) {
+                rec.clips = gltf.animations;
+                rec.mixer = new T.AnimationMixer(root);
+                this._initStates(rec);
+              }
+              this._rebuildWorld();
+            }, undefined, () => {});
+          } catch (e) { /* placeholder conservé */ }
+        }
+        break;
       case 'player':
       case 'coin':
       case 'goal':
@@ -401,6 +422,8 @@ export class KreoRuntime {
         break;
       default: break;
     }
+
+    if (rec.clips && rec.clips.length) this._initStates(rec);
 
     g.traverse((o) => {
       if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
@@ -487,6 +510,31 @@ export class KreoRuntime {
     rec.ownedGeom = [geo];
     rec.ownedMat = [mat];
     return new T.Mesh(geo, mat);
+  }
+
+  /**
+   * Machine à états d'animation : un clip = un état, nommé en minuscules.
+   * Les scripts basculent avec setState('run'), setState('idle')…
+   */
+  _initStates(rec) {
+    if (!rec.mixer || !rec.clips) return;
+    rec.states = {};
+    for (const clip of rec.clips) {
+      const key = clip.name.toLowerCase();
+      const action = rec.mixer.clipAction(clip);
+      action.loop = this.THREE.LoopRepeat;
+      // les clips de tir/saut ne bouclent pas
+      if (/shot|fire|shoot|jump|hit|death|die|attack|throw/i.test(key)) {
+        action.loop = this.THREE.LoopOnce;
+        action.clampWhenFinished = true;
+      }
+      rec.states[key] = { clip: clip, action: action, loop: action.loop === this.THREE.LoopRepeat };
+    }
+    const first = rec.states.idle || rec.states[Object.keys(rec.states)[0]];
+    if (first) {
+      rec.stateName = first.clip.name.toLowerCase();
+      first.action.reset().play();
+    }
   }
 
   _modelPlaceholder(p, rec) {
@@ -589,6 +637,7 @@ export class KreoRuntime {
     this._updatePlayer(dt);
     this._updateViewmodel(dt);
     this._updateEntities(dt);
+    this._updateObjectSounds(dt);
     this._updateCombat(dt);
     this._runHooks('onUpdate', dt);
     this._render();
@@ -1187,6 +1236,20 @@ export class KreoRuntime {
   sfx(kind) {
     const ac = this.initAudio();
     if (!ac || this.muted) return;
+    const scale = this._gainScale == null ? 1 : this._gainScale;
+    const bus = this._bus;
+    if (scale !== 1) {
+      // gain temporaire pour l'atténuation de distance
+      const g = ac.createGain();
+      g.gain.value = scale;
+      g.connect(bus);
+      this._bus = g;
+    }
+    try { this._sfxKind(kind, ac); }
+    finally { this._bus = bus; }
+  }
+
+  _sfxKind(kind, ac) {
     if (ac.state === 'suspended') ac.resume();
     const t = ac.currentTime;
     switch (kind) {
@@ -1200,10 +1263,49 @@ export class KreoRuntime {
       case 'jump': this._tone(300, 0.09, 'sine', 0.09, 480); break;
       case 'slide': this._noise(0.28, 0.16, 700); break;
       case 'enemyShot': this._tone(420, 0.1, 'sawtooth', 0.07, 180); break;
+      case 'alarm': this._tone(880, 0.22, 'square', 0.09, 660); break;
+      case 'fire': this._noise(0.22, 0.1, 1200); break;
+      case 'water': this._noise(0.3, 0.07, 700); break;
+      case 'machine': this._tone(150, 0.2, 'sawtooth', 0.06, 120); break;
+      case 'wind': this._noise(0.6, 0.05, 480); break;
+      case 'beep': this._tone(1400, 0.05, 'square', 0.06); break;
       case 'win': [523, 659, 784, 1047].forEach((f, i) => this._tone(f, 0.16, 'triangle', 0.14, null, t + i * 0.1)); break;
       case 'lose': [392, 330, 262, 196].forEach((f, i) => this._tone(f, 0.2, 'sawtooth', 0.12, null, t + i * 0.12)); break;
       default: break;
     }
+  }
+
+  /**
+   * Sons attachés aux objets : un objet peut porter un son d'ambiance ou de
+   * boucle, joué au plus près du joueur pour l'atténuation.
+   */
+  _updateObjectSounds(dt) {
+    if (!this.player) return;
+    for (const rec of this.entities.values()) {
+      if (!rec.sound) continue;
+      const snd = rec.sound;
+      if (!snd.kind || snd.kind === 'none') continue;
+      rec.soundTimer -= dt;
+      if (rec.soundTimer > 0) continue;
+      const every = Math.max(0.2, Number(snd.every) || 2);
+      rec.soundTimer = every;
+      const d = rec.root.position.distanceTo(this.player.pos);
+      const range = Number(snd.range) || 18;
+      if (d > range) continue;
+      const gain = Math.pow(1 - d / range, 2);
+      if (gain < 0.02) continue;
+      this.sfxAt(snd.kind, gain);
+    }
+  }
+
+  /** Joue un effet avec un volume relatif (atténuation de distance). */
+  sfxAt(kind, gain) {
+    const ac = this.initAudio();
+    if (!ac || this.muted) return;
+    const saved = this._gainScale;
+    this._gainScale = (saved == null ? 1 : saved) * Math.max(0, Math.min(1, gain));
+    this.sfx(kind);
+    this._gainScale = saved;
   }
 
   /* ---------- combat ---------- */
@@ -1585,15 +1687,38 @@ export class KreoRuntime {
         get y() { return T.MathUtils.radToDeg(o.rotation.y); }, set y(v) { o.rotation.y = T.MathUtils.degToRad(Number(v) || 0); },
         get z() { return T.MathUtils.radToDeg(o.rotation.z); }, set z(v) { o.rotation.z = T.MathUtils.degToRad(Number(v) || 0); }
       },
-      playAnim(name) {
+      playAnim(name, fade) {
         if (!rec.mixer) return false;
         const clip = rec.clips && rec.clips.find((c) => c.name === name);
         if (!clip) return false;
         const action = rec.mixer.clipAction(clip);
-        if (rec.currentClip && rec.currentClip !== action) rec.currentClip.fadeOut(0.18);
-        action.reset().fadeIn(0.18).play();
+        const f = fade == null ? 0.18 : fade;
+        if (rec.currentClip && rec.currentClip !== action) rec.currentClip.fadeOut(f);
+        action.reset().fadeIn(f).play();
         rec.currentClip = action;
         return true;
+      },
+      /** Bascule la machine à états d'animation de l'objet. */
+      setState(name, fade) {
+        if (!rec.states || !rec.states[name]) return false;
+        if (rec.stateName === name) return true;
+        const prev = rec.states[rec.stateName];
+        const next = rec.states[name];
+        if (prev && prev.action) prev.action.fadeOut(fade == null ? 0.16 : fade);
+        if (next.action) next.action.reset().fadeIn(fade == null ? 0.16 : fade).play();
+        rec.stateName = name;
+        rec.stateTime = 0;
+        return true;
+      },
+      get state() { return rec.stateName; },
+      /** Liste des états disponibles sur cet objet. */
+      get states() { return rec.states ? Object.keys(rec.states) : []; },
+      stopAnim() {
+        if (rec.currentClip) { rec.currentClip.fadeOut(0.15); rec.currentClip = null; }
+        if (rec.states) Object.keys(rec.states).forEach((k) => {
+          const st = rec.states[k];
+          if (st.action) st.action.fadeOut(0.15);
+        });
       }
     };
   }
