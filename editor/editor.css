@@ -637,3 +637,27 @@ kbd {
   border: 1px solid rgba(255,255,255,.12); background: #0c1119; color: var(--txt); font-size: 12px; }
 .dlg-actions { display: flex; gap: 6px; margin-top: 4px; }
 .dlg-actions .primary-btn, .dlg-actions .ghost-btn { flex: 1; height: 30px; }
+
+/* --- bibliothèque d'assets ------------------------------------------------ */
+.assets-bar .h-empty { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assets-bar .assets-tbtn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 0 4px;
+  background: none; border: 0; color: inherit; font: inherit; cursor: pointer;
+}
+.assets-bar .assets-tbtn svg { width: 11px; height: 11px; opacity: .7; }
+.assets-bar .assets-tbtn b {
+  font-size: 9.5px; font-weight: 700; opacity: .65;
+  background: rgba(255,255,255,.09); border-radius: 20px; padding: 1px 5px;
+}
+.asset-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px;
+  border-radius: 7px; border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.045); font-size: 11px; cursor: pointer;
+  white-space: nowrap; max-width: 130px;
+}
+.asset-chip:hover { border-color: rgba(140,180,255,.5); background: rgba(120,160,255,.12); }
+.asset-chip span { overflow: hidden; text-overflow: ellipsis; }
+.asset-chip i { font-style: normal; opacity: .5; font-size: 9.5px; }
+.asset-chip .rm { opacity: 0; font-weight: 700; margin-left: 2px; }
+.asset-chip:hover .rm { opacity: .55; }
+.asset-chip .rm:hover { opacity: 1; color: #ff8080; }

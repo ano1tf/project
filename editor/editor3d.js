@@ -404,8 +404,19 @@ function mat(opts) {
   }, opts || {}));
 }
 
+const KNOWN_TYPES = new Set(['cube', 'sphere', 'cylinder', 'cone', 'torus', 'plane',
+  'mesh', 'terrain', 'model', 'light', 'sun', 'point', 'player', 'coin', 'weapon',
+  'enemy', 'goal', 'group']);
+
 function createObject(type, opts) {
   opts = opts || {};
+  // Un type inconnu (projet plus récent, fichier abîmé) ne doit pas faire
+  // disparaître l'objet en silence : on le remplace par une primitive neutre.
+  if (type && !KNOWN_TYPES.has(type)) {
+    console.warn('type inconnu', type, '→ cube');
+    opts = Object.assign({}, opts);
+    type = 'cube';
+  }
   const id = opts.id || genId();
   const rec = {
     id: id,
@@ -428,7 +439,10 @@ function createObject(type, opts) {
       // Instance d'un modèle importé (GLB) : clone riggé + animations
       const asset = MODELS.get(opts.model);
       const g = new THREE.Group();
-      if (asset) {
+      // `gltf` reste null tant que la data URL embarquée n'est pas décodée :
+      // sans ce garde-fou, rouvrir un projet contenant un GLB levait une
+      // exception et faisait perdre tout le niveau.
+      if (asset && asset.gltf && asset.gltf.scene) {
         const root = cloneSkinned(asset.gltf.scene);
         g.add(root);
         if (asset.gltf.animations && asset.gltf.animations.length) {
@@ -440,6 +454,10 @@ function createObject(type, opts) {
           g.userData.clipCount = asset.gltf.animations.length;
         }
       } else {
+        // `pending` : le GLB embarqué n'est pas encore décodé. On charge un
+        // modèle de substitution, jamais un cube filaire (qui masquerait le
+        // vrai modèle si l'attente dépasse un instant).
+        if (opts.modelData) g.userData.pendingModel = true;
         const ph = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), mat({ color: 0x7DD3A0, wireframe: true }));
         ph.position.y = 0.8;
         g.add(ph);
@@ -691,7 +709,11 @@ function recToProps(rec) {
     // Les modèles importés sont désormais EMBARQUÉS (data URL) : sans ça, un
     // projet rouvert ou exporté remplaçait chaque modèle par un cube filaire.
     model: rec.model || null,
-    modelData: (rec.model && MODELS.get(rec.model)) ? MODELS.get(rec.model).dataUrl : null,
+    // Le blob du dernier import est encore en cours de lecture quand on
+    // sérialise juste après : `dataUrl` est alors null et le modèle se perd.
+    modelData: (rec.model && MODELS.get(rec.model))
+      ? (MODELS.get(rec.model).dataUrl || MODELS.get(rec.model).url || null)
+      : null,
     anim: rec.anim || 0,
     sound: rec.sound || null,
     def: rec.def ? {
@@ -3077,6 +3099,7 @@ function rebuildFromData(data, keepHistory, keepSceneList) {
       gltfLoader.loadAsync(p.modelData).then(function (gltf) {
         entry.gltf = gltf;
         entry.animations = (gltf.animations || []).length;
+        renderAssetLibrary();
         entry.gltf.scene.traverse(function (o) {
           if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
         });
@@ -3167,6 +3190,51 @@ function demoScene() {
   log('⭐ ' + t('ed.demoLoaded'), 'ok');
 }
 
+/* ================= Bibliothèque d'assets =================
+   Un GLB importé vivait le temps de la session : impossible de le réutiliser
+   sur un autre niveau ou après un rechargement. La bibliothèque garde les
+   modèles (data URL) et permet de les reposer à volonté. */
+function renderAssetLibrary() {
+  const host = $('#assetList');
+  if (!host) return;
+  const names = Array.from(MODELS.keys());
+  const cnt = $('#assetCount');
+  if (cnt) cnt.textContent = String(names.length);
+  if (!names.length) {
+    host.innerHTML = '<span class="h-empty">' + t('ed.assetNone') + '</span>';
+    return;
+  }
+  host.innerHTML = names.map(function (n) {
+    const a = MODELS.get(n);
+    return '<span class="asset-chip" data-model="' + escapeHtml(n) + '" title="' +
+      escapeHtml(n) + '">' + escapeHtml(n.length > 16 ? n.slice(0, 15) + '…' : n) +
+      (a && a.animations ? '<i>' + a.animations + 'a</i>' : '') +
+      '<span class="rm" data-rm="' + escapeHtml(n) + '">×</span></span>';
+  }).join('');
+}
+
+function loadModelIntoScene(name) {
+  if (!MODELS.has(name)) { toast('ed.assetMissing', '⚠️'); return null; }
+  const entry = MODELS.get(name);
+  if (entry && !entry.gltf) { toast('ed.assetLoading', '⏳'); return null; }
+  pushHistory();
+  const rec = addObject('model', { model: name, name: name });
+  if (!rec) return null;
+  const box = new THREE.Box3().setFromObject(rec.obj3d);
+  if (isFinite(box.min.y)) rec.obj3d.position.y = -box.min.y + 0.01;
+  armSnap();
+  select(rec.id);
+  log('📦 ' + t('ed.assetPlaced') + ' · ' + name, 'ok');
+  return rec;
+}
+
+/** Quantité de modèles disponibles mais pas encore décodés (data URL en cours). */
+function pendingModelCount() {
+  let n = 0;
+  MODELS.forEach(function (a) { if (!a.gltf) n++; });
+  return n;
+}
+
 /* ================= Import de modèles GLB ================= */
 async function importModel(file) {
   if (!file) return null;
@@ -3190,6 +3258,7 @@ async function importModel(file) {
       fr.readAsDataURL(file);
     });
     MODELS.set(name, { gltf: gltf, url: url, dataUrl: dataUrl, animations: (gltf.animations || []).length });
+    renderAssetLibrary();
 
     pushHistory();
     const rec = addObject('model', { model: name, name: name });
@@ -3214,6 +3283,27 @@ function pickModel() {
     if (input.files && input.files[0]) importModel(input.files[0]);
   };
   input.click();
+}
+
+if ($('#btnAssetImport')) $('#btnAssetImport').addEventListener('click', pickModel);
+if ($('#btnAssets')) $('#btnAssets').addEventListener('click', function () {
+  const list = $('#prefabList'); if (!list) return;
+  list.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  renderAssetLibrary();
+});
+if ($('#assetList')) {
+  $('#assetList').addEventListener('click', function (e) {
+    const rm = e.target.closest('[data-rm]');
+    if (rm) {
+      e.stopPropagation();
+      MODELS.delete(rm.getAttribute('data-rm'));
+      renderAssetLibrary();
+      log('🗑 ' + rm.getAttribute('data-rm'));
+      return;
+    }
+    const chip = e.target.closest('[data-model]');
+    if (chip) loadModelIntoScene(chip.getAttribute('data-model'));
+  });
 }
 
 /* Glisser-déposer d'un .glb dans le viewport */
@@ -3442,6 +3532,7 @@ if ($('#btnAddScene')) $('#btnAddScene').addEventListener('click', addScene);
 if ($('#btnPrefab')) $('#btnPrefab').addEventListener('click', function () { savePrefab(false); });
 if ($('#btnPrefabScene')) $('#btnPrefabScene').addEventListener('click', function () { savePrefab(true); });
 if (typeof renderPrefabs === 'function') renderPrefabs();
+if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
 $('#btnExportGame').addEventListener('click', exportGame);
 $('#btnImport').addEventListener('click', importFile);
 $('#btnDemo').addEventListener('click', demoScene);
@@ -3520,6 +3611,11 @@ window.KREO_EDITOR = {
   play: startPlay,
   stop: stopPlay,
   serialize: serialize,
+  // Poignées utiles aux tests automatisés (et au pilotage depuis la console).
+  importModel: importModel,
+  loadModelIntoScene: loadModelIntoScene,
+  pendingModels: pendingModelCount,
+  assets: function () { return Array.from(MODELS.keys()); },
   load: function (json) { rebuildFromData(typeof json === 'string' ? JSON.parse(json) : json); },
   save: save,
   exportGame: exportGame,
@@ -3559,7 +3655,11 @@ setInterval(function () {
         log('📂 ' + (state.scene.name || ''));
       }
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    // Un projet illisible ne doit pas laisser un écran vide sans explication.
+    console.error('chargement du projet', e);
+    log('⚠️ projet illisible · ' + e.message, 'err');
+  }
   if (!loaded) demoScene();
 
   resize();
