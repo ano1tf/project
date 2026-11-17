@@ -14,6 +14,7 @@ import { KreoRuntime, makeNoiseTexture, makeTexture, textureToThree, bindTexture
 import {
   MESH_PRIMS, emptyMesh, boxMesh, meshToGeometry, cloneMesh, boundsOf,
   extrudeFace, extrudeEdge, subdivideFaces, subdivideAll, insertLoop, weldMesh,
+  terrainMesh, sculptTerrain, flattenTerrain, noiseTerrain, sampleTerrainHeight,
   deleteFaces, moveVertex, smoothMesh, mirrorMesh, faceNormal, faceCenter,
   transformMesh, nearestVertexOnScreen
 } from './mesh.js';
@@ -49,7 +50,7 @@ const TYPE_COLORS = {
   plane: '#7BD88F', torus: '#E879F9', sun: '#FFE066', point: '#FFB86B',
   player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E', model: '#7DD3A0',
   spawn: '#FF8A5C', weapon: '#9AA7FF', enemy: '#FF5C5C', pickup: '#4FD1C5', cover: '#6C7B94',
-  group: '#9BA6B8', mesh: '#B48CFF'
+  group: '#9BA6B8', mesh: '#B48CFF', terrain: '#7BD88F'
 };
 
 /* ============ Modèles 3D importés (GLB / GLTF) ============ */
@@ -409,11 +410,13 @@ function createObject(type, opts) {
   const rec = {
     id: id,
     type: type,
-    name: opts.name || (type === 'mesh' ? t('ed.meshPrim') + ' ' + (reg.size + 1) : t('ed.add' + CAP(type))),
+    name: opts.name || (type === 'mesh' ? t('ed.meshPrim') + ' ' + (reg.size + 1)
+      : type === 'terrain' ? t('ed.terrainName') + ' ' + (reg.size + 1)
+        : t('ed.add' + CAP(type))),
     script: opts.script || { onStart: '', onUpdate: '', onCollide: '' },
     sound: opts.sound || null,
     def: opts.def || {},
-    collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'mesh'].indexOf(type) !== -1,
+    collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'mesh', 'terrain'].indexOf(type) !== -1,
     value: opts.value != null ? opts.value : 10,
     speed: opts.speed != null ? opts.speed : 6,
     jump: opts.jump != null ? opts.jump : 9
@@ -447,14 +450,26 @@ function createObject(type, opts) {
       obj3d = g;
       break;
     }
+    case 'terrain': {
+      rec.mesh = opts.mesh ? cloneMesh(opts.mesh) : terrainMesh(opts.size || 60, opts.segments || 24);
+      obj3d = new THREE.Mesh(
+        meshToGeometry(rec.mesh, {}),
+        new THREE.MeshStandardMaterial({
+          color: 0x6E7F52, roughness: 0.95, metalness: 0,
+          flatShading: true, side: THREE.DoubleSide
+        })
+      );
+      rec.terrainSize = opts.size || 60;
+      break;
+    }
     case 'mesh': {
       // Maillage éditable : la géométrie vient du module mesh.js et reste
       // stockée en sommets/faces dans le JSON du projet.
       rec.mesh = opts.mesh ? cloneMesh(opts.mesh) : boxMesh();
       obj3d = new THREE.Mesh(
-        meshToGeometry(rec.mesh, { vcolors: true }),
+        meshToGeometry(rec.mesh, {}),
         new THREE.MeshStandardMaterial({
-          vertexColors: true, color: 0xffffff, roughness: 0.7, metalness: 0.0,
+          color: 0xC8CEDA, roughness: 0.7, metalness: 0.0,
           flatShading: true, side: THREE.DoubleSide
         })
       );
@@ -670,7 +685,7 @@ function recToProps(rec) {
       intensity: rec.light.intensity
     } : null,
     script: rec.script,
-    mesh: rec.type === 'mesh' ? rec.mesh : null,
+    mesh: (rec.type === 'mesh' || rec.type === 'terrain') ? rec.mesh : null,
     parent: rec.parent || null,
     parentOffset: rec.parentOffset || null,
     // Les modèles importés sont désormais EMBARQUÉS (data URL) : sans ça, un
@@ -871,7 +886,7 @@ const meshState = { faceSel: [], vertSel: null, prim: 'box' };
 
 function meshRec() {
   const rec = findRec(state.selectedId);
-  if (!rec || rec.type !== 'mesh') return null;
+  if (!rec || (rec.type !== 'mesh' && rec.type !== 'terrain')) return null;
   if (state.play) return null;
   return rec;
 }
@@ -880,7 +895,7 @@ function meshRec() {
 function refreshMesh(rec) {
   if (!rec || rec.type !== 'mesh' || !rec.obj3d) return;
   const old = rec.obj3d.geometry;
-  rec.obj3d.geometry = meshToGeometry(rec.mesh, { vcolors: true });
+  rec.obj3d.geometry = meshToGeometry(rec.mesh, {});
   if (old && old.dispose) old.dispose();
   // la boîte de sélection et les colliders suivent
   if (selBox) { scene3d.remove(selBox); selBox = null; }
@@ -1137,7 +1152,64 @@ function refreshVertexDots(rec) {
   scene3d.add(vertDots);
 }
 
-/* Glisser un sommet déplace réellement le maillage. */
+/* ---------- Sculpture de terrain ----------
+   On vise le terrain au rayon, puis on applique le pinceau au point touché.
+   Le geste doit rester continu : pas d'entrée d'historique à chaque pixel,
+   seulement au début du trait. */
+const sculpt = { active: false, mode: 'raise', radius: 6, strength: 0.8, pushed: false, last: null };
+
+function terrainRec() {
+  const rec = findRec(state.selectedId);
+  return rec && rec.type === 'terrain' ? rec : null;
+}
+
+function sculptBar(rec) {
+  const bar = $('#sculptBar');
+  if (!bar) return;
+  bar.hidden = !rec || state.play;
+  if (!rec) return;
+  const st = $('#sculptStat');
+  if (st && rec.mesh) {
+    st.textContent = rec.mesh.verts.length + ' sommets';
+  }
+}
+
+function sculptPointAt(clientX, clientY) {
+  const rec = terrainRec();
+  if (!rec) return null;
+  const r = canvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((clientX - r.left) / r.width) * 2 - 1,
+    -((clientY - r.top) / r.height) * 2 + 1
+  );
+  raycaster.setFromCamera(ndc, camera);
+  camera.updateMatrixWorld();
+  rec.obj3d.updateMatrixWorld(true);
+  const hits = raycaster.intersectObject(rec.obj3d, false);
+  if (!hits.length) return null;
+  const local = rec.obj3d.worldToLocal(hits[0].point.clone());
+  return { rec: rec, point: [local.x, local.y, local.z] };
+}
+
+function applySculpt(clientX, clientY) {
+  const hit = sculptPointAt(clientX, clientY);
+  if (!hit) return false;
+  const rec = hit.rec;
+  if (!sculpt.pushed) {
+    pushHistory();
+    sculpt.pushed = true;
+  }
+  const s = sculpt.strength;
+  if (sculpt.mode === 'raise') sculptTerrain(rec.mesh, hit.point, sculpt.radius, s);
+  else if (sculpt.mode === 'lower') sculptTerrain(rec.mesh, hit.point, sculpt.radius, -s);
+  else if (sculpt.mode === 'flatten') flattenTerrain(rec.mesh, hit.point, sculpt.radius, hit.point[1], 0.5);
+  if (rec.obj3d.geometry) {
+    rec.obj3d.geometry.dispose();
+    rec.obj3d.geometry = meshToGeometry(rec.mesh, {});
+  }
+  markDirty();
+  return true;
+}
 function meshPointerMove(e) {
   if (!meshState.dragging) return false;
   const d = meshState.dragging;
@@ -1164,7 +1236,7 @@ function meshPointerMove(e) {
   const delta = right.multiplyScalar(dx / (s.x || 1)).add(up.multiplyScalar(-dy / (s.y || 1)));
   moveVertex(rec.mesh, meshState.dragging.index, [delta.x, delta.y, delta.z]);
   rec.obj3d.geometry.dispose();
-  rec.obj3d.geometry = meshToGeometry(rec.mesh, { vcolors: true });
+  rec.obj3d.geometry = meshToGeometry(rec.mesh, {});
   markDirty();
   return true;
 }
@@ -1221,6 +1293,7 @@ function select(id, additive) {
   highlightFaces(meshRec());
   refreshVertexDots(meshRec());
   updateMeshBar();
+  sculptBar(terrainRec());
 }
 
 let selBoxGroup = null;
@@ -1646,6 +1719,10 @@ function renderInspector() {
     setR('#inEnemyDmg', d.damage || 8, '#enemyDmgVal');
   }
 
+  // Primitive rapide pour les maillages
+  const primBlock = $('#meshPrimBlock');
+  if (primBlock) primBlock.hidden = rec.type !== 'mesh' && rec.type !== 'terrain';
+
   // Code
   renderApiRef();
   rec.script = rec.script || { onStart: '', onUpdate: '', onCollide: '' };
@@ -1959,13 +2036,26 @@ let downPos = null;
 
 canvas.addEventListener('pointerdown', function (e) {
   downPos = { x: e.clientX, y: e.clientY, button: e.button };
+  // sculpture : le clic appartient au pinceau
+  if (terrainRec() && e.button === 0) {
+    sculpt.active = true; sculpt.pushed = false;
+    if (applySculpt(e.clientX, e.clientY)) { downPos = null; return; }
+  }
   // en mode maillage, le clic appartient au modeleur
   if (meshPointerDown(e)) { downPos = null; }
 });
 canvas.addEventListener('pointermove', function (e) {
+  if (sculpt.active && terrainRec() && (e.buttons & 1)) { applySculpt(e.clientX, e.clientY); return; }
   if (meshPointerMove(e)) { downPos = null; }
 });
-canvas.addEventListener('pointerup', function () { meshPointerUp(); });
+canvas.addEventListener('pointerup', function () {
+  if (sculpt.active) {
+    sculpt.active = false; sculpt.pushed = false;
+    const rec = terrainRec();
+    if (rec) sculptBar(rec);
+  }
+  meshPointerUp();
+});
 canvas.addEventListener('pointerup', function (e) {
   if (!downPos) return;
   const moved = Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y);
@@ -2928,6 +3018,10 @@ function rebuildFromData(data, keepHistory, keepSceneList) {
       }).catch(function () { /* placeholder conservé */ });
     }
     const created = createObject(p.type, p);
+    if (created && (p.type === 'mesh' || p.type === 'terrain') && p.mesh) {
+      created.mesh = cloneMesh(p.mesh);
+      refreshMesh(created);
+    }
     if (created && p.parent && p.parentOffset) {
       const par = findRec(p.parent);
       if (par) {
@@ -3219,6 +3313,35 @@ $('#btnSnap').addEventListener('click', function () {
   toast(view.snap ? 'ed.snapOn' : 'ed.snapOff', '🧲');
 });
 $('#btnFocus').addEventListener('click', focusSelection);
+
+/* ---- primitives : remplacer la géométrie d'un maillage ---- */
+document.querySelectorAll('[data-prim]').forEach(function (btn) {
+  btn.addEventListener('click', function () { applyPrimitive(btn.getAttribute('data-prim')); });
+});
+
+/* ---- boutons du sculpteur ---- */
+[['#scRaise', 'raise'], ['#scLower', 'lower'], ['#scFlatten', 'flatten']].forEach(function (pair) {
+  const el = $(pair[0]);
+  if (el) el.addEventListener('click', function () { sculpt.mode = pair[1]; log('🖌 ' + pair[1]); });
+});
+if ($('#scNoise')) $('#scNoise').addEventListener('click', function () {
+  const rec = terrainRec();
+  if (!rec) return;
+  pushHistory();
+  noiseTerrain(rec.mesh, 3.5, 0.07);
+  rec.obj3d.geometry.dispose();
+  rec.obj3d.geometry = meshToGeometry(rec.mesh, {});
+  markDirty();
+  log('≈ relief');
+});
+if ($('#scRadius')) $('#scRadius').addEventListener('input', function (e) {
+  sculpt.radius = parseFloat(e.target.value);
+  if ($('#scRadiusVal')) $('#scRadiusVal').textContent = e.target.value + ' m';
+});
+if ($('#scStrength')) $('#scStrength').addEventListener('input', function (e) {
+  sculpt.strength = parseFloat(e.target.value);
+  if ($('#scStrengthVal')) $('#scStrengthVal').textContent = e.target.value;
+});
 
 /* ---- boutons du modeleur ---- */
 [['#mbExtrude', function () { doExtrude(0.5); }],

@@ -90,6 +90,7 @@
         <div class="tb-sep"></div>
         <button class="obj-btn" data-add="player" data-tip="Joueur"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="7" r="3.2"/><path d="M6.5 20a5.5 5.5 0 0 1 11 0"/></svg></button>
         <button class="obj-btn" data-add="coin" data-tip="Pièce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="obj-btn" data-add="terrain" data-tip="Terrain sculptable"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m2 18 6-7 4 4 3-3 7 6z"/><path d="M8 11 6 9"/></svg></button>
         <button class="obj-btn" data-add="mesh" data-tip="Modéliser un maillage (à la main)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M12 4v16M4 8.5l8 3 8-3"/><circle cx="12" cy="11.5" r="1.2" fill="currentColor"/></svg></button>
         <button class="obj-btn" data-add="model" data-tip="Importer un modèle 3D (.glb)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5"/><path d="M12 12v9"/><path d="M17.5 3.5v4M15.5 5.5h4"/></svg></button>
         <button class="obj-btn" data-add="spawn" data-tip="Point de départ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 3v18"/><path d="M6 4h11l-2.5 4L17 12H6z"/></svg></button>
@@ -144,6 +145,24 @@
           <div class="mb-row">
             <span class="mb-hint" data-i18n="ed.meshHint">Clic : face · Maj+clic : ajouter · glisser un sommet : déplacer</span>
           </div>
+        </div>
+        <div class="mesh-bar" id="sculptBar" hidden>
+          <div class="mb-title"><span data-i18n="ed.sculpt">Sculpter</span> <b id="sculptStat"></b></div>
+          <div class="mb-row">
+            <button class="mb-btn" id="scRaise" title="Monter">▲<span data-i18n="ed.raise">Monter</span></button>
+            <button class="mb-btn" id="scLower" title="Creuser">▼<span data-i18n="ed.lower">Creuser</span></button>
+            <button class="mb-btn" id="scFlatten" title="Aplatir">▬<span data-i18n="ed.flatten">Aplatir</span></button>
+            <button class="mb-btn" id="scNoise" title="Relief aléatoire">≈<span data-i18n="ed.relief">Relief</span></button>
+          </div>
+          <div class="mb-row">
+            <label class="mb-hint" data-i18n="ed.brush">Pinceau</label>
+            <input type="range" id="scRadius" min="2" max="20" step="1" value="6">
+            <span class="mb-hint" id="scRadiusVal">6 m</span>
+            <label class="mb-hint" data-i18n="ed.strength">Force</label>
+            <input type="range" id="scStrength" min="0.1" max="3" step="0.1" value="0.8">
+            <span class="mb-hint" id="scStrengthVal">0.8</span>
+          </div>
+          <div class="mb-row"><span class="mb-hint" data-i18n="ed.sculptHint">Clique-glisse sur le terrain pour le sculpter</span></div>
         </div>
         <div class="align-menu" id="alignMenu" hidden></div>
         <div class="dlg-overlay" id="arrayDialog" hidden></div>
@@ -232,6 +251,16 @@
         </div>
 
         <div class="field"><label data-i18n="ed.name">Nom</label><input type="text" id="inName"></div>
+
+        <div id="meshPrimBlock" hidden>
+          <div class="insp-section" data-i18n="ed.meshPrim">Primitive</div>
+          <div class="prim-row">
+            <button class="mini-btn" data-prim="box">Cube</button>
+            <button class="mini-btn" data-prim="sphere">Sphère</button>
+            <button class="mini-btn" data-prim="cylinder">Cylindre</button>
+            <button class="mini-btn" data-prim="plane">Plan</button>
+          </div>
+        </div>
 
         <div class="insp-section" data-i18n="ed.transform">Transformation</div>
         <div class="vec-field">

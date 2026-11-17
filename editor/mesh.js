@@ -397,3 +397,76 @@ export function nearestVertexOnScreen(mesh, matrixWorld, camera, ndc, maxPx, wid
 }
 
 export const MESH_PRIMS = { box: boxMesh, plane: planeMesh, cylinder: cylinderMesh, sphere: sphereMesh };
+
+/* --------------------------------------------------------------- terrain */
+
+/**
+ * Terrain en grille déformable : un maillage régulier dont on peut monter ou
+ * abaisser les sommets au pinceau. C'est ce qui distingue un niveau « fait
+ * de cubes » d'un décor continu.
+ */
+export function terrainMesh(size = 60, segments = 24) {
+  const m = planeMesh(size, segments);
+  // on réorientera l'objet ; le maillage reste dans le plan XZ (y = hauteur)
+  return m;
+}
+
+/** Hauteur interpolée du terrain en (x, z), par rapport à son maillage. */
+export function sampleTerrainHeight(mesh, x, z, extent) {
+  const n = Math.round(Math.sqrt(mesh.verts.length)) - 1;
+  if (n < 1) return 0;
+  const fx = (x / extent + 0.5) * n;
+  const fz = (z / extent + 0.5) * n;
+  const i = Math.max(0, Math.min(n - 1, Math.floor(fx)));
+  const j = Math.max(0, Math.min(n - 1, Math.floor(fz)));
+  const tx = fx - i, tz = fz - j;
+  const h = (a, b) => (mesh.verts[a] ? mesh.verts[a][1] : 0);
+  const v = (ii, jj) => jj * (n + 1) + ii;
+  const h00 = h(v(i, j)), h10 = h(v(i + 1, j)), h01 = h(v(i, j + 1)), h11 = h(v(i + 1, j + 1));
+  return (h00 * (1 - tx) + h10 * tx) * (1 - tz) + (h01 * (1 - tx) + h11 * tx) * tz;
+}
+
+/**
+ * Sculpte le terrain : relève ou creuse les sommets dans un rayon donné.
+ * `falloff` adoucit le bord pour éviter les marches d'escalier.
+ */
+export function sculptTerrain(mesh, point, radius, strength, falloff) {
+  const r2 = radius * radius;
+  const f = falloff == null ? 2 : falloff;
+  for (let i = 0; i < mesh.verts.length; i++) {
+    const v = mesh.verts[i];
+    const dx = v[0] - point[0];
+    const dz = v[2] - point[2];
+    const d2 = dx * dx + dz * dz;
+    if (d2 > r2) continue;
+    const d = Math.sqrt(d2) / radius;
+    const w = Math.pow(1 - d * d, f);
+    v[1] += strength * w;
+  }
+  return mesh;
+}
+
+/** Aplatit une zone : nivelle autour de la hauteur cible. */
+export function flattenTerrain(mesh, point, radius, targetY, strength) {
+  const r2 = radius * radius;
+  for (let i = 0; i < mesh.verts.length; i++) {
+    const v = mesh.verts[i];
+    const dx = v[0] - point[0];
+    const dz = v[2] - point[2];
+    const d2 = dx * dx + dz * dz;
+    if (d2 > r2) continue;
+    const d = Math.sqrt(d2) / radius;
+    const w = (1 - d * d) * (strength == null ? 0.4 : strength);
+    v[1] += (targetY - v[1]) * w;
+  }
+  return mesh;
+}
+
+/** Bruit de relief : donne un terrain naturel en un clic. */
+export function noiseTerrain(mesh, amplitude = 3, scale = 0.08) {
+  mesh.verts.forEach((v) => {
+    v[1] = (Math.sin(v[0] * scale) * Math.cos(v[2] * scale * 1.3)
+      + Math.sin(v[0] * scale * 2.1 + v[2] * scale * 0.7) * 0.5) * amplitude;
+  });
+  return mesh;
+}
