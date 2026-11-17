@@ -96,9 +96,22 @@
         <button class="obj-btn" data-add="goal" data-tip="Objectif"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 4v16"/><path d="M6 5c3-1.8 6 1.8 9 0v8c-3 1.8-6-1.8-9 0z"/></svg></button>
       </div>
 
+      <div class="scenes-bar" id="scenesBar">
+        <span class="sb-label" data-i18n="ed.scenes">Niveaux</span>
+        <div class="scenes-list" id="scenesList"></div>
+        <button class="sc-btn" id="btnAddScene" title="Nouveau niveau">+</button>
+      </div>
+
+      <div class="prefabs-bar">
+        <span class="sb-label" data-i18n="ed.prefabs">Prefabs</span>
+        <div class="prefab-list" id="prefabList"></div>
+        <button class="sc-btn" id="btnPrefabScene" title="Enregistrer tout le niveau">◍</button>
+      </div>
+
       <div class="hierarchy" id="hierarchy"></div>
 
       <div class="panel-foot">
+        <button class="ghost-btn" id="btnPrefab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg><span data-i18n="ed.prefab">Prefab</span></button>
         <button class="ghost-btn" id="btnDuplicate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 5H6a1 1 0 0 0-1 1v10"/></svg><span data-i18n="ed.duplicate">Dupliquer</span></button>
         <button class="ghost-btn danger" id="btnDelete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M8 7V5h8v2"/><path d="M6.5 7l1 13h9l1-13"/></svg><span data-i18n="ed.delete">Supprimer</span></button>
       </div>

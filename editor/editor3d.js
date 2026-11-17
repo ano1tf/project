@@ -27,7 +27,11 @@ const state = {
   score: 0,
   dirty: false,
   wire: false,
-  scene: { name: 'Ma scène', fog: true, fogColor: '#B9C9E2' }
+  scene: { name: 'Ma scène', fog: true, fogColor: '#B9C9E2' },
+  // Niveaux : chaque entrée garde son propre JSON d'objets. Le niveau actif
+  // est celui qu'on édite ; l'export les embarque tous.
+  scenes: [{ name: 'Ma scène', data: null }],
+  sceneIndex: 0
 };
 const view = { snap: true, grid: true, mode: 'translate' };
 
@@ -197,11 +201,82 @@ let selBox = null;
 
 /* ================= Historique (undo/redo) ================= */
 const undoStack = [], redoStack = [];
-function serialize() {
-  return JSON.stringify({
+function currentSceneData() {
+  return {
     scene: state.scene,
     objects: Array.from(reg.values()).map(recToProps)
+  };
+}
+
+/** Sérialise TOUS les niveaux (le niveau actif est rafraîchi d'abord). */
+function serialize() {
+  const scenes = state.scenes.map(function (s, i) {
+    return {
+      name: s.name,
+      data: i === state.sceneIndex ? currentSceneData() : s.data
+    };
   });
+  return JSON.stringify({
+    // rétrocompatibilité : un projet mono-niveau reste lisible
+    scene: state.scene,
+    objects: Array.from(reg.values()).map(recToProps),
+    scenes: scenes,
+    active: state.sceneIndex
+  });
+}
+
+function renderScenes() {
+  const list = $('#scenesList');
+  if (!list) return;
+  list.innerHTML = state.scenes.map(function (s, i) {
+    return '<button class="scene-chip' + (i === state.sceneIndex ? ' active' : '') + '" data-scene="' + i + '">' +
+      escapeHtml(s.name || ('Niveau ' + (i + 1))) + '</button>';
+  }).join('');
+  $$('.scene-chip', list).forEach(function (chip) {
+    chip.addEventListener('click', function () { switchScene(parseInt(chip.getAttribute('data-scene'), 10)); });
+    chip.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      removeScene(parseInt(chip.getAttribute('data-scene'), 10));
+    });
+  });
+}
+
+function switchScene(i) {
+  if (i === state.sceneIndex || !state.scenes[i]) return;
+  // sauvegarde du niveau courant
+  state.scenes[state.sceneIndex].data = currentSceneData();
+  state.scenes[state.sceneIndex].name = state.scene.name;
+  state.sceneIndex = i;
+  const target = state.scenes[i];
+  const data = target.data || { scene: { name: target.name, fog: true, fogColor: '#B9C9E2' }, objects: [] };
+  rebuildFromData(data, false, true);
+  state.scene.name = target.name;
+  $('#projectName').value = target.name;
+  renderScenes();
+}
+
+function addScene() {
+  state.scenes[state.sceneIndex].data = currentSceneData();
+  state.scenes[state.sceneIndex].name = state.scene.name;
+  const name = 'Niveau ' + (state.scenes.length + 1);
+  state.scenes.push({ name: name, data: null });
+  state.sceneIndex = state.scenes.length - 1;
+  rebuildFromData({ scene: { name: name, fog: true, fogColor: '#B9C9E2' }, objects: [] }, false, true);
+  state.scene.name = name;
+  $('#projectName').value = name;
+  renderScenes();
+  toast('ed.newScene', '＋');
+}
+
+function removeScene(i) {
+  if (state.scenes.length <= 1) { toast('ed.lastScene', '⚠️'); return; }
+  state.scenes.splice(i, 1);
+  if (state.sceneIndex >= state.scenes.length) state.sceneIndex = state.scenes.length - 1;
+  const target = state.scenes[state.sceneIndex];
+  state.sceneIndex = state.sceneIndex;
+  rebuildFromData(target.data || { scene: { name: target.name, fog: true, fogColor: '#B9C9E2' }, objects: [] }, false, true);
+  renderScenes();
+  markDirty();
 }
 function pushHistory() {
   undoStack.push(serialize());
@@ -528,6 +603,98 @@ function deleteObject(id) {
   markDirty();
   toast('ed.deletedToast', '🗑️');
   log('− ' + rec.name);
+}
+
+/* ---------- Prefabs ----------
+   Un prefab est un sous-ensemble d'objets mémorisé (nom + JSON), réinsérable
+   à volonté. Sans ça, un niveau se construit objet par objet, ce qui ne passe
+   pas l'échelle dès qu'il y a une cinquantaine d'éléments. */
+const PREFABS_KEY = 'kreo-prefabs3d';
+
+function loadPrefabs() {
+  try { return JSON.parse(localStorage.getItem(PREFABS_KEY) || '[]'); } catch (e) { return []; }
+}
+function storePrefabs(list) {
+  try { localStorage.setItem(PREFABS_KEY, JSON.stringify(list)); } catch (e) {}
+}
+
+/** Enregistre la sélection (ou tout le niveau) comme prefab. */
+function savePrefab(asScene) {
+  const all = Array.from(reg.values()).map(recToProps);
+  const objs = asScene ? all : (state.selectedId ? all.filter(function (o) { return o.id === state.selectedId; }) : all);
+  if (!objs.length) { toast('ed.prefabEmpty', '⚠️'); return; }
+  const name = window.prompt(t('ed.prefabName'), t('ed.prefabDefault'));
+  if (!name) return;
+  const list = loadPrefabs();
+  // les ids sont réattribués à l'insertion
+  const clean = objs.map(function (o) { const c = Object.assign({}, o); delete c.id; return c; });
+  list.unshift({ name: name, objects: clean, at: Date.now() });
+  storePrefabs(list.slice(0, 40));
+  renderPrefabs();
+  toast('ed.prefabSaved', '📦');
+  log('📦 prefab · ' + name + ' · ' + clean.length + ' obj', 'ok');
+}
+
+/** Insère un prefab au centre de la vue. */
+function insertPrefab(index) {
+  const list = loadPrefabs();
+  const pf = list[index];
+  if (!pf) return;
+  pushHistory();
+  const created = [];
+  const camTarget = (orbit.target || new THREE.Vector3()).clone();
+  pf.objects.forEach(function (o, i) {
+    const copy = Object.assign({}, o);
+    copy.id = undefined;
+    copy.name = o.name + ' ' + (i + 1);
+    if (copy.position) {
+      copy.position = [
+        copy.position[0] + camTarget.x,
+        copy.position[1] + camTarget.y,
+        copy.position[2] + camTarget.z
+      ];
+    }
+    const rec = createObject(copy.type, copy);
+    if (rec) created.push(rec.id);
+  });
+  renderHierarchy();
+  markDirty();
+  if (created.length) select(created[0]);
+  toast('ed.prefabInserted', '📦');
+  log('📦 ' + t('ed.prefabInserted') + ' · ' + pf.name, 'play');
+}
+
+function renderPrefabs() {
+  const host = $('#prefabList');
+  if (!host) return;
+  const list = loadPrefabs();
+  if (!list.length) {
+    host.innerHTML = '<div class="h-empty">' + t('ed.prefabNone') + '</div>';
+    return;
+  }
+  host.innerHTML = list.map(function (pf, i) {
+    return '<div class="pf-row" data-pf="' + i + '">' +
+      '<span class="pf-name">' + escapeHtml(pf.name) + '</span>' +
+      '<span class="pf-count">' + pf.objects.length + '</span>' +
+      '<button class="pf-del" data-del="' + i + '" title="Supprimer">×</button>' +
+      '</div>';
+  }).join('');
+  $$('.pf-row', host).forEach(function (row) {
+    row.addEventListener('click', function (e) {
+      if (e.target.closest('.pf-del')) return;
+      insertPrefab(parseInt(row.getAttribute('data-pf'), 10));
+    });
+  });
+  $$('.pf-del', host).forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const i = parseInt(btn.getAttribute('data-del'), 10);
+      const l = loadPrefabs();
+      l.splice(i, 1);
+      storePrefabs(l);
+      renderPrefabs();
+    });
+  });
 }
 
 function duplicateObject(id) {
@@ -1179,6 +1346,7 @@ function feedKeys() {
   runtime.input.right = !!d.KeyD;
   runtime.input.jump = !!d.Space;
   runtime.input.run = !!d.ShiftLeft || !!d.ShiftRight;
+  runtime.input.crouch = !!(d.ControlLeft || d.ControlRight || d.KeyC);
   runtime.input.ads = !!(rtKeys.mouse && rtKeys.mouse.right);
 }
 function onRtMouseMove(e) {
@@ -1518,6 +1686,7 @@ function feed() {
   rt.input.right = !!keys.KeyD;
   rt.input.jump = !!keys.Space;
   rt.input.run = !!(keys.ShiftLeft || keys.ShiftRight);
+  rt.input.crouch = !!(keys.ControlLeft || keys.ControlRight || keys.KeyC);
 }
 let dragging = false;
 canvas.addEventListener('mousedown', (e) => {
@@ -1610,7 +1779,7 @@ function importFile() {
   input.click();
 }
 
-function rebuildFromData(data, keepHistory) {
+function rebuildFromData(data, keepHistory, keepSceneList) {
   // Purge
   Array.from(reg.values()).forEach(function (rec) {
     scene3d.remove(rec.obj3d);
@@ -1619,6 +1788,22 @@ function rebuildFromData(data, keepHistory) {
   reg.clear();
   select(null);
 
+  // Un chargement de PROJET (fichier, autosave) peut contenir plusieurs
+  // niveaux. Un simple changement de niveau, lui, ne doit surtout pas
+  // réinitialiser la liste — d'où l'option `keepScenes`.
+  if (!keepSceneList) {
+    if (Array.isArray(data.scenes) && data.scenes.length) {
+      state.scenes = data.scenes.map(function (sc) {
+        return { name: sc.name || 'Niveau', data: sc.data || null };
+      });
+      state.sceneIndex = Math.min(data.active || 0, state.scenes.length - 1);
+      const active = state.scenes[state.sceneIndex];
+      if (active && active.data) data = active.data;
+    } else {
+      state.scenes = [{ name: (data.scene && data.scene.name) || 'Ma scène', data: null }];
+      state.sceneIndex = 0;
+    }
+  }
   if (data.scene) state.scene = Object.assign({ name: 'Ma scène', fog: true, fogColor: '#B9C9E2' }, data.scene);
   $('#projectName').value = state.scene.name || 'Ma scène';
   $('#inSceneName').value = state.scene.name || 'Ma scène';
@@ -1656,6 +1841,7 @@ function rebuildFromData(data, keepHistory) {
 
   renderHierarchy();
   renderInspector();
+  if (typeof renderScenes === 'function') renderScenes();
   markDirty();
 }
 
@@ -1918,6 +2104,10 @@ $('#btnWire').addEventListener('click', function () {
 $('#btnNew').addEventListener('click', newProject);
 $('#btnSave').addEventListener('click', save);
 $('#btnExport').addEventListener('click', exportFile);
+if ($('#btnAddScene')) $('#btnAddScene').addEventListener('click', addScene);
+if ($('#btnPrefab')) $('#btnPrefab').addEventListener('click', function () { savePrefab(false); });
+if ($('#btnPrefabScene')) $('#btnPrefabScene').addEventListener('click', function () { savePrefab(true); });
+if (typeof renderPrefabs === 'function') renderPrefabs();
 $('#btnExportGame').addEventListener('click', exportGame);
 $('#btnImport').addEventListener('click', importFile);
 $('#btnDemo').addEventListener('click', demoScene);

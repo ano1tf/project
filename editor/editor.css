@@ -543,3 +543,28 @@ kbd {
 .hud-vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0;
   background: radial-gradient(ellipse at center, transparent 45%, rgba(190,20,30,.55) 100%);
   transition: opacity .12s linear; }
+
+/* Barre de niveaux (scènes multiples) */
+.scenes-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.sb-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; opacity: .45; }
+.scenes-list { display: flex; gap: 4px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+.scenes-list::-webkit-scrollbar { display: none; }
+.sc-btn { border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: inherit;
+  border-radius: 6px; min-width: 22px; height: 22px; cursor: pointer; font-size: 13px; line-height: 1; }
+.sc-btn:hover { background: rgba(255,255,255,.12); }
+.scene-chip { border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03); color: inherit;
+  border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.scene-chip.active { background: rgba(109,74,255,.3); border-color: rgba(140,110,255,.7); }
+.scene-chip:hover { background: rgba(255,255,255,.1); }
+
+/* Prefabs */
+.prefabs-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.prefab-list { display: flex; gap: 4px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+.prefab-list::-webkit-scrollbar { display: none; }
+.prefab-list .h-empty { font-size: 10px; opacity: .4; padding: 2px 0; }
+.pf-row { display: flex; align-items: center; gap: 5px; border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.03); border-radius: 6px; padding: 2px 6px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.pf-row:hover { background: rgba(255,255,255,.1); }
+.pf-count { opacity: .45; font-size: 10px; }
+.pf-del { border: 0; background: none; color: inherit; opacity: .4; cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+.pf-del:hover { opacity: 1; color: #ff6b6b; }

@@ -143,7 +143,9 @@ function rayBox(o, d, mn, mx) {
 export class KreoRuntime {
   constructor(o) {
     this.THREE = o.THREE;
-    this.data = o.data || { scene: {}, objects: [] };
+    this.project = o.data || { scene: {}, objects: [] };
+    this.data = this._activeLevel(this.project);
+    this.levelIndex = 0;
     this.scene = o.scene || new this.THREE.Scene();
     this.canvas = o.canvas;
     this.host = o.host || null;
@@ -190,6 +192,33 @@ export class KreoRuntime {
     };
   }
 
+  /** Un projet peut contenir plusieurs niveaux ; on ne joue que le premier. */
+  _activeLevel(project) {
+    if (Array.isArray(project.scenes) && project.scenes.length) {
+      const i = Math.min(project.active || 0, project.scenes.length - 1);
+      const lvl = project.scenes[i];
+      if (lvl && lvl.data) return lvl.data;
+    }
+    return { scene: project.scene || {}, objects: project.objects || [] };
+  }
+
+  /** Charge un autre niveau du projet et relance le gameplay dessus. */
+  loadLevel(i) {
+    const project = this.project;
+    if (!Array.isArray(project.scenes) || !project.scenes[i]) return false;
+    const lvl = project.scenes[i];
+    if (!lvl.data) return false;
+    this.levelIndex = i;
+    this.data = lvl.data;
+    this.build();
+    this.start();
+    return true;
+  }
+
+  get levelCount() {
+    return (this.project.scenes && this.project.scenes.length) || 1;
+  }
+
   /* ---------- construction ---------- */
   /** Crée les objets de jeu depuis les données. Idempotent. */
   build() {
@@ -203,6 +232,8 @@ export class KreoRuntime {
     this._rebuildWorld();
     this._spawnPlayer();
     this._spawnEnemies();
+    this.projectiles.forEach((pr) => { if (pr.mesh.parent) pr.mesh.parent.remove(pr.mesh); });
+    this.projectiles.length = 0;
     if (!this._vmBuilt) { this._buildViewmodel(); this._vmBuilt = true; }
     // arme de départ : la première posée dans la scène, sinon le pistolet
     const wRec = Array.from(this.entities.values()).find((r) => r.type === 'weapon');
@@ -403,6 +434,11 @@ export class KreoRuntime {
       eye: 1.62,
       walkSpeed: 6.2,
       runSpeed: 9.4,
+      speedXZ: 0,
+      coyote: 0,
+      sliding: false,
+      slideT: 0,
+      crouched: false,
       jumpSpeed: 8.4,
       gravity: 24,
       record: player
@@ -460,12 +496,32 @@ export class KreoRuntime {
     const p = this.player;
     const inp = this.input;
 
-    // regard
+    /* ---------- regard ---------- */
     if (inp.lookX) p.yaw -= inp.lookX;
     if (inp.lookY) p.pitch = clamp(p.pitch - inp.lookY, -1.45, 1.45);
     inp.lookX = 0; inp.lookY = 0;
 
-    // déplacement relatif à la caméra
+    /* ---------- posture : debout / accroupi / glissade ---------- */
+    const wasCrouched = p.crouched;
+    const wantCrouch = !!inp.crouch;
+    if (wantCrouch && !p.crouched && p.grounded && p.speedXZ > p.runSpeed * 0.8 && !p.sliding) {
+      // glissade : on conserve l'élan, on s'accroupit
+      p.sliding = true;
+      p.slideT = 0.62;
+      p.slideDir = new this.THREE.Vector3(p.vel.x, 0, p.vel.z).normalize();
+      if (this.host && this.host.onSlide) this.host.onSlide();
+    }
+    p.crouched = wantCrouch;
+    if (p.sliding) {
+      p.slideT -= dt;
+      if (p.slideT <= 0 || !p.crouched) { p.sliding = false; }
+    }
+    const targetEye = p.crouched ? 1.12 : 1.62;
+    p.eye += (targetEye - p.eye) * Math.min(1, dt * 12);
+    p.height = p.crouched ? 1.25 : 1.75;
+    if (wasCrouched !== p.crouched && this.host && this.host.onHud) this.host.onHud(this.state);
+
+    /* ---------- déplacement relatif à la caméra ---------- */
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
     const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
     let mf = 0, ms = 0;
@@ -475,26 +531,52 @@ export class KreoRuntime {
     if (inp.left) ms -= 1;
     const len = Math.hypot(mf, ms) || 1;
     mf /= len; ms /= len;
-    const speed = (inp.run ? p.runSpeed : p.walkSpeed) * (inp.ads ? 0.55 : 1);
+
+    let speed = (inp.run && !p.crouched ? p.runSpeed : p.walkSpeed);
+    if (p.crouched) speed *= 0.52;
+    if (inp.ads) speed *= 0.62;
+    if (p.sliding) speed = p.runSpeed * 1.22;
+
     const wishX = (fx * mf + rx * ms) * speed;
     const wishZ = (fz * mf + rz * ms) * speed;
-    const accel = p.grounded ? 14 : 4;
-    p.vel.x += (wishX - p.vel.x) * Math.min(1, dt * accel);
-    p.vel.z += (wishZ - p.vel.z) * Math.min(1, dt * accel);
 
-    if (inp.jump && p.grounded) { p.vel.y = p.jumpSpeed; p.grounded = false; }
+    // accélération : plus faible en l'air, très faible en glissade (l'élan prime)
+    const accel = p.sliding ? 1.4 : (p.grounded ? 16 : 4);
+    if (!p.sliding) {
+      p.vel.x += (wishX - p.vel.x) * Math.min(1, dt * accel);
+      p.vel.z += (wishZ - p.vel.z) * Math.min(1, dt * accel);
+    } else {
+      // friction de glissade
+      const f = Math.pow(0.12, dt);
+      p.vel.x *= f; p.vel.z *= f;
+    }
+
+    /* ---------- saut (avec coyote time) ---------- */
+    if (p.grounded) p.coyote = 0.12; else p.coyote = Math.max(0, p.coyote - dt);
+    if (inp.jump && p.coyote > 0) {
+      p.vel.y = p.jumpSpeed;
+      p.grounded = false;
+      p.coyote = 0;
+      if (this.host && this.host.onJump) this.host.onJump();
+    }
     p.vel.y = Math.max(-60, p.vel.y - p.gravity * dt);
 
+    /* ---------- collisions : balayage par axe + pentes ---------- */
     const r = p.radius, h = p.height;
     const old = p.pos.clone();
+    let collidedX = false, collidedZ = false;
 
-    // axe X
     p.pos.x += p.vel.x * dt;
-    if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) { p.pos.x = old.x; p.vel.x = 0; }
-    // axe Z
+    if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) {
+      // tentative de montée de marche (10 cm) : c'est ce qui permet de passer
+      // un rebord sans rester bloqué, indispensable sur une carte à couloirs
+      if (!this._tryStep(p, 0.32)) { p.pos.x = old.x; p.vel.x = 0; collidedX = true; }
+    }
     p.pos.z += p.vel.z * dt;
-    if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) { p.pos.z = old.z; p.vel.z = 0; }
-    // axe Y
+    if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) {
+      if (!this._tryStep(p, 0.32)) { p.pos.z = old.z; p.vel.z = 0; collidedZ = true; }
+    }
+
     p.pos.y += p.vel.y * dt;
     p.grounded = false;
     if (this.world.intersects(p.pos.x, p.pos.y, p.pos.z, r, h)) {
@@ -502,24 +584,55 @@ export class KreoRuntime {
       if (p.vel.y <= 0) p.grounded = true;
       p.vel.y = 0;
     }
+
+    // sol : on cherche la surface la plus haute sous les pieds
     const ground = this.world.groundAt(p.pos.x, p.pos.z, p.pos.y);
-    if (p.pos.y <= 0 || (ground > -Infinity && p.pos.y <= ground + 0.02)) {
-      p.pos.y = Math.max(p.pos.y, ground > -Infinity ? ground : 0);
+    if (ground > -Infinity && p.pos.y <= ground + 0.06) {
+      p.pos.y = ground;
+      if (p.vel.y <= 0) { p.vel.y = 0; p.grounded = true; }
+    } else if (p.pos.y <= 0) {
+      p.pos.y = 0;
       if (p.vel.y <= 0) { p.vel.y = 0; p.grounded = true; }
     }
 
-    // chute hors carte
+    // marche : franchissement de petits obstacles (rebords, bordures)
+    if (p.grounded && (collidedX || collidedZ)) {
+      // rien de plus : le _tryStep a déjà tenté la montée sur l'axe concerné
+    }
+
+    /* ---------- vitesse horizontale courante (pour la glissade / le bob) ---------- */
+    p.speedXZ = Math.hypot(p.vel.x, p.vel.z);
+
+    /* ---------- chute hors carte ---------- */
     if (p.pos.y < -40) this._damage(999);
 
-    // caméra première personne
+    /* ---------- caméra première personne ---------- */
     const shake = (this.damageFlash || 0) * 0.035;
+    // inclinaison en glissade
+    const roll = p.sliding ? -0.06 : 0;
     this.camera.position.set(
       p.pos.x + (Math.random() - 0.5) * shake,
       p.pos.y + p.eye + (Math.random() - 0.5) * shake,
       p.pos.z
     );
     this.camera.rotation.order = 'YXZ';
-    this.camera.rotation.set(p.pitch, p.yaw, (Math.random() - 0.5) * shake * 0.6);
+    this.camera.rotation.set(p.pitch, p.yaw, roll + (Math.random() - 0.5) * shake * 0.6);
+  }
+
+  /**
+   * Franchissement de marche : si monter de `step` dégage le joueur, on le
+   * pose sur la surface. Évite de rester coincé sur un rebord de 10 cm, le
+   * défaut classique des collisions purement AABB.
+   */
+  _tryStep(p, step) {
+    const y0 = p.pos.y;
+    for (let dy = 0.06; dy <= step; dy += 0.06) {
+      if (!this.world.intersects(p.pos.x, y0 + dy, p.pos.z, p.radius, p.height)) {
+        p.pos.y = y0 + dy;
+        return true;
+      }
+    }
+    return false;
   }
 
   _updateEntities(dt) {
@@ -1188,6 +1301,10 @@ export class KreoRuntime {
       damage: (n) => rt._damage(Number(n) || 0),
       heal: (n) => rt.heal(Number(n) || 0),
       win: (msg) => rt.win(msg),
+      loadLevel: (i) => rt.loadLevel(i),
+      get level() { return rt.levelIndex; },
+      get levelCount() { return rt.levelCount; },
+      nextLevel() { return rt.levelIndex + 1 < rt.levelCount ? rt.loadLevel(rt.levelIndex + 1) : false; },
       lose: () => { rt.state.lost = true; if (rt.host && rt.host.onLose) rt.host.onLose(); },
       message: (msg) => { if (rt.host && rt.host.onMessage) rt.host.onMessage(String(msg)); },
       /** Raycast dans le monde : { point, normal, dist } ou null. */
