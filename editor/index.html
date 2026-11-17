@@ -224,6 +224,17 @@
         <div class="type-block" id="matBlock">
           <div class="insp-section" data-i18n="ed.material">Matériau</div>
           <div class="field"><label data-i18n="ed.color">Couleur</label><input type="color" id="inColor"></div>
+          <div class="field"><label data-i18n="ed.texture">Texture</label>
+            <select id="inTexture">
+              <option value="none">—</option>
+              <option value="concrete">Béton</option>
+              <option value="metal">Métal</option>
+              <option value="grid">Grille</option>
+              <option value="checker">Damier</option>
+              <option value="wood">Bois</option>
+              <option value="noise">Bruit</option>
+            </select>
+          </div>
           <div class="field"><label data-i18n="ed.metalness">Métallique</label>
             <div class="range-row"><input type="range" id="inMetal" min="0" max="1" step="0.05"><span id="metalVal"></span></div>
           </div>

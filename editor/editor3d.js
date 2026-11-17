@@ -10,7 +10,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { KreoRuntime, makeNoiseTexture } from './runtime.js';
+import { KreoRuntime, makeNoiseTexture, makeTexture, textureToThree, bindTextureGlobals } from './runtime.js';
 
 const $ = (s, c) => (c || document).querySelector(s);
 const $$ = (s, c) => Array.from((c || document).querySelectorAll(s));
@@ -142,6 +142,48 @@ scene3d.fog = new THREE.Fog(0xB9C9E2, 60, 260);
   tex.colorSpace = THREE.SRGBColorSpace;
   scene3d.background = tex;
 })();
+
+
+/* ---------- Éclairage d'environnement (IBL) ----------
+   Sans ça, tout ce qui est métallique rend noir : un métal n'a pas de
+   couleur diffuse, il ne réfléchit que l'environnement. */
+function buildEnvironment(sceneObj, rendererObj) {
+  const pmrem = new THREE.PMREMGenerator(rendererObj);
+  pmrem.compileEquirectangularShader();
+  const envScene = new THREE.Scene();
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(60, 24, 16),
+    new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true })
+  );
+  const geo = sky.geometry;
+  const pos = geo.attributes.position;
+  const colors = [];
+  const top = new THREE.Color('#4E7FC4');
+  const mid = new THREE.Color('#A8C4E4');
+  const bot = new THREE.Color('#5A6472');
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i) / 58;
+    if (y >= 0) c.copy(mid).lerp(top, Math.pow(y, 0.6));
+    else c.copy(mid).lerp(bot, Math.min(1, -y * 1.6));
+    colors.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  envScene.add(sky);
+  const sunDisc = new THREE.Mesh(
+    new THREE.SphereGeometry(4, 16, 12),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 5.4, 4.4) })
+  );
+  sunDisc.position.set(24, 34, 18);
+  envScene.add(sunDisc);
+  const rt = pmrem.fromScene(envScene, 0.04);
+  sceneObj.environment = rt.texture;
+  sceneObj.environmentIntensity = 0.85;
+  geo.dispose(); sky.material.dispose(); envScene.clear();
+  return rt.texture;
+}
+
+const __envRT = buildEnvironment(scene3d, renderer);
 
 const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 600);
 camera.position.set(15, 11, 18);
@@ -504,6 +546,15 @@ function createObject(type, opts) {
   // Matériau custom
   if (opts.material && obj3d.material) {
     obj3d.material.color.set(opts.material.color || '#8FA3C8');
+    if (opts.material.texture && opts.material.texture !== 'none') {
+      const lib = getTexture(opts.material.texture);
+      if (lib) {
+        obj3d.material.map = textureToThree(THREE, lib);
+        obj3d.material.userData = obj3d.material.userData || {};
+        obj3d.material.userData.kind = opts.material.texture;
+        obj3d.material.needsUpdate = true;
+      }
+    }
     obj3d.material.metalness = opts.material.metalness != null ? opts.material.metalness : 0.08;
     obj3d.material.roughness = opts.material.roughness != null ? opts.material.roughness : 0.62;
     if (opts.material.emissive) obj3d.material.emissive.set(opts.material.emissive);
@@ -565,6 +616,16 @@ function recToProps(rec) {
   };
 }
 
+/* ---------- Bibliothèque de textures procédurales ---------- */
+const TEXTURES = new Map();
+function getTexture(kind) {
+  if (!kind || kind === 'none') return null;
+  bindTextureGlobals(THREE);
+  if (!TEXTURES.has(kind)) TEXTURES.set(kind, makeTexture(kind, 256, 4));
+  return TEXTURES.get(kind);
+}
+const TEXTURE_KINDS = ['none', 'concrete', 'metal', 'grid', 'checker', 'wood', 'noise'];
+
 function getMaterialProps(rec) {
   let m = null;
   rec.obj3d.traverse(function (o) {
@@ -577,7 +638,8 @@ function getMaterialProps(rec) {
     roughness: m.roughness,
     emissive: '#' + m.emissive.getHexString(),
     opacity: m.opacity,
-    wireframe: m.wireframe
+    wireframe: m.wireframe,
+    texture: m.map ? (m.userData ? m.userData.kind : null) : null
   };
 }
 
@@ -865,6 +927,7 @@ function renderInspector() {
     const m = getMaterialProps(rec);
     if (m) {
       $('#inColor').value = m.color;
+      if ($('#inTexture')) $('#inTexture').value = m.texture || 'none';
       $('#inMetal').value = m.metalness;
       $('#metalVal').textContent = Number(m.metalness).toFixed(2);
       $('#inRough').value = m.roughness;
@@ -964,6 +1027,28 @@ function forEachMat(rec, fn) {
   });
 }
 
+bindField('#inTexture', function (el) {
+  const rec = findRec(state.selectedId);
+  if (!rec) return;
+  armSnap();
+  const kind = el.value;
+  rec.obj3d.traverse(function (o) {
+    if (!o.isMesh || !o.material || !o.material.isMeshStandardMaterial) return;
+    const lib = getTexture(kind);
+    if (lib) {
+      if (o.material.map) o.material.map.dispose();
+      o.material.map = textureToThree(THREE, lib);
+      o.material.userData = o.material.userData || {};
+      o.material.userData.kind = kind;
+    } else if (o.material.map) {
+      o.material.map.dispose();
+      o.material.map = null;
+      if (o.material.userData) o.material.userData.kind = null;
+    }
+    o.material.needsUpdate = true;
+  });
+  takeSnap();
+});
 bindField('#inColor', function (el) {
   const rec = findRec(state.selectedId);
   if (rec) forEachMat(rec, function (m) { m.color.set(el.value); });
@@ -1439,6 +1524,47 @@ async function grabRuntimeSource() {
  * (`_m1$1`, `clamp`...). Retourne le bundle `three.core` + `three.module` séparé
  * du runtime, car le runtime doit pouvoir être patché autrement.
  */
+/**
+ * Applique `re` uniquement au code, jamais aux littéraux.
+ * three contient de longues chaînes GLSL (`clamp(...)`) : un renommage
+ * global y casse les shaders. On protège chaînes, gabarits et commentaires.
+ */
+function replaceCodeOnly(src, re, replacement) {
+  let out = '';
+  let buf = '';
+  let i = 0;
+  const flush = () => { out += buf.replace(re, replacement); buf = ''; };
+  while (i < src.length) {
+    const c = src[i], n = src[i + 1];
+    if (c === '/' && n === '/') {
+      flush();
+      const end = src.indexOf('\n', i);
+      const stop = end === -1 ? src.length : end;
+      out += src.slice(i, stop); i = stop; continue;
+    }
+    if (c === '/' && n === '*') {
+      flush();
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      out += src.slice(i, stop); i = stop; continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      flush();
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === '\\') { j += 2; continue; }
+        if (src[j] === c) { j++; break; }
+        // gabarit multi-lignes : on avale tout jusqu'au backtick fermant
+        j++;
+      }
+      out += src.slice(i, j); i = j; continue;
+    }
+    buf += c; i++;
+  }
+  flush();
+  return out;
+}
+
 function mergeModules(sources) {
   const DECL = /^(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm;
   const names = (src) => {
@@ -1458,7 +1584,7 @@ function mergeModules(sources) {
       for (const name of own) {
         if (!taken.has(name)) continue;
         const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        src = src.replace(new RegExp('\\b' + escaped + '\\b', 'g'), 'kt' + i + '_' + name.replace(/\$/g, '_'));
+        src = replaceCodeOnly(src, new RegExp('\\b' + escaped + '\\b', 'g'), 'kt' + i + '_' + name.replace(/\$/g, '_'));
         renamed = true;
       }
       if (renamed) { /* rien d'autre à faire : remplacement global */ }
@@ -1468,6 +1594,32 @@ function mergeModules(sources) {
   }
   return out.join('\n');
 }
+
+const ENV_SRC = `
+/* IBL : indispensable pour que les surfaces métalliques ne rendent pas noir */
+(function env() {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const es = new THREE.Scene();
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(60, 24, 16),
+    new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true }));
+  const pos = sky.geometry.attributes.position, cols = [];
+  const top = new THREE.Color('#4E7FC4'), mid = new THREE.Color('#A8C4E4'), bot = new THREE.Color('#5A6472');
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i) / 58;
+    if (y >= 0) c.copy(mid).lerp(top, Math.pow(y, 0.6)); else c.copy(mid).lerp(bot, Math.min(1, -y * 1.6));
+    cols.push(c.r, c.g, c.b);
+  }
+  sky.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  es.add(sky);
+  const disc = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 12),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 5.4, 4.4) }));
+  disc.position.set(24, 34, 18); es.add(disc);
+  scene.environment = pmrem.fromScene(es, 0.04).texture;
+  scene.environmentIntensity = 0.85;
+  sky.geometry.dispose(); sky.material.dispose();
+})();
+`;
 
 function buildGameHtml(three, runtimeSrc, projectJson, title) {
   // three.module.js importe './three.core.js' : on inline les deux dans un
@@ -1533,7 +1685,12 @@ const THREE = {
   LOD, BatchedMesh, InstancedBufferAttribute, InstancedBufferGeometry,
   WebGLRenderTarget, WebGLCubeRenderTarget, CubeCamera,
   PMREMGenerator, DepthTexture, DataArrayTexture, CompressedTexture,
-  REVISION
+  Float32BufferAttribute, Int32BufferAttribute, Uint32BufferAttribute,
+  Uint16BufferAttribute, Uint8BufferAttribute, HalfFloatType, LinearSRGBColorSpace,
+  NoColorSpace, CanvasTexture, OrthographicCamera, WebGLRenderTarget,
+  ShaderMaterial, PlaneGeometry, MeshBasicMaterial, FloatType, RGBAFormat,
+  LinearFilter, NearestFilter, DoubleSide, BackSide, FrontSide, RepeatWrapping,
+  SRGBColorSpace, REVISION
 };
 `;
 
@@ -1628,7 +1785,7 @@ sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
 sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
 sun.shadow.camera.far = 200; sun.shadow.bias = -0.0004;
 scene.add(sun);
-
+${ENV_SRC}
 const ui = {
   score: document.getElementById('score'),
   kills: document.getElementById('kills'),

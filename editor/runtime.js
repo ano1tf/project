@@ -44,6 +44,106 @@ export function makeNoiseTexture(THREE, size = 64, repeat = 4, contrast = 0.5) {
   return tex;
 }
 
+/* ---------------------------------------------------------- textures */
+/**
+ * Textures procédurales : grille, béton, métal, damier, bruit.
+ * Elles évitent l'écueil « tout est une couleur unie » sans imposer de
+ * fichiers externes — indispensable pour un export autonome.
+ */
+let CanvasTextureCtor = null;
+let RepeatWrappingCtor = null;
+
+export function bindTextureGlobals(THREE) {
+  CanvasTextureCtor = THREE.CanvasTexture;
+  RepeatWrappingCtor = THREE.RepeatWrapping;
+}
+
+export function makeTexture(kind, size = 256, repeat = 4) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const S = size;
+
+  const noise = (amount, mono) => {
+    const img = g.getImageData(0, 0, S, S);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * amount;
+      img.data[i] = clamp(img.data[i] + n, 0, 255);
+      img.data[i + 1] = clamp(img.data[i + 1] + (mono ? n : (Math.random() - 0.5) * amount), 0, 255);
+      img.data[i + 2] = clamp(img.data[i + 2] + n, 0, 255);
+    }
+    g.putImageData(img, 0, 0);
+  };
+
+  if (kind === 'grid') {
+    g.fillStyle = '#6C7B94'; g.fillRect(0, 0, S, S);
+    g.strokeStyle = 'rgba(220,232,255,.35)'; g.lineWidth = 2;
+    for (let i = 0; i <= 4; i++) {
+      const p = (i / 4) * S;
+      g.beginPath(); g.moveTo(p, 0); g.lineTo(p, S); g.stroke();
+      g.beginPath(); g.moveTo(0, p); g.lineTo(S, p); g.stroke();
+    }
+    noise(16, true);
+  } else if (kind === 'concrete') {
+    g.fillStyle = '#8A8F98'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 900; i++) {
+      g.fillStyle = `rgba(${90 + Math.random() * 90 | 0},${90 + Math.random() * 90 | 0},${95 + Math.random() * 90 | 0},.35)`;
+      const r = Math.random() * 6 + 1;
+      g.beginPath(); g.arc(Math.random() * S, Math.random() * S, r, 0, 7); g.fill();
+    }
+    noise(26, true);
+  } else if (kind === 'metal') {
+    const grad = g.createLinearGradient(0, 0, S, S);
+    grad.addColorStop(0, '#9AA3B0'); grad.addColorStop(.5, '#6E7783'); grad.addColorStop(1, '#9AA3B0');
+    g.fillStyle = grad; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 220; i++) {
+      g.strokeStyle = `rgba(255,255,255,${Math.random() * 0.12})`;
+      g.beginPath();
+      const y = Math.random() * S;
+      g.moveTo(0, y); g.lineTo(S, y + (Math.random() - .5) * 4); g.stroke();
+    }
+    noise(12, true);
+  } else if (kind === 'checker') {
+    const n = 8, cell = S / n;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      g.fillStyle = (x + y) % 2 ? '#E8EDF5' : '#4A5568';
+      g.fillRect(x * cell, y * cell, cell, cell);
+    }
+  } else if (kind === 'wood') {
+    g.fillStyle = '#7A553A'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 60; i++) {
+      g.strokeStyle = `rgba(${60 + Math.random() * 60 | 0},${40 + Math.random() * 40 | 0},20,.35)`;
+      g.lineWidth = 1 + Math.random() * 3;
+      g.beginPath();
+      const y = Math.random() * S;
+      g.moveTo(0, y);
+      g.bezierCurveTo(S * .3, y + (Math.random() - .5) * 20, S * .7, y + (Math.random() - .5) * 20, S, y);
+      g.stroke();
+    }
+    noise(14, false);
+  } else {
+    // bruit neutre
+    g.fillStyle = '#808080'; g.fillRect(0, 0, S, S);
+    noise(60, true);
+  }
+
+  const tex = new CanvasTextureCtor(c);
+  tex.wrapS = tex.wrapT = RepeatWrappingCtor;
+  tex.repeat.set(repeat, repeat);
+  tex.anisotropy = 4;
+  return { canvas: c, kind: kind, repeat: repeat };
+}
+
+/** Construit une THREE.CanvasTexture depuis l'entrée de la bibliothèque. */
+export function textureToThree(THREE, entry) {
+  const tex = new THREE.CanvasTexture(entry.canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(entry.repeat, entry.repeat);
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /* ---------------------------------------------------------- physique simple */
 /* Boîtes alignées sur les axes (AABB) + hauteurs de sol.
    Volontairement simple : c'est ce qui reste rapide avec 500 colliders
@@ -158,6 +258,7 @@ export class KreoRuntime {
     this.time = 0;
     this.input = {};
 
+    bindTextureGlobals(this.THREE);
     this._hooks = new Map();
     this._tmpV = new this.THREE.Vector3();
     this._ray = new this.THREE.Raycaster();
@@ -322,9 +423,10 @@ export class KreoRuntime {
     const mat = new T.MeshStandardMaterial(params);
     // textures : la propriété existe déjà dans les données, elle n'était
     // simplement jamais lue au chargement.
-    if (m.texture && this.textures && this.textures[m.texture]) {
-      mat.map = this.textures[m.texture];
-      if (m.uvScale) { mat.map = mat.map.clone(); mat.map.needsUpdate = true; mat.map.repeat.set(m.uvScale[0], m.uvScale[1]); }
+    if (m.texture && this.textureLib && this.textureLib[m.texture]) {
+      mat.map = textureToThree(T, this.textureLib[m.texture]);
+      const rep = m.uvScale || [1, 1];
+      mat.map.repeat.set(rep[0], rep[1]);
     }
     return mat;
   }
@@ -509,6 +611,7 @@ export class KreoRuntime {
       p.sliding = true;
       p.slideT = 0.62;
       p.slideDir = new this.THREE.Vector3(p.vel.x, 0, p.vel.z).normalize();
+      this.sfx('slide');
       if (this.host && this.host.onSlide) this.host.onSlide();
     }
     p.crouched = wantCrouch;
@@ -557,6 +660,7 @@ export class KreoRuntime {
       p.vel.y = p.jumpSpeed;
       p.grounded = false;
       p.coyote = 0;
+      this.sfx('jump');
       if (this.host && this.host.onJump) this.host.onJump();
     }
     p.vel.y = Math.max(-60, p.vel.y - p.gravity * dt);
@@ -831,8 +935,140 @@ export class KreoRuntime {
   }
 
   /** Rend la scène, puis l'arme en main par-dessus (profondeur nettoyée). */
+  /* ---------- post-traitement ----------
+     Le jeu se rend dans une cible hors écran (scène puis viewmodel), et une
+     dernière passe plein écran applique étalonnage, vignette, grain et
+     aberration chromatique. Coût : un quad, négligeable. */
+  _initPost() {
+    const T = this.THREE;
+    const size = this.renderer.getDrawingBufferSize(new T.Vector2());
+    this._postRT = new T.WebGLRenderTarget(size.x, size.y, {
+      minFilter: T.LinearFilter, magFilter: T.LinearFilter,
+      type: T.HalfFloatType, format: T.RGBAFormat
+    });
+    this._postRT.texture.colorSpace = T.LinearSRGBColorSpace;
+    this._postCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this._postScene = new T.Scene();
+    this._postMat = new T.ShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: this._postRT.texture },
+        uTime: { value: 0 },
+        uDamage: { value: 0 },
+        uVignette: { value: 0.32 },
+        uGrain: { value: 0.035 },
+        uAberr: { value: 0.0016 },
+        uSat: { value: 1.06 },
+        uContrast: { value: 1.04 },
+        uExposure: { value: 1.08 },
+        uRes: { value: new T.Vector2(size.x, size.y) }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D tDiffuse;
+        uniform float uTime, uDamage, uVignette, uGrain, uAberr, uSat, uContrast, uExposure;
+        uniform vec2 uRes;
+        varying vec2 vUv;
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+        // ACES filmique (approximation de Narkowicz) : indispensable ici,
+        // three ne l'applique pas quand la scène est rendue dans une cible.
+        vec3 aces(vec3 x) {
+          return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+        }
+        vec3 toSRGB(vec3 c) {
+          return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+        }
+
+        void main() {
+          vec2 uv = vUv;
+          vec2 d = uv - 0.5;
+          float r2 = dot(d, d);
+          float ab = uAberr * (1.0 + uDamage * 3.0) * (0.35 + r2 * 2.0);
+          vec3 col;
+          col.r = texture2D(tDiffuse, uv + d * ab).r;
+          col.g = texture2D(tDiffuse, uv).g;
+          col.b = texture2D(tDiffuse, uv - d * ab).b;
+
+          col *= uExposure;
+          col = aces(col);
+          col = toSRGB(col);
+
+          // étalonnage
+          float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          col = mix(vec3(lum), col, uSat);
+          col = (col - 0.5) * uContrast + 0.5;
+
+          // vignette
+          float vig = smoothstep(0.95, 0.22, r2 * (1.0 + uDamage * 1.6));
+          col *= mix(1.0, vig, uVignette + uDamage * 0.45);
+
+          // flash rouge à l'impact
+          col = mix(col, vec3(0.55, 0.04, 0.03), uDamage * 0.28);
+
+          // grain animé
+          float g = hash(uv * uRes + fract(uTime) * 91.7) - 0.5;
+          col += g * uGrain;
+
+          gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+        }
+      `,
+      depthTest: false, depthWrite: false
+    });
+    const quad = new T.Mesh(new T.PlaneGeometry(2, 2), this._postMat);
+    quad.frustumCulled = false;
+    this._postQuad = quad;
+    this._postScene.add(quad);
+    this.post = true;
+  }
+
+  setPostQuality(level) {
+    if (!this._postMat) return;
+    const q = Math.max(0, Math.min(2, level | 0));
+    this._postMat.uniforms.uGrain.value = q === 0 ? 0 : 0.035;
+    this._postMat.uniforms.uAberr.value = q === 0 ? 0 : 0.0016;
+    this._postMat.uniforms.uVignette.value = q === 0 ? 0 : 0.32;
+  }
+
+  _renderPost() {
+    const r = this.renderer;
+    const T = this.THREE;
+    const size = r.getDrawingBufferSize(new T.Vector2());
+    if (this._postRT.width !== size.x || this._postRT.height !== size.y) {
+      this._postRT.setSize(size.x, size.y);
+      this._postMat.uniforms.uRes.value.set(size.x, size.y);
+    }
+    const u = this._postMat.uniforms;
+    u.uTime.value = this._now || 0;
+    u.uExposure.value = this.renderer.toneMappingExposure || 1.0;
+    u.uDamage.value = Math.min(1, this.damageFlash || 0);
+    // passe 1 : scène dans la cible
+    r.setRenderTarget(this._postRT);
+    r.clear();
+    const vmVisible = this.vm.visible;
+    this.vm.visible = false;
+    r.render(this.scene, this.camera);
+    this.vm.visible = vmVisible;
+    // passe 2 : viewmodel par-dessus, même cible
+    if (this.vm.visible && this.vmScene) this._renderViewmodel();
+    // passe 3 : quad plein écran
+    r.setRenderTarget(null);
+    r.clear();
+    r.render(this._postScene, this._postCam);
+  }
+
   _render() {
     const r = this.renderer;
+    if (this.post === undefined) {
+      this.post = this.host && this.host.postFx === false ? false : true;
+    }
+    if (this.post) {
+      if (!this._postRT) this._initPost();
+      if (this._postRT) { this._renderPost(); return; }
+    }
     r.setRenderTarget(null);
     // la caméra est dans la scène à cause du viewmodel : on la retire
     // temporairement du rendu principal en masquant ses enfants
@@ -841,7 +1077,13 @@ export class KreoRuntime {
     r.render(this.scene, this.camera);
     this.vm.visible = vmVisible;
 
-    if (this.vm.visible && this.vmScene) {
+    if (this.vm.visible && this.vmScene) this._renderViewmodel();
+  }
+
+  /** Deuxième passe : l'arme, sans effacer la couleur déjà rendue. */
+  _renderViewmodel() {
+    const r = this.renderer;
+    {
       // caméra du calque : même pose, FOV plus étroit
       const c = this.camera;
       const vc = this.vmCamera;
@@ -867,6 +1109,100 @@ export class KreoRuntime {
       r.clearDepth();
       r.render(this.vmScene, vc);
       r.autoClear = prevAuto;
+    }
+  }
+
+  /* ---------- audio procédural ----------
+     Aucun asset à charger : tout est synthétisé. Un jeu exporté doit sonner
+     correctement sans dépendre de fichiers externes. */
+  initAudio() {
+    if (this._audio) return this._audio;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      const ac = new AC();
+      this._audio = ac;
+      // bus de sortie + réverbération courte (IR générée)
+      const master = ac.createGain();
+      master.gain.value = 0.5;
+      master.connect(ac.destination);
+      const comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.ratio.value = 6; comp.knee.value = 12;
+      comp.connect(master);
+      this._bus = comp;
+      const len = Math.floor(ac.sampleRate * 1.1);
+      const ir = ac.createBuffer(2, len, ac.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const d = ir.getChannelData(c);
+        for (let i = 0; i < len; i++) {
+          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+        }
+      }
+      const verb = ac.createConvolver();
+      verb.buffer = ir;
+      const wet = ac.createGain();
+      wet.gain.value = 0.22;
+      verb.connect(wet); wet.connect(comp);
+      this._verb = verb;
+      return ac;
+    } catch (e) { return null; }
+  }
+
+  _tone(freq, dur, type, vol, slideTo, when, dest) {
+    const ac = this._audio;
+    if (!ac) return;
+    const t0 = (when || ac.currentTime);
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type || 'square';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g);
+    g.connect(dest || this._bus);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+
+  _noise(dur, vol, filterHz, when) {
+    const ac = this._audio;
+    if (!ac) return;
+    const t0 = when || ac.currentTime;
+    const len = Math.floor(ac.sampleRate * dur);
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const f = ac.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = filterHz || 2400;
+    const g = ac.createGain();
+    g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(this._bus);
+    if (this._verb) { const v = ac.createGain(); v.gain.value = 0.5; g.connect(v); v.connect(this._verb); }
+    src.start(t0);
+  }
+
+  sfx(kind) {
+    const ac = this.initAudio();
+    if (!ac || this.muted) return;
+    if (ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime;
+    switch (kind) {
+      case 'shot': this._noise(0.09, 0.32, 5200); this._tone(180, 0.07, 'square', 0.16, 60); break;
+      case 'shotHeavy': this._noise(0.16, 0.4, 3600); this._tone(120, 0.14, 'sawtooth', 0.18, 42); break;
+      case 'hit': this._tone(880, 0.05, 'square', 0.12, 1500); break;
+      case 'kill': this._tone(660, 0.07, 'triangle', 0.14); this._tone(990, 0.09, 'triangle', 0.12, 1200, t + 0.07); break;
+      case 'hurt': this._noise(0.12, 0.22, 900); this._tone(140, 0.16, 'sawtooth', 0.16, 60); break;
+      case 'pickup': this._tone(880, 0.06, 'triangle', 0.14); this._tone(1320, 0.09, 'triangle', 0.12, 1600, t + 0.06); break;
+      case 'reload': this._noise(0.05, 0.14, 1800); this._noise(0.06, 0.12, 1400, t + 0.18); break;
+      case 'jump': this._tone(300, 0.09, 'sine', 0.09, 480); break;
+      case 'slide': this._noise(0.28, 0.16, 700); break;
+      case 'enemyShot': this._tone(420, 0.1, 'sawtooth', 0.07, 180); break;
+      case 'win': [523, 659, 784, 1047].forEach((f, i) => this._tone(f, 0.16, 'triangle', 0.14, null, t + i * 0.1)); break;
+      case 'lose': [392, 330, 262, 196].forEach((f, i) => this._tone(f, 0.2, 'sawtooth', 0.12, null, t + i * 0.12)); break;
+      default: break;
     }
   }
 
@@ -915,7 +1251,7 @@ export class KreoRuntime {
         enemyHit.enemy.hp -= w.damage;
         enemyHit.enemy.hurtT = 0.18;
         if (!bestHit) bestHit = { point: enemyHit.point, enemy: enemyHit.enemy };
-        if (enemyHit.enemy.hp <= 0) this.kill(enemyHit.enemy.id);
+        if (enemyHit.enemy.hp <= 0) this.kill(enemyHit.enemy.id); else this.sfx('hit');
         this._spawnImpact(enemyHit.point, null, 0xFFCF6A);
       } else if (worldHit) {
         if (!bestHit) bestHit = { point: worldHit.point };
@@ -929,6 +1265,7 @@ export class KreoRuntime {
     this.recoilKick = Math.min(0.075, 0.02 + w.recoil * 1.6);
     this.recoilRot = Math.min(0.30, 0.08 + w.recoil * 4);
     this.vmFlash.intensity = 26;
+    this.sfx(this.state.weapon && this.state.weapon.id === 'shotgun' ? 'shotHeavy' : 'shot');
     if (this.host && this.host.onHud) this.host.onHud(this.state);
     if (this.host && this.host.onShot) this.host.onShot(w);
     return bestHit;
@@ -938,6 +1275,7 @@ export class KreoRuntime {
     const w = this.state.weapon;
     if (!w || this._reloading) return;
     this._reloading = true;
+    this.sfx('reload');
     setTimeout(() => {
       this.state.ammo = w.mag;
       this._reloading = false;
@@ -1076,6 +1414,7 @@ export class KreoRuntime {
       if (rec.type !== 'coin' && rec.type !== 'pickup' && rec.type !== 'weapon') continue;
       const d = rec.root.position.distanceTo(new T.Vector3(p.pos.x, p.pos.y + 0.9, p.pos.z));
       if (d > 1.7) continue;
+      this.sfx('pickup');
       if (rec.type === 'coin') { this.addScore(rec.def.value || 10); }
       if (rec.type === 'weapon') { this.giveWeapon(rec.def.weapon || 'rifle'); }
       if (rec.type === 'pickup') {
@@ -1118,6 +1457,7 @@ export class KreoRuntime {
     mesh.position.copy(from);
     this.scene.add(mesh);
     this.projectiles.push({ mesh, dir, speed: 22, damage: e.damage, life: 3.2 });
+    this.sfx('enemyShot');
     if (this.host && this.host.onEnemyShot) this.host.onEnemyShot(from);
   }
 
@@ -1132,11 +1472,13 @@ export class KreoRuntime {
   /* ---------- dégâts / état ---------- */
   _damage(n) {
     this.state.health = Math.max(0, this.state.health - n);
+    this.sfx('hurt');
     this.damageFlash = 1;
     this.lastHurt = this.time;
     if (this.host && this.host.onHud) this.host.onHud(this.state);
     if (this.state.health <= 0 && !this.state.lost) {
       this.state.lost = true;
+      this.sfx('lose');
       if (this.host && this.host.onLose) this.host.onLose();
       this._runHooks('onDeath');
     }
@@ -1155,6 +1497,7 @@ export class KreoRuntime {
   win(msg) {
     if (this.state.won) return;
     this.state.won = true;
+    this.sfx('win');
     if (this.host && this.host.onWin) this.host.onWin(msg || '');
   }
 
@@ -1260,6 +1603,7 @@ export class KreoRuntime {
     if (!rec || !rec.alive) return;
     rec.alive = false;
     rec.root.visible = false;
+    this.sfx('kill');
     for (const e of this.enemies) if (e.id === id) e.alive = false;
     this.state.kills++;
     this._runHooksFor(id, 'onDeath', 0);
@@ -1307,6 +1651,9 @@ export class KreoRuntime {
       nextLevel() { return rt.levelIndex + 1 < rt.levelCount ? rt.loadLevel(rt.levelIndex + 1) : false; },
       lose: () => { rt.state.lost = true; if (rt.host && rt.host.onLose) rt.host.onLose(); },
       message: (msg) => { if (rt.host && rt.host.onMessage) rt.host.onMessage(String(msg)); },
+      sound: (kind) => rt.sfx(kind),
+      tone: (freq, dur, type, vol, slideTo) => { rt.initAudio(); rt._tone(freq, dur, type, vol, slideTo); },
+      setMuted: (v) => { rt.muted = !!v; },
       /** Raycast dans le monde : { point, normal, dist } ou null. */
       raycast: (ox, oy, oz, dx, dy, dz, maxDist) => {
         const d = new rt.THREE.Vector3(dx, dy, dz).normalize();
