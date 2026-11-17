@@ -587,3 +587,14 @@ kbd {
 .api-chip { font: 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 4px 6px; border-radius: 5px;
   background: rgba(120,200,255,.06); border: 1px solid rgba(255,255,255,.1); color: #a9b8cf; cursor: pointer; }
 .api-chip:hover { background: rgba(120,200,255,.18); color: #eaf4ff; }
+
+.sel-badge { margin: 4px 10px; padding: 3px 8px; border-radius: 6px; font-size: 10px; letter-spacing: .04em;
+  background: rgba(95,208,255,.14); border: 1px solid rgba(95,208,255,.3); color: #9fe2ff; align-self: flex-start; }
+
+/* Débogueur */
+.dbg-overlay { position: absolute; top: 56px; right: 14px; z-index: 30; min-width: 260px;
+  padding: 10px 12px; border-radius: 10px; pointer-events: none;
+  background: rgba(8,12,20,.82); border: 1px solid rgba(120,200,255,.28);
+  font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cfe3ff;
+  backdrop-filter: blur(10px); white-space: pre-wrap; }
+.dbg-overlay b { color: #7fd4ff; font-weight: 600; }

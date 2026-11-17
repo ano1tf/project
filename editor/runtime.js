@@ -606,7 +606,11 @@ export class KreoRuntime {
     if (this.host && this.host.onHud) this.host.onHud(this.state);
     const loop = (now) => {
       if (!this.running) return;
-      const dt = Math.min(0.05, (now - this._last) / 1000);
+      // L'horodatage de la première image peut précéder `_last` (origine de
+      // temps différente) : un dt négatif inverse la gravité et fait décoller
+      // le joueur. On borne des deux côtés.
+      const raw = (now - this._last) / 1000;
+      const dt = Math.max(0, Math.min(0.05, isFinite(raw) ? raw : 0));
       this._last = now;
       this.update(dt);
       this.requestFrame = requestAnimationFrame(loop);
@@ -1359,6 +1363,13 @@ export class KreoRuntime {
         if (!bestHit) bestHit = { point: worldHit.point };
         this._spawnImpact(worldHit.point, worldHit.normal, 0xCFE0FF);
       }
+      if (!this._lastRay || this._lastRay.frame !== this.time) {
+        this._lastRayInfo(!!(worldHit || enemyHit),
+          enemyHit && (!worldHit || enemyHit.dist < worldHit.dist) ? enemyHit.dist
+            : (worldHit ? worldHit.dist : 0),
+          worldHit ? worldHit.tag : (enemyHit ? 'ennemi' : null));
+        this._lastRay.frame = this.time;
+      }
     }
 
     // recul caméra
@@ -1383,6 +1394,10 @@ export class KreoRuntime {
       this._reloading = false;
       if (this.host && this.host.onHud) this.host.onHud(this.state);
     }, 900);
+  }
+
+  _lastRayInfo(hit, dist, tag) {
+    this._lastRay = { hit: !!hit, dist: dist || 0, tag: tag || null };
   }
 
   _rayEnemies(origin, dir, maxDist) {

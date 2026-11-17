@@ -39,6 +39,7 @@
       <button class="tb-btn toggle active" id="btnSnap" title="Aimantation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 4h4M14 4h4"/></svg><span class="tb-label" data-i18n="ed.snap">Aimantation</span></button>
       <button class="tb-btn toggle active" id="btnGrid" title="Grille (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9.5h16M4 14.5h16M9.5 4v16M14.5 4v16"/><rect x="4" y="4" width="16" height="16" rx="3"/></svg><span class="tb-label" data-i18n="ed.grid">Grille</span></button>
       <button class="tb-btn" id="btnFocus" title="Centrer (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21"/></svg><span class="tb-label" data-i18n="ed.focus">Centrer</span></button>
+      <button class="tb-btn toggle" id="btnDebug" title="Débogueur (colliders, rayons, états)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9h8a4 4 0 0 1 4 4v1a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-1a4 4 0 0 1 4-4Z"/><path d="M9 9V7a3 3 0 0 1 6 0v2M4 13H2m20 0h-2M5.5 19 3.5 21m15-2 2 2M5.5 8 3.5 6m15 2 2-2"/></svg><span class="tb-label" data-i18n="ed.debug">Debug</span></button>
       <button class="tb-btn toggle" id="btnWire" title="Fil de fer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg><span class="tb-label" data-i18n="ed.wireframe">Fil de fer</span></button>
     </div>
     <div class="tb-sep"></div>
@@ -108,9 +109,11 @@
         <button class="sc-btn" id="btnPrefabScene" title="Enregistrer tout le niveau">◍</button>
       </div>
 
+      <div class="sel-badge" id="selCount" hidden></div>
       <div class="hierarchy" id="hierarchy"></div>
 
       <div class="panel-foot">
+        <button class="ghost-btn" id="btnGroup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M11 7h4a2 2 0 0 1 2 2v4"/></svg><span data-i18n="ed.groupBtn">Grouper</span></button>
         <button class="ghost-btn" id="btnPrefab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg><span data-i18n="ed.prefab">Prefab</span></button>
         <button class="ghost-btn" id="btnDuplicate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 5H6a1 1 0 0 0-1 1v10"/></svg><span data-i18n="ed.duplicate">Dupliquer</span></button>
         <button class="ghost-btn danger" id="btnDelete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M8 7V5h8v2"/><path d="M6.5 7l1 13h9l1-13"/></svg><span data-i18n="ed.delete">Supprimer</span></button>
@@ -122,6 +125,7 @@
       <div class="viewport" id="viewport">
         <canvas id="gl"></canvas>
 
+        <div class="dbg-overlay" id="dbgOverlay" hidden></div>
         <div class="play-hint" id="playHint" hidden><span data-i18n="ed.playHint">ZQSD/WASD : se déplacer · Flèches : tourner · Espace : sauter · Glisser : regarder</span></div>
 
         <div class="vp-top">

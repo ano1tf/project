@@ -21,6 +21,7 @@ const reg = new Map();            // id → record
 let nextId = 1;
 const state = {
   selectedId: null,
+  selection: [],
   play: false,
   won: false,
   lost: false,
@@ -39,7 +40,8 @@ const TYPE_COLORS = {
   cube: '#8B7CFF', sphere: '#22B8CF', cylinder: '#F5A623', cone: '#F26D6D',
   plane: '#7BD88F', torus: '#E879F9', sun: '#FFE066', point: '#FFB86B',
   player: '#6D4AFF', coin: '#F5C542', goal: '#3ECF8E', model: '#7DD3A0',
-  spawn: '#FF8A5C', weapon: '#9AA7FF', enemy: '#FF5C5C', pickup: '#4FD1C5', cover: '#6C7B94'
+  spawn: '#FF8A5C', weapon: '#9AA7FF', enemy: '#FF5C5C', pickup: '#4FD1C5', cover: '#6C7B94',
+  group: '#9BA6B8'
 };
 
 /* ============ Modèles 3D importés (GLB / GLTF) ============ */
@@ -403,6 +405,11 @@ function createObject(type, opts) {
       obj3d = g;
       break;
     }
+    case 'group': {
+      // pivot invisible : sert à déplacer un ensemble d'objets d'un bloc
+      obj3d = new THREE.Group();
+      break;
+    }
     case 'cube': {
       obj3d = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat({ color: opts.color || 0x8FA3C8 }));
       break;
@@ -608,6 +615,8 @@ function recToProps(rec) {
       intensity: rec.light.intensity
     } : null,
     script: rec.script,
+    parent: rec.parent || null,
+    parentOffset: rec.parentOffset || null,
     // Les modèles importés sont désormais EMBARQUÉS (data URL) : sans ça, un
     // projet rouvert ou exporté remplaçait chaque modèle par un cube filaire.
     model: rec.model || null,
@@ -655,18 +664,25 @@ function disposeObj(obj3d) {
   });
 }
 
-function deleteObject(id) {
+function deleteObject(id, skipHistory) {
   const rec = findRec(id);
   if (!rec) return;
-  pushHistory();
-  scene3d.remove(rec.obj3d);
+  if (!skipHistory) pushHistory();
+  // les enfants d'un groupe suivent leur parent
+  Array.from(reg.values()).forEach(function (child) {
+    if (child.parent === id) deleteObject(child.id, true);
+  });
+  if (rec.obj3d.parent) rec.obj3d.parent.remove(rec.obj3d);
+  else scene3d.remove(rec.obj3d);
   disposeObj(rec.obj3d);
   reg.delete(id);
   if (state.selectedId === id) select(null);
-  renderHierarchy();
-  markDirty();
-  toast('ed.deletedToast', '🗑️');
-  log('− ' + rec.name);
+  if (!skipHistory) {
+    renderHierarchy();
+    markDirty();
+    toast('ed.deletedToast', '🗑️');
+    log('− ' + rec.name);
+  }
 }
 
 /* ---------- Prefabs ----------
@@ -788,22 +804,102 @@ function addObject(type, opts) {
 }
 
 /* ================= Sélection ================= */
-function select(id) {
+function select(id, additive) {
+  // Sélection multiple : Maj/Ctrl+clic ajoute ou retire de la sélection.
+  if (additive) {
+    const i = state.selection.indexOf(id);
+    if (i >= 0) state.selection.splice(i, 1);
+    else if (id) state.selection.push(id);
+    id = state.selection.length ? state.selection[state.selection.length - 1] : null;
+  } else {
+    state.selection = id ? [id] : [];
+  }
   state.selectedId = id;
+
+  if (selBoxGroup) { scene3d.remove(selBoxGroup); selBoxGroup = null; }
   if (selBox) { scene3d.remove(selBox); selBox = null; }
+  selBoxGroup = new THREE.Group();
   const rec = id ? findRec(id) : null;
   if (rec) {
     selBox = new THREE.BoxHelper(rec.obj3d, 0x8B7CFF);
     selBox.material.depthTest = false;
     scene3d.add(selBox);
-    if (!state.play) {
-      transform.attach(rec.obj3d);
-    }
+    if (!state.play) transform.attach(rec.obj3d);
   } else {
     transform.detach();
   }
+  // contours des objets secondaires de la sélection
+  state.selection.forEach(function (sid) {
+    if (sid === id) return;
+    const r = findRec(sid);
+    if (!r) return;
+    const b = new THREE.BoxHelper(r.obj3d, 0x5FD0FF);
+    b.material.depthTest = false;
+    selBoxGroup.add(b);
+  });
+  if (selBoxGroup.children.length) scene3d.add(selBoxGroup);
+
   renderHierarchy();
   renderInspector();
+  updateSelectionBadge();
+}
+
+let selBoxGroup = null;
+
+function selectionRecs() {
+  return state.selection.map(findRec).filter(Boolean);
+}
+
+function updateSelectionBadge() {
+  const badge = $('#selCount');
+  if (!badge) return;
+  const n = state.selection.length;
+  badge.hidden = n < 2;
+  if (n > 1) badge.textContent = n + ' ' + t('ed.selected');
+}
+
+function deleteSelection() {
+  const ids = state.selection.slice();
+  if (!ids.length) { if (state.selectedId) deleteObject(state.selectedId); return; }
+  pushHistory();
+  ids.forEach(function (id) { deleteObject(id, true); });
+  state.selection = [];
+  state.selectedId = null;
+  renderHierarchy();
+  renderInspector();
+  markDirty();
+  log('🗑 ' + ids.length + ' obj');
+}
+
+/**
+ * Regroupe la sélection sous un objet parent : indispensable pour déplacer
+ * un bâtiment entier sans toucher à chaque mur.
+ */
+function groupSelection() {
+  const recs = selectionRecs();
+  if (recs.length < 2) { toast('ed.groupNeed', '⚠️'); return; }
+  pushHistory();
+  const parent = createObject('group', {
+    name: t('ed.group') + ' ' + (reg.size + 1),
+    position: [0, 0, 0]
+  });
+  if (!parent) return;
+  recs.forEach(function (rec) {
+    if (rec.id === parent.id) return;
+    const world = new THREE.Vector3();
+    rec.obj3d.getWorldPosition(world);
+    // conserve la position monde en la convertissant dans le repère du parent
+    if (rec.obj3d.parent) rec.obj3d.parent.remove(rec.obj3d);
+    parent.obj3d.add(rec.obj3d);
+    rec.obj3d.position.copy(parent.obj3d.worldToLocal(world.clone()));
+    // on mémorise le décalage : la sérialisation n'écrit que des positions
+    // monde, il faut pouvoir retrouver la pose locale à la reconstruction.
+    rec.parent = parent.id;
+    rec.parentOffset = [rec.obj3d.position.x, rec.obj3d.position.y, rec.obj3d.position.z];
+  });
+  select(parent.id);
+  markDirty();
+  log('📁 ' + t('ed.group') + ' · ' + recs.length);
 }
 
 function focusSelection() {
@@ -846,7 +942,7 @@ function renderHierarchy() {
     const id = row.getAttribute('data-id');
     row.addEventListener('click', function (e) {
       if (e.target.closest('.h-eye')) return;
-      select(id);
+      select(id, e.shiftKey || e.metaKey || e.ctrlKey);
     });
     row.addEventListener('dblclick', function (e) {
       if (e.target.closest('.h-eye')) return;
@@ -1264,7 +1360,7 @@ canvas.addEventListener('pointerup', function (e) {
   if (hits.length) {
     let o = hits[0].object;
     while (o && !o.userData.recId) o = o.parent;
-    if (o && o.userData.recId) { select(o.userData.recId); return; }
+    if (o && o.userData.recId) { select(o.userData.recId, e.shiftKey || e.metaKey || e.ctrlKey); return; }
   }
   select(null);
 });
@@ -1401,6 +1497,7 @@ function startPlay() {
   });
   // textures procédurales disponibles pour les matériaux
   runtime.textures = { noise: makeNoiseTexture(THREE, 64, 6, 0.55) };
+  runtime.textureLib = buildTextureLib();
   runtime.build();
   runtime.resize(canvas.clientWidth, canvas.clientHeight, Math.min(window.devicePixelRatio, 2));
 
@@ -1466,6 +1563,93 @@ function togglePlay() {
   if (state.play) stopPlay();
   else startPlay();
 }
+
+/* ---------- Débogueur ----------
+   Affiche ce qui est invisible en jeu : colliders, rayons de tir, états des
+   entités, valeurs de script. Sans ça, un niveau qui « ne marche pas » reste
+   impossible à diagnostiquer. */
+function buildTextureLib() {
+  const lib = {};
+  TEXTURE_KINDS.forEach(function (k) {
+    if (k === 'none') return;
+    lib[k] = getTexture(k);
+  });
+  return lib;
+}
+
+function initDebug() {
+  const el = $('#dbgOverlay');
+  if (!el || el.dataset.ready === '1') return;
+  el.dataset.ready = '1';
+  el.hidden = true;
+}
+
+function renderDebug() {
+  const el = $('#dbgOverlay');
+  if (!el || el.hidden || !runtime) return;
+  const st = runtime.state;
+  const p = runtime.player || {};
+  const lines = [];
+  lines.push('<b>FPS</b> ' + (stats.fps || 0).toFixed(0) + ' · <b>t</b> ' + (runtime.time || 0).toFixed(1) + 's');
+  lines.push('<b>ENTITÉS</b> ' + runtime.entities.size + ' · colliders ' + (runtime.world.boxes ? runtime.world.boxes.length : '—'));
+  lines.push('<b>JOUEUR</b> x ' + (p.pos ? p.pos.x.toFixed(2) : '—') + ' y ' + (p.pos ? p.pos.y.toFixed(2) : '—') + ' z ' + (p.pos ? p.pos.z.toFixed(2) : '—'));
+  lines.push('sol ' + (p.grounded ? 'oui' : 'non') + ' · vitesse ' + (p.speedXZ ? p.speedXZ.toFixed(2) : '0') + ' m/s' + (p.crouched ? ' · accroupi' : '') + (p.sliding ? ' · glissade' : ''));
+  lines.push('<b>VIE</b> ' + st.health + '/' + st.maxHealth + ' · <b>ARME</b> ' + (st.weapon ? st.weapon.name || st.weapon.id : '—') + ' · ' + st.ammo + '/' + st.ammoMax);
+  lines.push('<b>SCORE</b> ' + st.score + ' · tués ' + st.kills + ' · niveau ' + (runtime.levelIndex + 1) + '/' + runtime.levelCount);
+  const live = Array.from(runtime.entities.values()).filter(function (r) { return r.type === 'enemy'; });
+  if (live.length) {
+    lines.push('<b>ENNEMIS</b>');
+    live.slice(0, 6).forEach(function (e) {
+      lines.push('  ' + e.name + ' · ' + (e.alive ? 'vivant' : 'mort') + ' · ' + Math.round(e.hp) + ' pv'
+        + (e.stateName ? ' · état ' + e.stateName : '')
+        + ' · ' + e.root.position.distanceTo(p.pos || e.root.position).toFixed(1) + ' m');
+    });
+  }
+  if (runtime._lastRay) {
+    const r = runtime._lastRay;
+    lines.push('<b>DERNIER RAYON</b> ' + (r.hit ? 'touché à ' + r.dist.toFixed(2) + ' m' : 'libre') +
+      (r.hit && r.tag ? ' (' + r.tag + ')' : ''));
+  }
+  if (debugWatch) {
+    lines.push('<b>SCRIPT</b> ' + escapeHtml(debugWatch));
+  }
+  const ent = lines.join('<br>');
+  if (el.__cache !== ent) { el.innerHTML = ent; el.__cache = ent; }
+}
+
+let debugWatch = '';
+
+function toggleDebug() {
+  const el = $('#dbgOverlay');
+  if (!el) return;
+  el.hidden = !el.hidden;
+  const btn = $('#btnDebug');
+  if (btn) btn.classList.toggle('active', !el.hidden);
+  if (state.play && runtime) {
+    runtime.debugDraw = !el.hidden;
+    // en mode debug on matérialise les colliders et les rayons
+    renderDebugColliders(!el.hidden);
+  }
+  log((el.hidden ? '⏹ debug off' : '🐞 debug on'), 'warn');
+}
+
+function renderDebugColliders(on) {
+  if (!runtime) return;
+  if (debugHelper) { scene3d.remove(debugHelper); debugHelper = null; }
+  if (!on) return;
+  debugHelper = new THREE.Group();
+  runtime.world.boxes.forEach(function (b) {
+    const size = new THREE.Vector3().subVectors(b.max, b.min);
+    const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0x36E5A0, wireframe: true, transparent: true, opacity: 0.55, depthTest: false
+    }));
+    m.position.copy(b.min).add(b.max).multiplyScalar(0.5);
+    debugHelper.add(m);
+  });
+  scene3d.add(debugHelper);
+}
+let debugHelper = null;
 
 function updateHUD() {
   if (runtime) runtime.host.onHud(runtime.state);
@@ -2070,7 +2254,17 @@ function rebuildFromData(data, keepHistory, keepSceneList) {
         }
       }).catch(function () { /* placeholder conservé */ });
     }
-    createObject(p.type, p);
+    const created = createObject(p.type, p);
+    if (created && p.parent && p.parentOffset) {
+      const par = findRec(p.parent);
+      if (par) {
+        created.parent = p.parent;
+        created.parentOffset = p.parentOffset;
+        if (created.obj3d.parent) created.obj3d.parent.remove(created.obj3d);
+        par.obj3d.add(created.obj3d);
+        created.obj3d.position.set(p.parentOffset[0], p.parentOffset[1], p.parentOffset[2]);
+      }
+    }
   });
 
   let max = 0;
@@ -2206,6 +2400,7 @@ function pickModel() {
 /* ================= Boucle de rendu ================= */
 let lastTime = performance.now();
 let fpsAcc = 0, fpsCount = 0, fpsTimer = 0;
+const stats = { fps: 0 };
 
 function animate(now) {
   requestAnimationFrame(animate);
@@ -2229,9 +2424,11 @@ function animate(now) {
   fpsCount++;
   fpsTimer += dt;
   if (fpsTimer > 0.5) {
-    $('#vpFps').textContent = Math.round(fpsAcc / fpsCount) + ' FPS';
+    stats.fps = Math.round(fpsAcc / fpsCount);
+    $('#vpFps').textContent = stats.fps + ' FPS';
     fpsAcc = 0; fpsCount = 0; fpsTimer = 0;
   }
+  if (state.play && !$('#dbgOverlay').hidden) renderDebug();
 }
 
 function resize() {
@@ -2335,6 +2532,8 @@ $('#btnSnap').addEventListener('click', function () {
   toast(view.snap ? 'ed.snapOn' : 'ed.snapOff', '🧲');
 });
 $('#btnFocus').addEventListener('click', focusSelection);
+if ($('#btnDebug')) $('#btnDebug').addEventListener('click', toggleDebug);
+initDebug();
 $('#btnWire').addEventListener('click', function () {
   state.wire = !state.wire;
   $('#btnWire').classList.toggle('active', state.wire);
@@ -2363,8 +2562,10 @@ $('#btnReplay').addEventListener('click', function () { stopPlay(); startPlay();
 $('#btnReplay2').addEventListener('click', function () { stopPlay(); startPlay(); });
 $('#btnBackEdit').addEventListener('click', stopPlay);
 $('#btnBackEdit2').addEventListener('click', stopPlay);
-$('#btnDelete').addEventListener('click', function () { if (state.selectedId) deleteObject(state.selectedId); });
-$('#btnDelete2').addEventListener('click', function () { if (state.selectedId) deleteObject(state.selectedId); });
+$('#btnDelete').addEventListener('click', function () { deleteSelection(); });
+if ($('#btnGroup')) $('#btnGroup').addEventListener('click', groupSelection);
+$('#btnDelete2').addEventListener('click', function () { deleteSelection(); });
+if ($('#btnGroup2')) $('#btnGroup2').addEventListener('click', groupSelection);
 $('#btnDuplicate').addEventListener('click', function () { if (state.selectedId) duplicateObject(state.selectedId); });
 $('#btnDuplicate2').addEventListener('click', function () { if (state.selectedId) duplicateObject(state.selectedId); });
 $$('#addBar .obj-btn').forEach(function (b) {
