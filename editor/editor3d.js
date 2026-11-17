@@ -405,6 +405,7 @@ function createObject(type, opts) {
     name: opts.name || t('ed.add' + CAP(type)),
     script: opts.script || { onStart: '', onUpdate: '', onCollide: '' },
     sound: opts.sound || null,
+    def: opts.def || {},
     collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus'].indexOf(type) !== -1,
     value: opts.value != null ? opts.value : 10,
     speed: opts.speed != null ? opts.speed : 6,
@@ -657,6 +658,10 @@ function recToProps(rec) {
     modelData: (rec.model && MODELS.get(rec.model)) ? MODELS.get(rec.model).dataUrl : null,
     anim: rec.anim || 0,
     sound: rec.sound || null,
+    def: rec.def ? {
+      hp: rec.def.hp, speed: rec.def.speed, damage: rec.def.damage,
+      attackRange: rec.def.attackRange, visionRange: rec.def.visionRange, fov: rec.def.fov
+    } : null,
     tags: rec.tags || []
   };
 }
@@ -1114,6 +1119,26 @@ function renderInspector() {
   }
   if (rec.type === 'coin') $('#inValue').value = rec.value;
 
+  const isEnemy = rec.type === 'enemy';
+  ['#enemyBlock', '#enemyHpField', '#enemyRangeField', '#enemyVisionField', '#enemySpeedField', '#enemyDmgField'].forEach(function (sel) {
+    const el = $(sel);
+    if (el) el.hidden = !isEnemy;
+  });
+  if (isEnemy) {
+    const d = rec.def || {};
+    const setR = (sel, val, out) => {
+      const el = $(sel);
+      if (el) el.value = val;
+      const o = $(out);
+      if (o) o.textContent = val;
+    };
+    setR('#inEnemyHp', d.hp || 100, '#enemyHpVal');
+    setR('#inEnemyRange', d.attackRange || 26, '#enemyRangeVal');
+    setR('#inEnemyVision', d.visionRange || 34, '#enemyVisionVal');
+    setR('#inEnemySpeed', d.speed || 2.6, '#enemySpeedVal');
+    setR('#inEnemyDmg', d.damage || 8, '#enemyDmgVal');
+  }
+
   // Code
   renderApiRef();
   rec.script = rec.script || { onStart: '', onUpdate: '', onCollide: '' };
@@ -1223,6 +1248,21 @@ function forEachMat(rec, fn) {
     if (o.isMesh && o.material && o.material.color && !(o.material instanceof THREE.MeshBasicMaterial)) fn(o.material);
   });
 }
+
+function bindEnemyField(sel, key, out, asInt) {
+  bindField(sel, function (el) {
+    const rec = findRec(state.selectedId);
+    if (!rec) return;
+    rec.def = rec.def || {};
+    rec.def[key] = asInt ? parseInt(el.value, 10) : parseFloat(el.value);
+    if (out && $(out)) $(out).textContent = el.value;
+  });
+}
+bindEnemyField('#inEnemyHp', 'hp', '#enemyHpVal', true);
+bindEnemyField('#inEnemyRange', 'attackRange', '#enemyRangeVal', true);
+bindEnemyField('#inEnemyVision', 'visionRange', '#enemyVisionVal', true);
+bindEnemyField('#inEnemySpeed', 'speed', '#enemySpeedVal', false);
+bindEnemyField('#inEnemyDmg', 'damage', '#enemyDmgVal', true);
 
 bindField('#inSound', function (el) {
   const rec = findRec(state.selectedId);

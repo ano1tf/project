@@ -1504,8 +1504,157 @@ export class KreoRuntime {
         alive: true, hurtT: 0,
         patrolA: rec.root.position.clone(),
         patrolT: Math.random() * 6,
-        state: 'seek'
+        patrolDir: new T.Vector3(0, 0, 1),
+        state: 'patrol', stateT: 0, lastSeen: 99, alert: 0,
+        visionRange: rec.def.visionRange || 34,
+        fov: (rec.def.fov || 110) * Math.PI / 180,
+        marker: rec.marker || null,
+        burst: 0
       });
+    }
+  }
+
+  /**
+   * IA ennemie à états : veille → alerte → attaque → repli → patrouille.
+   * Ce n'est pas de l'IA de studio, mais c'est ce qui transforme des cibles
+   * immobiles en adversaires : vision à cône, mémoire, tirs en rafale,
+   * déplacement latéral, repli quand la vie baisse, retour à la patrouille
+   * quand le joueur est perdu.
+   */
+  _updateEnemyAI(e, dt, eye) {
+    const T = this.THREE;
+    const pos = e.root.position;
+    const head = pos.clone().setY(pos.y + 1.5);
+    const toP = eye.clone().sub(pos).setY(0);
+    const dist = toP.length() || 0.0001;
+    toP.normalize();
+    e.think = (e.think || 0) - dt;
+
+    // --- perception : cône de vision + ligne de vue + mémoire
+    const fwd = new T.Vector3(Math.sin(e.root.rotation.y), 0, Math.cos(e.root.rotation.y));
+    const facing = fwd.dot(toP);
+    const visionRange = e.visionRange || 34;
+    const inCone = dist < visionRange && (facing > (e.fov ? Math.cos(e.fov) : -0.2));
+    let los = false;
+    if (dist < visionRange) {
+      los = !this.world.raycast(head, toP, dist - 0.6);
+    }
+    const sees = inCone && los;
+    e.lastSeen = sees ? 0 : (e.lastSeen == null ? 99 : e.lastSeen + dt);
+    if (sees) e.alert = 1;
+
+    // --- sélection d'état
+    const hpFrac = e.hp / Math.max(1, e.maxHp);
+    let want = 'patrol';
+    if (sees && dist <= (e.attackRange || 26)) want = 'attack';
+    else if (sees) want = 'alert';
+    else if (e.lastSeen < 3.5) want = 'alert';
+    if (hpFrac < 0.3 && e.lastSeen < 4) want = 'retreat';
+
+    if (want !== e.state) {
+      e.state = want;
+      e.stateT = 0;
+      if (want === 'alert' && e.onAlert) e.onAlert();
+      this._setEnemyStateAnim(e, want);
+    }
+    e.stateT = (e.stateT || 0) + dt;
+
+    // --- orientation
+    const faceTarget = want === 'patrol' ? e.patrolDir : toP;
+    if (faceTarget) {
+      const targetYaw = Math.atan2(faceTarget.x, faceTarget.z);
+      let diff = targetYaw - e.root.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const turn = want === 'patrol' ? 1.6 : 5.5;
+      e.root.rotation.y += diff * Math.min(1, dt * turn);
+    }
+
+    // --- déplacement
+    let move = null;
+    if (want === 'attack') {
+      // maintient une distance de combat et glisse latéralement (strafe)
+      const ideal = (e.attackRange || 26) * 0.55;
+      e.strafeT = (e.strafeT || 0) - dt;
+      if (e.strafeT <= 0) { e.strafeT = 0.8 + Math.random() * 1.2; e.strafeDir = Math.random() < 0.5 ? -1 : 1; }
+      const lateral = new T.Vector3(-toP.z, 0, toP.x).multiplyScalar(e.strafeDir);
+      if (dist > ideal * 1.15) move = toP.clone().addScaledVector(lateral, 0.5);
+      else if (dist < ideal * 0.7) move = toP.clone().multiplyScalar(-1).addScaledVector(lateral, 0.5);
+      else move = lateral;
+    } else if (want === 'alert') {
+      move = toP.clone();
+    } else if (want === 'retreat') {
+      move = toP.clone().multiplyScalar(-1);
+    } else {
+      // patrouille : aller-retour autour du point de départ
+      e.patrolT = (e.patrolT || 0) + dt;
+      const phase = Math.sin(e.patrolT * 0.5);
+      e.patrolDir = new T.Vector3(Math.cos(e.patrolT * 0.7), 0, Math.sin(e.patrolT * 0.7)).normalize();
+      move = (e.patrolDir || new T.Vector3(0, 0, 1)).clone().multiplyScalar(1);
+      void phase;
+    }
+    if (move) {
+      move.y = 0;
+      if (move.lengthSq() > 0.0001) {
+        move.normalize();
+        const spd = want === 'retreat' ? e.speed * 1.25 : (want === 'patrol' ? e.speed * 0.45 : e.speed);
+        const step = spd * dt;
+        const nx = pos.x + move.x * step;
+        const nz = pos.z + move.z * step;
+        const blocked = this.world.intersects(nx, pos.y, nz, 0.55, 1.8);
+        if (!blocked) { pos.x = nx; pos.z = nz; }
+        else if (!this.world.intersects(pos.x, pos.y, nz, 0.55, 1.8)) { pos.z = nz; }
+        else if (!this.world.intersects(nx, pos.y, pos.z, 0.55, 1.8)) { pos.x = nx; }
+        else if (want === 'patrol') { e.patrolT += 1.4; }
+        // un ennemi ne traverse pas de mur, mais contourne : d'où les tests
+        // axe par axe ci-dessus.
+      }
+    }
+
+    // --- tir : rafales de 2-4 balles avec une pause, seulement à vue
+    e.cooldown = (e.cooldown || 0) - dt;
+    if (want === 'attack' && los) {
+      if (e.burst == null) e.burst = 0;
+      if (e.cooldown <= 0) {
+        if (e.burst <= 0) {
+          e.burst = 2 + Math.floor(Math.random() * 3);
+          e.burstGap = 0.13;
+        }
+        if (e.burst > 0) {
+          e.burst--;
+          this._enemyShot(e, eye);
+          e.cooldown = e.burst > 0 ? e.burstGap : 1.1 + Math.random() * 1.0;
+        }
+      }
+    }
+
+    // --- réaction au tir reçu
+    if (e.hurtT > 0) {
+      e.hurtT -= dt;
+      const mesh = e.root.children[0];
+      if (mesh && mesh.material) mesh.material.emissiveIntensity = 0.35 + e.hurtT * 6;
+    }
+    if (e.marker) {
+      e.marker.material.color.set(e.state === 'attack' ? 0xFF2D2D
+        : e.state === 'alert' ? 0xFFA23D : e.state === 'retreat' ? 0xFF7BD5 : 0x9AA6B8);
+    }
+  }
+
+  /** Fait suivre l'animation de l'ennemi à son état, si des clips existent. */
+  _setEnemyStateAnim(e, state) {
+    const rec = this.entities.get(e.id);
+    if (!rec || !rec.states) return;
+    const map = { patrol: 'walk', alert: 'walk', attack: 'shoot', retreat: 'run' };
+    const want = map[state];
+    if (!want) return;
+    const key = Object.keys(rec.states).find((k) => k.includes(want)) ||
+      (state === 'patrol' ? Object.keys(rec.states).find((k) => k.includes('idle')) : null);
+    if (key && rec.stateName !== key) {
+      const prev = rec.states[rec.stateName];
+      if (prev && prev.action) prev.action.fadeOut(0.2);
+      const next = rec.states[key];
+      if (next.action) next.action.reset().fadeIn(0.2).play();
+      rec.stateName = key;
     }
   }
 
@@ -1514,45 +1663,10 @@ export class KreoRuntime {
     const p = this.player;
     const eye = new T.Vector3(p.pos.x, p.pos.y + p.eye, p.pos.z);
 
-    // --- ennemis : poursuite + tir à distance
+    // --- ennemis : IA à états
     for (const e of this.enemies) {
       if (!e.alive) continue;
-      e.patrolT += dt;
-      const toP = eye.clone().sub(e.root.position).setY(0);
-      const dist = toP.length();
-      toP.normalize();
-
-      // regard vers le joueur
-      const targetYaw = Math.atan2(toP.x, toP.z);
-      let diff = targetYaw - e.root.rotation.y;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      e.root.rotation.y += diff * Math.min(1, dt * 4);
-
-      // avance jusqu'à la distance de tir, puis tient la position
-      if (dist > e.attackRange * 0.7) {
-        const step = e.speed * dt;
-        const nx = e.root.position.x + toP.x * step;
-        const nz = e.root.position.z + toP.z * step;
-        if (!this.world.intersects(nx, e.root.position.y, nz, 0.5, 1.8)) {
-          e.root.position.x = nx;
-          e.root.position.z = nz;
-        }
-      }
-
-      // tir
-      e.cooldown -= dt;
-      const hasLOS = !this.world.raycast(e.root.position.clone().setY(e.root.position.y + 1.4), toP, dist - 1);
-      if (e.cooldown <= 0 && dist < e.attackRange && hasLOS) {
-        e.cooldown = 1.4 + Math.random() * 1.1;
-        this._enemyShot(e, eye);
-      }
-      if (e.hurtT > 0) {
-        e.hurtT -= dt;
-        if (e.root.children[0] && e.root.children[0].material) {
-          e.root.children[0].material.emissiveIntensity = 0.3 + e.hurtT * 6;
-        }
-      }
+      this._updateEnemyAI(e, dt, eye);
     }
 
     // --- projectiles ennemis (boules lentes, esquivables)
