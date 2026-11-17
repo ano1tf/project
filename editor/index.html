@@ -114,6 +114,8 @@
       <div class="hierarchy" id="hierarchy"></div>
 
       <div class="panel-foot">
+        <button class="ghost-btn" id="btnAlign" title="Aligner la sélection"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4v16"/><rect x="8" y="6" width="10" height="4" rx="1"/><rect x="8" y="14" width="6" height="4" rx="1"/></svg><span data-i18n="ed.align">Aligner</span></button>
+        <button class="ghost-btn" id="btnArray" title="Dupliquer en réseau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="9" width="4" height="6" rx="1"/><rect x="10" y="9" width="4" height="6" rx="1"/><rect x="17" y="9" width="4" height="6" rx="1"/></svg><span data-i18n="ed.array">Réseau</span></button>
         <button class="ghost-btn" id="btnGroup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M11 7h4a2 2 0 0 1 2 2v4"/></svg><span data-i18n="ed.groupBtn">Grouper</span></button>
         <button class="ghost-btn" id="btnPrefab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg><span data-i18n="ed.prefab">Prefab</span></button>
         <button class="ghost-btn" id="btnDuplicate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 5H6a1 1 0 0 0-1 1v10"/></svg><span data-i18n="ed.duplicate">Dupliquer</span></button>
@@ -143,6 +145,8 @@
             <span class="mb-hint" data-i18n="ed.meshHint">Clic : face · Maj+clic : ajouter · glisser un sommet : déplacer</span>
           </div>
         </div>
+        <div class="align-menu" id="alignMenu" hidden></div>
+        <div class="dlg-overlay" id="arrayDialog" hidden></div>
         <div class="dbg-overlay" id="dbgOverlay" hidden></div>
         <div class="play-hint" id="playHint" hidden><span data-i18n="ed.playHint">ZQSD/WASD : se déplacer · Flèches : tourner · Espace : sauter · Glisser : regarder</span></div>
 

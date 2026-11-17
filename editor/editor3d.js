@@ -276,6 +276,7 @@ transform.addEventListener('dragging-changed', function (e) {
   }
 });
 transform.addEventListener('objectChange', function () {
+  if (multiPivot && transform.object === multiPivot) syncMultiTransform();
   syncTransformInputs();
   markDirty();
 });
@@ -1120,7 +1121,7 @@ function highlightFaces(rec) {
 let vertDots = null;
 function refreshVertexDots(rec) {
   if (vertDots) { scene3d.remove(vertDots); vertDots.geometry.dispose(); vertDots.material.dispose(); vertDots = null; }
-  if (!rec) return;
+  if (!rec || !rec.mesh || !rec.mesh.verts) return;
   const pos = [];
   rec.mesh.verts.forEach(function (v) { pos.push(v[0], v[1], v[2]); });
   if (!pos.length) return;
@@ -1198,10 +1199,8 @@ function select(id, additive) {
     selBox = new THREE.BoxHelper(rec.obj3d, 0x8B7CFF);
     selBox.material.depthTest = false;
     scene3d.add(selBox);
-    if (!state.play) transform.attach(rec.obj3d);
-  } else {
-    transform.detach();
   }
+  if (!state.play) attachGizmo();
   // contours des objets secondaires de la sélection
   state.selection.forEach(function (sid) {
     if (sid === id) return;
@@ -1219,12 +1218,179 @@ function select(id, additive) {
   updateMeshBar();
   meshState.faceSel = [];
   meshState.vertSel = null;
-  highlightFaces(rec);
-  refreshVertexDots(rec);
+  highlightFaces(meshRec());
+  refreshVertexDots(meshRec());
   updateMeshBar();
 }
 
 let selBoxGroup = null;
+
+/* ---------- Gizmo de sélection multiple ----------
+   Un seul gizmo, posé sur un pivot au barycentre : déplacer 10 objets d'un
+   bloc est le geste le plus courant du level design. Les deltas du pivot sont
+   reportés sur chaque objet sélectionné. */
+let multiPivot = null;
+
+function attachGizmo() {
+  const ids = state.selection.filter(function (id) { return findRec(id); });
+  if (!ids.length) { transform.detach(); multiPivot = null; return; }
+  if (ids.length === 1) {
+    multiPivot = null;
+    transform.attach(findRec(ids[0]).obj3d);
+    return;
+  }
+  const center = new THREE.Vector3();
+  ids.forEach(function (id) { center.add(findRec(id).obj3d.position); });
+  center.multiplyScalar(1 / ids.length);
+  if (!multiPivot) {
+    multiPivot = new THREE.Object3D();
+    multiPivot.userData.multi = true;
+    scene3d.add(multiPivot);
+    multiPivot.addEventListener('removed', function () { /* noop */ });
+  }
+  multiPivot.position.copy(center);
+  multiPivot.userData.last = center.clone();
+  transform.attach(multiPivot);
+}
+
+/** Reporte le déplacement du pivot sur tous les objets de la sélection. */
+function syncMultiTransform() {
+  if (!multiPivot) return;
+  const last = multiPivot.userData.last || multiPivot.position.clone();
+  const delta = multiPivot.position.clone().sub(last);
+  const drot = multiPivot.rotation.clone();
+  const dscale = multiPivot.scale.clone();
+  if (delta.lengthSq() < 1e-10 && drot.x === 0 && drot.y === 0 && drot.z === 0
+      && dscale.x === 1 && dscale.y === 1 && dscale.z === 1) return;
+  state.selection.forEach(function (id) {
+    const r = findRec(id);
+    if (!r || r.obj3d === multiPivot) return;
+    r.obj3d.position.add(delta);
+  });
+  multiPivot.userData.last = multiPivot.position.clone();
+  multiPivot.rotation.set(0, 0, 0);
+  multiPivot.scale.set(1, 1, 1);
+  markDirty();
+}
+
+/* ---------- Alignement et distribution ---------- */
+function alignSelection(axis, mode) {
+  // `axis` peut arriver en lettre ou en indice : on normalise ici.
+  const axisName = typeof axis === 'string' ? axis : 'xyz'[axis];
+  const ax = { x: 0, y: 1, z: 2 }[axisName] != null ? { x: 0, y: 1, z: 2 }[axisName] : 1;
+  const recs = selectionRecs();
+  if (recs.length < 2) { toast('ed.groupNeed', '⚠️'); return; }
+  pushHistory();
+  const boxes = recs.map(function (r) {
+    const b = new THREE.Box3().setFromObject(r.obj3d);
+    return { rec: r, box: b, center: b.getCenter(new THREE.Vector3()) };
+  });
+  let target;
+  if (mode === 'min') target = Math.min.apply(null, boxes.map(function (o) { return o.box.min[axisName]; }));
+  else if (mode === 'max') target = Math.max.apply(null, boxes.map(function (o) { return o.box.max[axisName]; }));
+  else target = boxes.reduce(function (sum, o) { return sum + o.center[axisName]; }, 0) / boxes.length;
+  boxes.forEach(function (o) {
+    const shift = mode === 'min' ? target - o.box.min[axisName]
+      : mode === 'max' ? target - o.box.max[axisName]
+        : target - o.center[axisName];
+    o.rec.obj3d.position[axisName] += shift;
+  });
+  void ax;
+  markDirty();
+  log('⇔ align ' + axisName + ' · ' + recs.length + ' obj');
+}
+
+/** Répartit les objets sélectionnés à intervalle régulier sur un axe. */
+function distributeSelection(axis) {
+  const recs = selectionRecs();
+  if (recs.length < 3) { toast('ed.groupNeed', '⚠️'); return; }
+  pushHistory();
+  const ax = typeof axis === 'string' ? axis : 'xyz'[axis];
+  const sorted = recs.slice().sort(function (a, b) { return a.obj3d.position[ax] - b.obj3d.position[ax]; });
+  const first = sorted[0].obj3d.position[ax];
+  const last = sorted[sorted.length - 1].obj3d.position[ax];
+  const step = (last - first) / (sorted.length - 1);
+  sorted.forEach(function (r, i) { r.obj3d.position[ax] = first + step * i; });
+  markDirty();
+  log('⋯ distribuer ' + ax + ' · ' + recs.length + ' obj');
+}
+
+/** Petit menu contextuel, sans dépendance : aligner / distribuer. */
+function openAlignMenu() {
+  const recs = selectionRecs();
+  if (recs.length < 2) { toast('ed.groupNeed', '⚠️'); return; }
+  const host = $('#alignMenu');
+  if (!host) return;
+  host.hidden = !host.hidden;
+  if (host.hidden) return;
+  host.innerHTML = '';
+  const axes = ['x', 'y', 'z'];
+  const idx = { x: 0, y: 1, z: 2 };
+  axes.forEach(function (ax) {
+    [['min', '⤒'], ['center', '↕'], ['max', '⤓']].forEach(function (pair) {
+      const b = document.createElement('button');
+      b.className = 'mini-btn';
+      b.textContent = pair[1] + ' ' + ax;
+      b.title = t('ed.align') + ' ' + ax + ' (' + pair[0] + ')';
+      b.addEventListener('click', function () { alignSelection(idx[ax], pair[0]); host.hidden = true; });
+      host.appendChild(b);
+    });
+    const d = document.createElement('button');
+    d.className = 'mini-btn';
+    d.textContent = '⋯ ' + ax;
+    d.title = t('ed.distribute') + ' ' + ax;
+    d.addEventListener('click', function () { distributeSelection(idx[ax]); host.hidden = true; });
+    host.appendChild(d);
+  });
+}
+
+/** Boîte de dialogue du réseau : axe, nombre, espacement. */
+function openArrayDialog() {
+  const recs = selectionRecs();
+  if (!recs.length) { toast('ed.groupNeed', '⚠️'); return; }
+  const host = $('#arrayDialog');
+  if (!host) return;
+  host.hidden = false;
+  if (host.dataset.ready === '1') return;
+  host.dataset.ready = '1';
+  host.innerHTML =
+    '<div class="dlg-card">' +
+    '<div class="dlg-title">' + t('ed.array') + '</div>' +
+    '<label class="dlg-row">' + t('ed.axis') + ' <select id="arrAxis"><option value="0">X</option><option value="1">Y</option><option value="2" selected>Z</option></select></label>' +
+    '<label class="dlg-row">' + t('ed.count') + ' <input type="number" id="arrCount" value="5" min="2" max="200"></label>' +
+    '<label class="dlg-row">' + t('ed.spacing') + ' <input type="number" id="arrSpacing" value="3" step="0.25"></label>' +
+    '<div class="dlg-actions"><button class="primary-btn" id="arrOk">' + t('ed.dlgOk') + '</button>' +
+    '<button class="ghost-btn" id="arrCancel">' + t('ed.dlgCancel') + '</button></div></div>';
+  $('#arrOk').addEventListener('click', function () {
+    arrayDuplicate(parseInt($('#arrAxis').value, 10),
+      Math.max(2, parseInt($('#arrCount').value, 10) || 2),
+      parseFloat($('#arrSpacing').value) || 3);
+    host.hidden = true;
+  });
+  $('#arrCancel').addEventListener('click', function () { host.hidden = true; });
+}
+
+/** Duplication en réseau : N copies régulièrement espacées. */
+function arrayDuplicate(axis, count, spacing) {
+  const ax = typeof axis === 'string' ? axis : 'xyz'[axis];
+  const recs = selectionRecs();
+  if (!recs.length) return;
+  pushHistory();
+  for (let i = 1; i < count; i++) {
+    recs.forEach(function (rec) {
+      const copy = JSON.parse(JSON.stringify(recToProps(rec)));
+      copy.id = undefined;
+      copy.name = rec.name + ' ' + (i + 1);
+      if (!copy.position) copy.position = [0, 0, 0];
+      copy.position[[{ x: 0, y: 1, z: 2 }[ax]]] += spacing * i;
+      createObject(copy.type, copy);
+    });
+  }
+  renderHierarchy();
+  markDirty();
+  log('⋮⋮ réseau ×' + count + ' · ' + recs.length + ' obj');
+  toast('ed.arrayDone', '⋮⋮');
+}
 
 function selectionRecs() {
   return state.selection.map(findRec).filter(Boolean);
@@ -3098,6 +3264,8 @@ $('#btnBackEdit').addEventListener('click', stopPlay);
 $('#btnBackEdit2').addEventListener('click', stopPlay);
 $('#btnDelete').addEventListener('click', function () { deleteSelection(); });
 if ($('#btnGroup')) $('#btnGroup').addEventListener('click', groupSelection);
+if ($('#btnAlign')) $('#btnAlign').addEventListener('click', openAlignMenu);
+if ($('#btnArray')) $('#btnArray').addEventListener('click', openArrayDialog);
 $('#btnDelete2').addEventListener('click', function () { deleteSelection(); });
 if ($('#btnGroup2')) $('#btnGroup2').addEventListener('click', groupSelection);
 $('#btnDuplicate').addEventListener('click', function () { if (state.selectedId) duplicateObject(state.selectedId); });
@@ -3139,6 +3307,20 @@ window.KREO_EDITOR = {
   get objects() { return Array.from(reg.values()).map(function (r) { return { id: r.id, type: r.type, name: r.name }; }); },
   get selected() { return state.selectedId; },
   select: select,
+  // outils exposés pour les tests et l'automatisation
+  tools: {
+    get multiPivot() { return multiPivot; },
+    align: alignSelection,
+    distribute: distributeSelection,
+    array: arrayDuplicate,
+    extendSelectionSync: syncMultiTransform,
+    mesh: {
+      get state() { return meshState; },
+      extrude: doExtrude, inset: doInset, subdivide: doSubdivide,
+      loop: doLoop, weld: doWeld, mirror: doMirror, smooth: doSmoothMesh,
+      deleteFaces: doDeleteFaces, primitive: applyPrimitive
+    }
+  },
   add: function (type, opts) { pushHistory(); const r = createObject(type, opts || {}); if (r) { renderHierarchy(); markDirty(); } return r ? r.id : null; },
   remove: deleteObject,
   play: startPlay,

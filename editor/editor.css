@@ -618,3 +618,22 @@ kbd {
 .mb-hint { font-size: 10px; color: var(--faint); }
 /* aperçu des sommets et de la face sélectionnée */
 .mesh-gizmo { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+
+/* Menu d'alignement */
+.align-menu { position: absolute; left: 12px; bottom: 56px; z-index: 26; display: grid;
+  grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 6px; border-radius: 10px;
+  background: rgba(10,14,22,.94); border: 1px solid rgba(124,92,255,.35); }
+.mini-btn { padding: 5px 7px; font-size: 11px; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05); color: var(--txt); }
+.mini-btn:hover { background: rgba(124,92,255,.25); }
+/* Dialogue générique */
+.dlg-overlay { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center;
+  background: rgba(6,9,15,.55); backdrop-filter: blur(3px); }
+.dlg-card { width: 300px; padding: 16px; border-radius: 14px; display: flex; flex-direction: column; gap: 10px;
+  background: #11161f; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.dlg-title { font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+.dlg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+.dlg-row input, .dlg-row select { width: 96px; height: 28px; padding: 0 8px; border-radius: 7px;
+  border: 1px solid rgba(255,255,255,.12); background: #0c1119; color: var(--txt); font-size: 12px; }
+.dlg-actions { display: flex; gap: 6px; margin-top: 4px; }
+.dlg-actions .primary-btn, .dlg-actions .ghost-btn { flex: 1; height: 30px; }
