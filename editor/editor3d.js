@@ -28,7 +28,9 @@ const state = {
   score: 0,
   dirty: false,
   wire: false,
-  scene: { name: 'Ma scène', fog: true, fogColor: '#B9C9E2' },
+  scene: { name: 'Ma scène', fog: true, fogColor: '#B9C9E2',
+    skyTop: '#6E9BD8', skyBottom: '#DCE7F2',
+    sunColor: '#FFF2DE', sunIntensity: 2.3, ambient: 0.32, exposure: 1.08 },
   // Niveaux : chaque entrée garde son propre JSON d'objets. Le niveau actif
   // est celui qu'on édite ; l'export les embarque tous.
   scenes: [{ name: 'Ma scène', data: null }],
@@ -127,23 +129,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
 
 const scene3d = new THREE.Scene();
-scene3d.fog = new THREE.Fog(0xB9C9E2, 60, 260);
+// (le brouillard est défini par applySceneSettings)
 
-// Ciel dégradé
-(function makeSky() {
-  const c = document.createElement('canvas');
-  c.width = 2; c.height = 256;
-  const g = c.getContext('2d');
-  const grad = g.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#6E9BD8');
-  grad.addColorStop(0.55, '#A8C4E4');
-  grad.addColorStop(1, '#DCE7F2');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 2, 256);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  scene3d.background = tex;
-})();
+// (le ciel est construit par applySceneSettings, depuis les réglages de scène)
 
 
 /* ---------- Éclairage d'environnement (IBL) ----------
@@ -185,7 +173,49 @@ function buildEnvironment(sceneObj, rendererObj) {
   return rt.texture;
 }
 
-const __envRT = buildEnvironment(scene3d, renderer);
+let sunLight = null, ambientLight = null;
+let __envRT = null;
+
+/**
+ * Applique les réglages de scène (ciel, soleil, ambiance, exposition) aussi
+ * bien dans l'éditeur que, par sérialisation, dans le jeu exporté.
+ */
+function applySceneSettings() {
+  const sc = state.scene;
+  // ciel
+  const c = document.createElement('canvas');
+  c.width = 2; c.height = 256;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, sc.skyTop || '#6E9BD8');
+  grad.addColorStop(0.55, mixHex(sc.skyTop || '#6E9BD8', sc.skyBottom || '#DCE7F2', 0.6));
+  grad.addColorStop(1, sc.skyBottom || '#DCE7F2');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 2, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  scene3d.background = tex;
+  if (__skyTex) __skyTex.dispose();
+  __skyTex = tex;
+
+  scene3d.fog = sc.fog !== false
+    ? new THREE.Fog(new THREE.Color(sc.fogColor || '#B9C9E2'), 60, 260)
+    : null;
+
+  if (sunLight) {
+    sunLight.color.set(sc.sunColor || '#FFF2DE');
+    sunLight.intensity = sc.sunIntensity == null ? 2.3 : sc.sunIntensity;
+  }
+  if (ambientLight) ambientLight.intensity = sc.ambient == null ? 0.32 : sc.ambient;
+  if (renderer) renderer.toneMappingExposure = sc.exposure == null ? 1.08 : sc.exposure;
+}
+let __skyTex = null;
+
+function mixHex(a, b, t) {
+  const ca = new THREE.Color(a), cb = new THREE.Color(b);
+  return '#' + ca.lerp(cb, t).getHexString();
+}
+
 
 const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 600);
 camera.position.set(15, 11, 18);
@@ -200,8 +230,10 @@ orbit.target.set(0, 2, 0);
 
 // Lumières d'environnement (hors arbre)
 scene3d.add(new THREE.HemisphereLight(0xDDEBFF, 0x3A4455, 0.9));
-scene3d.add(new THREE.AmbientLight(0xFFFFFF, 0.32));
+ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.32);
+scene3d.add(ambientLight);
 const keyLight = new THREE.DirectionalLight(0xFFF2DE, 2.3);
+sunLight = keyLight;
 keyLight.position.set(20, 32, 14);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
@@ -212,6 +244,8 @@ keyLight.shadow.camera.bottom = -50;
 keyLight.shadow.camera.far = 120;
 keyLight.shadow.bias = -0.0004;
 scene3d.add(keyLight);
+__envRT = buildEnvironment(scene3d, renderer);
+applySceneSettings();
 
 // Grille
 const grid = new THREE.GridHelper(120, 60, 0x8B7CFF, 0x3A4256);
@@ -1006,6 +1040,24 @@ function renderInspector() {
     $('#inSceneName').value = state.scene.name;
     $('#inBg').value = state.scene.fogColor;
     $('#inFog').checked = state.scene.fog !== false;
+    if ($('#inSkyTop')) $('#inSkyTop').value = state.scene.skyTop || '#6E9BD8';
+    if ($('#inSkyBottom')) $('#inSkyBottom').value = state.scene.skyBottom || '#DCE7F2';
+    if ($('#inSunColor')) $('#inSunColor').value = state.scene.sunColor || '#FFF2DE';
+    if ($('#inSunIntensity')) {
+      const si = state.scene.sunIntensity == null ? 2.3 : state.scene.sunIntensity;
+      $('#inSunIntensity').value = si;
+      if ($('#sunVal')) $('#sunVal').textContent = si;
+    }
+    if ($('#inAmbient')) {
+      const am = state.scene.ambient == null ? 0.32 : state.scene.ambient;
+      $('#inAmbient').value = am;
+      if ($('#ambVal')) $('#ambVal').textContent = am;
+    }
+    if ($('#inExposure')) {
+      const ex = state.scene.exposure == null ? 1.08 : state.scene.exposure;
+      $('#inExposure').value = ex;
+      if ($('#expVal')) $('#expVal').textContent = ex;
+    }
     return;
   }
   empty.hidden = true;
@@ -1286,6 +1338,24 @@ bindField('#inSceneName', function (el) {
 bindField('#inBg', function (el) {
   state.scene.fogColor = el.value;
   if (scene3d.fog) scene3d.fog.color.set(el.value);
+});
+bindField('#inSkyTop', function (el) { state.scene.skyTop = el.value; applySceneSettings(); });
+bindField('#inSkyBottom', function (el) { state.scene.skyBottom = el.value; applySceneSettings(); });
+bindField('#inSunColor', function (el) { state.scene.sunColor = el.value; applySceneSettings(); });
+bindField('#inSunIntensity', function (el) {
+  state.scene.sunIntensity = parseFloat(el.value);
+  if ($('#sunVal')) $('#sunVal').textContent = el.value;
+  applySceneSettings();
+});
+bindField('#inAmbient', function (el) {
+  state.scene.ambient = parseFloat(el.value);
+  if ($('#ambVal')) $('#ambVal').textContent = el.value;
+  applySceneSettings();
+});
+bindField('#inExposure', function (el) {
+  state.scene.exposure = parseFloat(el.value);
+  if ($('#expVal')) $('#expVal').textContent = el.value;
+  applySceneSettings();
 });
 $('#inFog').addEventListener('change', function () {
   pushHistory();
@@ -2030,22 +2100,37 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.08;
+/* Réglages de scène définis dans l'éditeur (ciel, soleil, ambiance,
+   exposition) : le jeu exporté doit être identique à ce qu'on a réglé. */
+const ENV = (function () {
+  let sc = PROJECT.scene || {};
+  if (Array.isArray(PROJECT.scenes) && PROJECT.scenes.length) {
+    const i = Math.min(PROJECT.active || 0, PROJECT.scenes.length - 1);
+    sc = (PROJECT.scenes[i] && PROJECT.scenes[i].data && PROJECT.scenes[i].data.scene) || sc;
+  }
+  return Object.assign({
+    fog: true, fogColor: '#B9C9E2', skyTop: '#6E9BD8', skyBottom: '#DCE7F2',
+    sunColor: '#FFF2DE', sunIntensity: 2.3, ambient: 0.32, exposure: 1.08
+  }, sc);
+})();
+renderer.toneMappingExposure = ENV.exposure;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xb9c9e2, 60, 260);
+if (ENV.fog !== false) scene.fog = new THREE.Fog(new THREE.Color(ENV.fogColor), 60, 260);
 (function sky() {
   const c = document.createElement('canvas'); c.width = 2; c.height = 256;
   const g = c.getContext('2d');
   const grad = g.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#6E9BD8'); grad.addColorStop(.55, '#A8C4E4'); grad.addColorStop(1, '#DCE7F2');
+  const col = new THREE.Color(ENV.skyTop), col2 = new THREE.Color(ENV.skyBottom);
+  const mid = col.clone().lerp(col2, 0.6).getStyle();
+  grad.addColorStop(0, col.getStyle()); grad.addColorStop(.55, mid); grad.addColorStop(1, col2.getStyle());
   g.fillStyle = grad; g.fillRect(0, 0, 2, 256);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   scene.background = tex;
 })();
 scene.add(new THREE.HemisphereLight(0xddebff, 0x3a4455, 0.9));
-scene.add(new THREE.AmbientLight(0xffffff, 0.32));
-const sun = new THREE.DirectionalLight(0xfff2de, 2.3);
+scene.add(new THREE.AmbientLight(0xffffff, ENV.ambient));
+const sun = new THREE.DirectionalLight(new THREE.Color(ENV.sunColor), ENV.sunIntensity);
 sun.position.set(20, 32, 14); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
@@ -2229,11 +2314,15 @@ function rebuildFromData(data, keepHistory, keepSceneList) {
       state.sceneIndex = 0;
     }
   }
-  if (data.scene) state.scene = Object.assign({ name: 'Ma scène', fog: true, fogColor: '#B9C9E2' }, data.scene);
+  if (data.scene) state.scene = Object.assign({
+    name: 'Ma scène', fog: true, fogColor: '#B9C9E2',
+    skyTop: '#6E9BD8', skyBottom: '#DCE7F2',
+    sunColor: '#FFF2DE', sunIntensity: 2.3, ambient: 0.32, exposure: 1.08
+  }, data.scene);
   $('#projectName').value = state.scene.name || 'Ma scène';
   $('#inSceneName').value = state.scene.name || 'Ma scène';
   $('#inBg').value = state.scene.fogColor || '#B9C9E2';
-  scene3d.fog = state.scene.fog !== false ? new THREE.Fog(new THREE.Color(state.scene.fogColor || '#B9C9E2'), 60, 260) : null;
+  applySceneSettings();
 
   (data.objects || []).forEach(function (p) {
     // modèle embarqué : on le réenregistre avant de créer l'objet

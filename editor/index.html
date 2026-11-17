@@ -189,6 +189,18 @@
           <label data-i18n="ed.fog">Brouillard</label>
           <label class="switch"><input type="checkbox" id="inFog" checked><span></span></label>
         </div>
+        <div class="field"><label data-i18n="ed.skyTop">Ciel — haut</label><input type="color" id="inSkyTop" value="#6E9BD8"></div>
+        <div class="field"><label data-i18n="ed.skyBottom">Ciel — horizon</label><input type="color" id="inSkyBottom" value="#DCE7F2"></div>
+        <div class="field"><label data-i18n="ed.sunColor">Couleur du soleil</label><input type="color" id="inSunColor" value="#FFF2DE"></div>
+        <div class="field"><label data-i18n="ed.sunIntensity">Intensité du soleil</label>
+          <div class="range-row"><input type="range" id="inSunIntensity" min="0" max="5" step="0.1" value="2.3"><span id="sunVal">2.3</span></div>
+        </div>
+        <div class="field"><label data-i18n="ed.ambient">Ambiance</label>
+          <div class="range-row"><input type="range" id="inAmbient" min="0" max="1.5" step="0.05" value="0.32"><span id="ambVal">0.32</span></div>
+        </div>
+        <div class="field"><label data-i18n="ed.exposure">Exposition</label>
+          <div class="range-row"><input type="range" id="inExposure" min="0.4" max="2" step="0.05" value="1.08"><span id="expVal">1.08</span></div>
+        </div>
       </div>
 
       <div id="inspectorObj" class="inspector-body" hidden>
