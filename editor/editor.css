@@ -337,6 +337,7 @@ input, select, textarea { font-family: 'Inter'; color: var(--txt); }
 .c-line.warn { color: var(--warn); }
 .c-line.err { color: var(--danger); }
 .c-line.play { color: var(--acc-2); }
+.c-line.debug { color: #8fd0ff; font-style: italic; }
 
 /* ---------- Statusbar ---------- */
 .statusbar {

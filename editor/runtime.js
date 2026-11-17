@@ -260,6 +260,8 @@ export class KreoRuntime {
 
     bindTextureGlobals(this.THREE);
     this._hooks = new Map();
+    this.scriptErrors = 0;
+    this.scriptLog = [];
     this._tmpV = new this.THREE.Vector3();
     this._ray = new this.THREE.Raycaster();
 
@@ -1629,7 +1631,9 @@ export class KreoRuntime {
         const src = (s[name] || '').trim();
         if (!src) continue;
         try {
-          h[name] = new Function('scene', 'dt', 'player', 'self', 'other', src);
+          // l'API est passée en paramètre : les scripts peuvent nommer le
+          // contexte librement (`api`, `world`, `self`, `player`).
+          h[name] = new Function('api', 'dt', 'player', 'self', 'other', 'scene', 'print', src);
         } catch (e) {
           if (this.host && this.host.onError) this.host.onError(rec.name + ' · ' + e.message);
         }
@@ -1638,18 +1642,55 @@ export class KreoRuntime {
     }
   }
 
+  /**
+   * API de script pour un objet donné.
+   * `api` donne accès aux fonctions globales (score, dégâts, sons, niveaux)
+   * ET, par délégation, aux propriétés de l'objet courant (pos, rot,
+   * playAnim, setState…). Sans cette fusion, `api.pos` — ce que montrent les
+   * extraits de code de l'éditeur — vaudrait `undefined`.
+   */
+  _apiFor(rec) {
+    const base = this.api();
+    if (!rec) return base;
+    this._apiCache = this._apiCache || new Map();
+    const cached = this._apiCache.get(rec.id);
+    if (cached && cached.base === base) return cached.proxy;
+    const proxy = this.makeProxy(rec);
+    const merged = new Proxy(base, {
+      get(target, key) {
+        if (key in target) return target[key];
+        const v = proxy[key];
+        return typeof v === 'function' ? v.bind(proxy) : v;
+      },
+      set(target, key, value) {
+        if (key in proxy) { proxy[key] = value; return true; }
+        target[key] = value;
+        return true;
+      },
+      has(target, key) { return key in target || key in proxy; }
+    });
+    this._apiCache.set(rec.id, { base: base, proxy: merged });
+    return merged;
+  }
+
   _runHooks(name, dt) {
-    const api = this.api();
     const playerProxy = this.makeProxy(null);
+    const api = this.api();
     for (const [id, h] of this._hooks) {
       const fn = h[name];
       if (!fn) continue;
       const rec = this.entities.get(id);
+      const objApi = this._apiFor(rec);
       try {
-        fn(api, dt || 0, playerProxy, this.makeProxy(rec), null);
+        fn(objApi, dt || 0, playerProxy, this.makeProxy(rec), null, this.scene, api.print);
       } catch (e) {
+        // une erreur de script est désactivée pour éviter 60 erreurs/seconde,
+        // mais elle est remontée avec l'objet et le hook fautifs.
         h[name] = null;
-        if (this.host && this.host.onError) this.host.onError((rec ? rec.name : id) + ' · ' + e.message);
+        this.scriptErrors++;
+        if (this.host && this.host.onError) {
+          this.host.onError((rec ? rec.name : id) + ' · ' + name + ' · ' + e.message, rec ? rec.id : id, name);
+        }
       }
     }
   }
@@ -1697,11 +1738,16 @@ export class KreoRuntime {
         get y() { return o.position.y; }, set y(v) { o.position.y = Number(v) || 0; },
         get z() { return o.position.z; }, set z(v) { o.position.z = Number(v) || 0; }
       },
+      // alias courts, utilisés par les extraits de code de l'éditeur
+      get pos() { return this.position; },
+      get rot() { return this.rotation; },
       rotation: {
         get x() { return T.MathUtils.radToDeg(o.rotation.x); }, set x(v) { o.rotation.x = T.MathUtils.degToRad(Number(v) || 0); },
         get y() { return T.MathUtils.radToDeg(o.rotation.y); }, set y(v) { o.rotation.y = T.MathUtils.degToRad(Number(v) || 0); },
         get z() { return T.MathUtils.radToDeg(o.rotation.z); }, set z(v) { o.rotation.z = T.MathUtils.degToRad(Number(v) || 0); }
       },
+      /** Alias lisibles : api.position.x === api.pos.x. */
+      get position3() { return o.position; },
       playAnim(name, fade) {
         if (!rec.mixer) return false;
         const clip = rec.clips && rec.clips.find((c) => c.name === name);
@@ -1755,7 +1801,10 @@ export class KreoRuntime {
     const h = this._hooks.get(id);
     if (!h || !h[name]) return;
     const rec = this.entities.get(id);
-    try { h[name](this.api(), dt, this.makeProxy(null), this.makeProxy(rec), null); }
+    try {
+      const a = this._apiFor(rec);
+      h[name](a, dt, this.makeProxy(null), this.makeProxy(rec), a.print, this.scene, a.print);
+    }
     catch (e) { if (this.host && this.host.onError) this.host.onError(e.message); }
   }
 
@@ -1791,6 +1840,17 @@ export class KreoRuntime {
       nextLevel() { return rt.levelIndex + 1 < rt.levelCount ? rt.loadLevel(rt.levelIndex + 1) : false; },
       lose: () => { rt.state.lost = true; if (rt.host && rt.host.onLose) rt.host.onLose(); },
       message: (msg) => { if (rt.host && rt.host.onMessage) rt.host.onMessage(String(msg)); },
+      /** Écrit dans la console de l'éditeur (et dans celle du jeu exporté). */
+      print: (...args) => {
+        const text = args.map((a) => {
+          if (a == null) return String(a);
+          if (typeof a === 'object') { try { return JSON.stringify(a); } catch (e) { return '[objet]'; } }
+          return String(a);
+        }).join(' ');
+        rt.scriptLog.push(text);
+        if (rt.scriptLog.length > 200) rt.scriptLog.shift();
+        if (rt.host && rt.host.onScriptLog) rt.host.onScriptLog(text);
+      },
       sound: (kind) => rt.sfx(kind),
       tone: (freq, dur, type, vol, slideTo) => { rt.initAudio(); rt._tone(freq, dur, type, vol, slideTo); },
       setMuted: (v) => { rt.muted = !!v; },

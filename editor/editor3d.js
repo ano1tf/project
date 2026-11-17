@@ -1502,7 +1502,13 @@ function makeHost() {
       log('💥 ' + t('ed.loseTitle'), 'err');
     },
     onMessage: function (msg) { toast(msg, '💬'); log('💬 ' + msg); },
-    onError: function (msg) { toast('⚠️ ' + msg, '⚠️'); log('code error · ' + msg, 'err'); },
+    onError: function (msg, id, hook) {
+      toast('⚠️ ' + msg, '⚠️');
+      log('⚠️ code · ' + msg, 'err');
+      // on sélectionne l'objet fautif : on voit tout de suite son code
+      if (id && !state.play) select(id);
+    },
+    onScriptLog: function (text) { log('🖨 ' + text, 'debug'); },
     onPickup: function (kind) { SFX.coin(); },
     onHudExtra: null,
     onShot: function () { SFX.shoot ? SFX.shoot() : SFX.hit(); },
@@ -2168,10 +2174,16 @@ const rt = new KreoRuntime({
     },
     onWin(m) { ui.overTitle.textContent = 'Victoire'; ui.overScore.textContent = m || ''; ui.over.classList.add('show'); rt.stop(); },
     onLose() { ui.overTitle.textContent = 'Échec'; ui.overScore.textContent = 'Score : ' + rt.state.score; ui.over.classList.add('show'); rt.stop(); },
-    onError(e) { console.error('[KREO]', e); }
+    onError(e) { console.error('[KREO]', e); },
+    onScriptLog(t) { console.log('[script]', t); if (ui.msg) { ui.msg.textContent = t; ui.msg.classList.add('show'); clearTimeout(msgTimer); msgTimer = setTimeout(() => ui.msg.classList.remove('show'), 1600); } }
   }
 });
 rt.textures = { noise: makeNoiseTexture(THREE, 64, 6, 0.55) };
+// textures procédurales : mêmes matières que dans l'éditeur
+rt.textureLib = {};
+['concrete', 'metal', 'grid', 'checker', 'wood', 'noise'].forEach(function (k) {
+  rt.textureLib[k] = makeTexture(k, 256, 4);
+});
 rt.build();
 
 function resize() {
