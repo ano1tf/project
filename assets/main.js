@@ -32,8 +32,12 @@
   const burger = document.getElementById('burger');
   const menu = document.getElementById('mobileMenu');
   if (burger && menu) {
-    burger.addEventListener('click', () => menu.classList.toggle('open'));
-    menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => menu.classList.remove('open')));
+    const showMenu = (open) => {
+      menu.classList.toggle('open', open);
+      burger.setAttribute('aria-expanded', String(open));
+    };
+    burger.addEventListener('click', () => showMenu(!menu.classList.contains('open')));
+    menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => showMenu(false)));
   }
 
   if (reduce || typeof gsap === 'undefined') return;
@@ -109,14 +113,6 @@
           }
         });
       }
-    });
-  });
-
-  /* ---------- Showcase tiles: image parallax ---------- */
-  gsap.utils.toArray('.tile-imgwrap img').forEach((img) => {
-    gsap.fromTo(img, { yPercent: -6 }, {
-      yPercent: 6, ease: 'none',
-      scrollTrigger: { trigger: img.closest('.tile'), start: 'top bottom', end: 'bottom top', scrub: 0.6 }
     });
   });
 

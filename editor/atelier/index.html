@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#111626">
+  <title>Face technique · Atelier Arena — KREO</title>
+  <link rel="icon" href="../../assets/kreo-logo-web.png">
+  <style>
+    @font-face{font-family:Inter;src:url(../../assets/fonts/inter-latin-400-normal.woff2) format("woff2");font-display:swap}
+    @font-face{font-family:Inter;src:url(../../assets/fonts/inter-latin-600-normal.woff2) format("woff2");font-display:swap;font-weight:600}
+    *{box-sizing:border-box} html{color-scheme:dark;scroll-behavior:smooth}
+    body{margin:0;background:radial-gradient(ellipse at 44% -30%,#3a335d 0%,#111626 60%);color:#eef0ff;font:15px/1.6 Inter,system-ui,sans-serif}
+    main,.rail{width:min(calc(100% - 36px),944px);margin:auto}
+    .rail{padding:20px 0;border-bottom:1px solid #4e5274;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    a{color:#c7b8ff;text-underline-offset:.23em}a:hover{color:#ecdcff}a:focus-visible{outline:2px solid #c7b8ff;outline-offset:4px}
+    .brand{display:flex;gap:9px;align-items:center;color:inherit;font-weight:600;text-decoration:none}.brand img{width:32px;height:32px;border-radius:8px}
+    header{padding:clamp(30px,6vw,70px) 0 24px} .kicker,b.small{font:600 11px/1.5 ui-monospace,monospace;letter-spacing:.12em;color:#c7b8ff}
+    h1{margin:8px 0 10px;font-size:clamp(35px,7vw,67px);line-height:1.07;letter-spacing:-.055em} h2{font-size:22px;margin:5px 0;letter-spacing:-.02em}
+    p{color:#bac5dd;margin:6px 0 13px} header p{max-width:63ch;font-size:16px}
+    .sheet{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:0 0 19px}
+    article,.note{background:#1b2337;border:1px solid #39445e;border-radius:14px;padding:18px;min-width:0}
+    article p{font-size:13px} .note{background:#202d37;border-color:#527877;margin:0 0 19px}.note strong{color:#bce8d8}.note p{margin:4px 0}
+    code{color:#d7ceff;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #39445e;border-radius:8px;padding:14px;background:#101623}
+    .links{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 40px}.links a{padding:8px 14px;border:1px solid #6b6295;border-radius:8px;text-decoration:none}
+    .links a:first-child{background:#c7b8ff;color:#1e1834;font-weight:600}.links a:first-child:hover{background:#e5d9ff}
+    footer{font-size:12px;padding:0 0 28px;color:#aebada} @media (max-width:710px){.sheet{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <nav class="rail" aria-label="Atelier"><a class="brand" href="../"><img src="../../assets/kreo-logo-web.png" alt="">KREO / Atelier</a><a href="../">Retour à l’éditeur</a></nav>
+  <main id="protocole">
+    <header>
+      <span class="kicker">ATELIER ARENA / FORMAT V1</span>
+      <h1>Face technique</h1>
+      <p>Le contrat que lit l’agent pour fabriquer un assemblage 3D animé, vérifiable avant son insertion dans KREO.</p>
+    </header>
+    <div class="sheet">
+      <article><b class="small">01 / FICHIERS</b><h2>Un lot, pas un projet</h2><p><code>kreo.asset</code> v1 porte des objets à ajouter. Le brief est copié ou transmis par l’auteur ; aucune scène n’est hébergée ici.</p></article>
+      <article><b class="small">02 / 3D &amp; MOUVEMENT</b><h2>Maillages &amp; clés</h2><p>Primitives ou sommets/faces. Pivots imbriqués et pistes position, rotation, échelle. En boucle, en aller-retour ou une fois.</p></article>
+      <article><b class="small">03 / MODE AGENT</b><h2>Valider avant retour</h2><p>Dans le dépôt connecté, lance la validation depuis le terminal d’Arena. Sans dépôt, renvoie le JSON dans la conversation.</p></article>
+    </div>
+    <pre><code>node tools/kreo-atelier.mjs validate creation.kreo-asset.json</code></pre>
+    <div class="note"><strong>Ce lien n’accorde aucun droit.</strong><p>Arena n’accède qu’au dépôt que tu as déjà connecté ou aux données que tu lui transmets. Cette page ne voit ni ton projet local ni ton terminal.</p></div>
+    <div class="links"><a href="PROTOCOL.md">Lire le contrat</a><a href="exemples/semaphore.kreo-asset.json" download>Télécharger le sémaphore</a><a href="../?atelier=exemple">Voir l’exemple dans KREO</a></div>
+    <footer>Données uniquement · pas de scripts ni d’URL externes dans un lot · mêmes règles dans le navigateur et dans le terminal.</footer>
+  </main>
+</body>
+</html>

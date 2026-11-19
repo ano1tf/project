@@ -248,9 +248,14 @@ export class TrackSlot {
       const v = (s.cum / uvRepeat);
       uvs.push(0, v, 1, v);
     }
+    // Each ribbon can run left-to-right or right-to-left. Face the surface up
+    // so that back-face culling does not hide the asphalt or one of the curbs.
+    const facesUp = (verts[5] - verts[2]) * (verts[6] - verts[0])
+      - (verts[3] - verts[0]) * (verts[8] - verts[2]) > 0;
     for (let i = 0; i < count; i++) {
       const k = i * 2;
-      idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+      if (facesUp) idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+      else idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
@@ -269,11 +274,12 @@ export class TrackSlot {
     tex.anisotropy = 8;
     const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92, metalness: 0.02 });
     const N = this.samples.length - 1;
-    this._ribbon(
+    const road = this._ribbon(
       (s) => s.pos.clone().addScaledVector(s.left, s.halfWidth),
       (s) => s.pos.clone().addScaledVector(s.left, -s.halfWidth),
       N, 10, mat, 0.06
     );
+    road.name = "Chaussée · Coteaux";
   }
 
   _buildCurbs() {

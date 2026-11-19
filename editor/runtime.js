@@ -16,7 +16,9 @@
      rt.camera, rt.player, rt.entities
    ============================================================ */
 
-export const RUNTIME_VERSION = '1.0.0';
+import { createKreoMotion, linkKreoScene } from './atelier/animation.mjs';
+
+export const RUNTIME_VERSION = '1.1.0';
 
 /* ---------------------------------------------------------- utilitaires */
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -279,6 +281,9 @@ export class KreoRuntime {
     this.entities = new Map();       // id → record vivant
     this.running = false;
     this.time = 0;
+    this.assemblyTime = 0;
+    this.assemblyClips = [];
+    this.reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     this.input = {};
 
     bindTextureGlobals(this.THREE);
@@ -369,6 +374,15 @@ export class KreoRuntime {
       const rec = this._makeRecord(p);
       if (rec) this.entities.set(p.id, rec);
     }
+    linkKreoScene(objects, (id) => this.entities.get(id)?.root);
+    this.assemblyTime = 0;
+    for (const rec of this.entities.values()) {
+      const clip = createKreoMotion(rec.root, rec.def.motion);
+      if (clip) {
+        this.assemblyClips.push(clip);
+        clip.sample(0);
+      }
+    }
     this._rebuildWorld();
     this._spawnPlayer();
     this._spawnEnemies();
@@ -387,6 +401,7 @@ export class KreoRuntime {
   clear() {
     for (const rec of this.entities.values()) this._disposeRec(rec);
     this.entities.clear();
+    this.assemblyClips.length = 0;
     this.world.clear();
   }
 
@@ -426,22 +441,17 @@ export class KreoRuntime {
     switch (p.type) {
       case 'mesh': {
         const geo = buildMeshGeometry(T, p.mesh || { verts: [], faces: [] });
-        const mat = new T.MeshStandardMaterial({
-          color: 0xDDDDDD, roughness: 0.7, metalness: 0, flatShading: true, side: T.DoubleSide
-        });
-        // matériau du projet, s'il y en a un
-        if (p.material) {
-          mat.color.set(p.material.color || '#DDDDDD');
-          mat.roughness = p.material.roughness != null ? p.material.roughness : 0.7;
-          mat.metalness = p.material.metalness != null ? p.material.metalness : 0;
-          if (p.material.emissive) mat.emissive.set(p.material.emissive);
-        }
+        const mat = this._mat(p);
+        mat.flatShading = true;
+        mat.side = T.DoubleSide;
+        mat.depthWrite = !mat.transparent;
         const m = new T.Mesh(geo, mat);
         rec.ownedGeom = [geo];
         rec.ownedMat = [mat];
         g.add(m);
         break;
       }
+      case 'group': break;
       case 'cube':
       case 'sphere':
       case 'cylinder':
@@ -632,10 +642,15 @@ export class KreoRuntime {
     const T = this.THREE;
     this.world.clear();
     const box = new T.Box3();
+    const moving = new Set(Array.from(this.entities.values()).filter((r) => r.def.motion).map((r) => r.root));
     for (const rec of this.entities.values()) {
-      if (!rec.collidable || !rec.root.visible) continue;
-      if (rec.type === 'player' || rec.type === 'coin' || rec.type === 'goal') continue;
+      if (!rec.collidable || ['group', 'player', 'coin', 'goal'].includes(rec.type)) continue;
       if (!rec.root.children.length) continue;
+      let solid = true;
+      for (let node = rec.root; node && node !== this.scene; node = node.parent) {
+        if (!node.visible || moving.has(node)) { solid = false; break; }
+      }
+      if (!solid) continue;
       box.setFromObject(rec.root);
       if (!isFinite(box.min.x) || !isFinite(box.max.x)) continue;
       this.world.add(box, rec.id);
@@ -740,6 +755,10 @@ export class KreoRuntime {
       if (this._deathT <= 0) { this._deathT = 0; this._respawn(); }
       this._render();
       return;
+    }
+    if (!this.reduceMotion && this.assemblyClips.length) {
+      this.assemblyTime += dt;
+      for (const clip of this.assemblyClips) clip.sample(this.assemblyTime);
     }
     if (this._invuln > 0) this._invuln -= dt;
     this._updatePlayer(dt);

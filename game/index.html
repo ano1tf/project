@@ -31,9 +31,9 @@
   .sub { color: #97A3BC; font-size: 15px; margin-bottom: 42px; text-align: center; }
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     gap: 22px;
-    width: min(880px, 100%);
+    width: min(1040px, 100%);
   }
   .card {
     display: block;
@@ -87,14 +87,23 @@
 
 <div class="logo">
   <img src="../assets/kreo-logo-web.png" alt="KREO">
-  <div class="kicker">CRÉÉ AVEC KREO</div>
+  <div class="kicker">JEUX KREO</div>
 </div>
 <h1>Choisis ta démo 🎮</h1>
-<p class="sub">Deux jeux 3D complets, jouables directement dans le navigateur.</p>
+<p class="sub">Explore, pilote ou relève le défi : trois jeux 3D à lancer dans le navigateur.</p>
 
 <div class="cards">
+  <a class="card" href="meridien/">
+    <img src="../assets/showcase/meridien-sillage.webp" alt="Noa Vidal devant le sémaphore du Sillage">
+    <div class="body">
+      <span class="tag">Monde ouvert</span>
+      <h2>Méridien</h2>
+      <p>Incarnez Noa Vidal et enquêtez sur un mystérieux signal dans le quartier portuaire de Port-Lumière.</p>
+      <span class="play">▶ JOUER</span>
+    </div>
+  </a>
   <a class="card" href="course/">
-    <img src="../assets/showcase/neon-drift.jpg" alt="KREO Racing">
+    <img src="../assets/showcase/racing-circuit.webp" alt="KREO Racing">
     <div class="body">
       <span class="tag">Course 3D</span>
       <h2>KREO Racing 🏁</h2>
@@ -103,7 +112,7 @@
     </div>
   </a>
   <a class="card" href="fps/">
-    <img src="../assets/showcase/nova-strike.jpg" alt="KREO ARENA">
+    <img src="../assets/showcase/arena-ingame.webp" alt="KREO ARENA">
     <div class="body">
       <span class="tag">FPS</span>
       <h2>KREO ARENA 🎯</h2>

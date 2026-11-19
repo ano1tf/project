@@ -14,7 +14,7 @@
 <script>
   (function(){try{var t=localStorage.getItem('kreo-theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 </script>
-<link rel="stylesheet" href="assets/styles.css?v=6">
+<link rel="stylesheet" href="assets/styles.css?v=7">
 </head>
 <body>
 
@@ -27,8 +27,8 @@
       <a class="brand" href="#top"><img src="assets/kreo-logo-web.png" alt="Logo KREO">KREO</a>
       <nav class="nav-links">
         <a href="#features" data-i18n="nav.features">Fonctionnalités</a>
-        <a href="#showcase" data-i18n="nav.showcase">Jeux</a>
-        <a href="game/" data-i18n="nav.demo">Démo</a>
+        <a href="#showcase" data-i18n="nav.showcase">Démos jouables</a>
+        <a href="#atelier" data-i18n="nav.atelier">Atelier IA</a>
         <a href="#steps" data-i18n="nav.steps">Comment ça marche</a>
         <a href="#pricing" data-i18n="nav.pricing">Prix</a>
         <a href="#faq" data-i18n="nav.faq">FAQ</a>
@@ -44,12 +44,12 @@
         </button>
         <a class="btn btn-fill" href="editor/" data-i18n="nav.start">Commencer</a>
       </div>
-      <button class="burger" id="burger" aria-label="Ouvrir le menu"><span></span><span></span><span></span></button>
+      <button class="burger" id="burger" aria-label="Menu" aria-controls="mobileMenu" aria-expanded="false"><span></span><span></span><span></span></button>
     </div>
     <div class="mobile-menu" id="mobileMenu">
       <a href="#features" data-i18n="nav.features">Fonctionnalités</a>
-      <a href="#showcase" data-i18n="nav.showcase">Jeux</a>
-        <a href="game/" data-i18n="nav.demo">Démo</a>
+      <a href="#showcase" data-i18n="nav.showcase">Démos jouables</a>
+      <a href="#atelier" data-i18n="nav.atelier">Atelier IA</a>
       <a href="#steps" data-i18n="nav.steps">Comment ça marche</a>
       <a href="#pricing" data-i18n="nav.pricing">Prix</a>
       <a href="#faq" data-i18n="nav.faq">FAQ</a>
@@ -71,7 +71,7 @@
       <p class="lead" data-i18n="hero.lead">KREO transforme ton navigateur en studio de jeu. Dessine tes niveaux, programme par blocs ou en code, publie en un clic — ton premier jeu est jouable en quelques minutes.</p>
       <div class="hero-cta">
         <a class="btn btn-fill" href="editor/" data-i18n="hero.cta1">Commencer à créer</a>
-        <a class="link" href="#discord"><span data-i18n="hero.cta2">Rejoindre le Discord</span>
+        <a class="link hero-demos" href="#showcase"><span data-i18n="hero.cta2">Jouer aux démos</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </a>
       </div>
@@ -133,6 +133,89 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DÉMOS JOUABLES ============ -->
+  <section id="showcase" class="showcase" aria-labelledby="showcase-title">
+    <div class="container">
+      <div class="showcase-head">
+        <div>
+          <span class="eyebrow" data-i18n="gal.eyebrow">JEUX KREO / 03</span>
+          <h2 id="showcase-title" data-i18n="gal.title">Les démos jouables.</h2>
+          <p class="lead" data-i18n="gal.lead">Enquête, course ou arène : lance un jeu 3D directement dans ton navigateur.</p>
+        </div>
+        <span class="showcase-ready"><i aria-hidden="true"></i><span data-i18n="gal.ready">Sans installation</span></span>
+      </div>
+      <div class="demo-grid">
+        <article class="demo-tile demo-featured">
+          <a href="game/meridien/" class="demo-link" aria-labelledby="demo-play-meridien demo-title-meridien">
+            <div class="demo-image">
+              <img src="assets/showcase/meridien-sillage.webp" alt="" width="1088" height="612" loading="lazy" decoding="async">
+              <span class="demo-index" aria-hidden="true">01</span>
+            </div>
+            <div class="demo-body">
+              <span class="demo-genre" data-i18n="gal.meridienGenre">Monde ouvert</span>
+              <h3 id="demo-title-meridien">Méridien</h3>
+              <p data-i18n="gal.meridienDesc">Enquête dans les docks de Port-Lumière et découvre le sémaphore animé du Sillage.</p>
+              <div class="demo-meta">
+                <span class="demo-play" id="demo-play-meridien"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span data-i18n="gal.play">Jouer</span></span>
+                <span class="demo-input" data-i18n="gal.meridienInput">Clavier · tactile</span>
+              </div>
+            </div>
+          </a>
+        </article>
+        <article class="demo-tile">
+          <a href="game/course/" class="demo-link" aria-labelledby="demo-play-course demo-title-course">
+            <div class="demo-image">
+              <img src="assets/showcase/racing-circuit.webp" alt="" width="1088" height="612" loading="lazy" decoding="async">
+              <span class="demo-index" aria-hidden="true">02</span>
+            </div>
+            <div class="demo-body">
+              <span class="demo-genre" data-i18n="gal.courseGenre">Course 3D</span>
+              <h3 id="demo-title-course">KREO Racing</h3>
+              <p data-i18n="gal.courseDesc">Trois tours sur le circuit des Coteaux, quatre pilotes et du drift.</p>
+              <div class="demo-meta">
+                <span class="demo-play" id="demo-play-course"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span data-i18n="gal.play">Jouer</span></span>
+                <span class="demo-input" data-i18n="gal.courseInput">Clavier</span>
+              </div>
+            </div>
+          </a>
+        </article>
+        <article class="demo-tile">
+          <a href="game/fps/" class="demo-link" aria-labelledby="demo-play-fps demo-title-fps">
+            <div class="demo-image">
+              <img src="assets/showcase/arena-ingame.webp" alt="" width="1088" height="612" loading="lazy" decoding="async">
+              <span class="demo-index" aria-hidden="true">03</span>
+            </div>
+            <div class="demo-body">
+              <span class="demo-genre" data-i18n="gal.fpsGenre">FPS</span>
+              <h3 id="demo-title-fps">KREO Arena</h3>
+              <p data-i18n="gal.fpsDesc">Survis à dix vagues dans une arène nocturne, avec score et précision.</p>
+              <div class="demo-meta">
+                <span class="demo-play" id="demo-play-fps"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span data-i18n="gal.play">Jouer</span></span>
+                <span class="demo-input" data-i18n="gal.fpsInput">Clavier · souris</span>
+              </div>
+            </div>
+          </a>
+        </article>
+      </div>
+      <div class="showcase-foot"><a class="link" href="game/"><span data-i18n="gal.catalog">Ouvrir le catalogue des jeux</span><span aria-hidden="true">↗</span></a></div>
+    </div>
+  </section>
+
+  <!-- ============ ATELIER IA ============ -->
+  <section id="atelier" class="atelier-launch" aria-labelledby="atelier-launch-title">
+    <div class="container">
+      <div class="atelier-banner">
+        <div class="atelier-symbol" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="m20 3 14 8v17l-14 9-14-9V11zM6 11l14 9 14-9M20 20v17"/><path d="m10 22 4-5 3 6 5-9 3 5 5-3" stroke-linecap="round" opacity=".5"/></svg></div>
+        <div>
+          <span class="eyebrow" data-i18n="launch.kicker">NOUVEAU / ATELIER ARENA</span>
+          <h2 id="atelier-launch-title" data-i18n="launch.title">Du brief à l’objet animé.</h2>
+          <p data-i18n="launch.desc">Prépare un prompt pour le mode Agent d’Arena, puis vérifie le modèle 3D et ses animations dans KREO avant de les ajouter à ton jeu.</p>
+        </div>
+        <a class="btn btn-fill" href="editor/?atelier=exemple" data-i18n="launch.try">Essayer l’Atelier</a>
       </div>
     </div>
   </section>
@@ -256,102 +339,6 @@
       <p class="statement-text" data-i18n-html="st.text">
         <span class="s-word">Si</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">l'imaginer,</span> <span class="s-word">tu</span> <span class="s-word">peux</span> <span class="s-word">le</span> <span class="s-word">créer.</span>
       </p>
-    </div>
-  </section>
-
-  <!-- ============ SHOWCASE (dark) ============ -->
-  <section id="showcase" class="showcase">
-    <div class="container">
-      <div class="section-head" data-reveal>
-        <span class="eyebrow" data-i18n="gal.eyebrow">Galerie</span>
-        <h2 data-i18n-html="gal.title">Des jeux qui ont<br>du style.</h2>
-        <p class="lead" data-i18n="gal.lead">Créés avec KREO par des joueurs comme toi.</p>
-      </div>
-      <div class="tiles" data-reveal-group>
-        <article class="tile" data-reveal-item>
-          <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/sky-runner.jpg" alt="Sky Runner" loading="lazy"></div>
-            <div class="tile-play">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              <span data-i18n="gal.play">Jouer</span>
-            </div>
-          </div>
-          <div class="tile-info">
-            <h3 data-i18n="gal.g1t">Sky Runner</h3>
-            <p data-i18n="gal.g1s">Plateforme · par Léo</p>
-          </div>
-        </article>
-        <article class="tile" data-reveal-item>
-          <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/neon-drift.jpg" alt="Neon Drift" loading="lazy"></div>
-            <div class="tile-play">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              <span data-i18n="gal.play">Jouer</span>
-            </div>
-          </div>
-          <div class="tile-info">
-            <h3 data-i18n="gal.g2t">Neon Drift</h3>
-            <p data-i18n="gal.g2s">Course · par Maya</p>
-          </div>
-        </article>
-        <article class="tile" data-reveal-item>
-          <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/nova-strike.jpg" alt="Nova Strike" loading="lazy"></div>
-            <div class="tile-play">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              <span data-i18n="gal.play">Jouer</span>
-            </div>
-          </div>
-          <div class="tile-info">
-            <h3 data-i18n="gal.g3t">Nova Strike</h3>
-            <p data-i18n="gal.g3s">Arcade · par Samir</p>
-          </div>
-        </article>
-        <article class="tile" data-reveal-item>
-          <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/ile-cristaux.jpg" alt="L'Île aux Cristaux" loading="lazy"></div>
-            <div class="tile-play">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              <span data-i18n="gal.play">Jouer</span>
-            </div>
-          </div>
-          <div class="tile-info">
-            <h3 data-i18n="gal.g4t">L'Île aux Cristaux</h3>
-            <p data-i18n="gal.g4s">Réflexion · par Chloé</p>
-          </div>
-        </article>
-        <article class="tile" data-reveal-item>
-          <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/nova-strike.jpg" alt="KREO Arena" loading="lazy"></div>
-            <a class="tile-play" href="game/fps/">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              <span data-i18n="gal.play">Jouer</span>
-            </a>
-          </div>
-          <div class="tile-info">
-            <h3 data-i18n="gal.g5t">KREO Arena</h3>
-            <p data-i18n="gal.g5s">FPS · jouable maintenant</p>
-          </div>
-        </article>
-        <article class="tile" data-reveal-item>
-          <div class="tile-media">
-            <div class="tile-imgwrap"><img src="assets/showcase/neon-drift.jpg" alt="KREO Racing" loading="lazy"></div>
-            <a class="tile-play" href="game/course/">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>
-              <span data-i18n="gal.play">Jouer</span>
-            </a>
-          </div>
-          <div class="tile-info">
-            <h3 data-i18n="gal.g6t">KREO Racing</h3>
-            <p data-i18n="gal.g6s">Course · jouable maintenant</p>
-          </div>
-        </article>
-      </div>
-      <div class="showcase-foot" data-reveal>
-        <a class="link" href="editor/"><span data-i18n="gal.more">Crée le tien</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-        </a>
-      </div>
     </div>
   </section>
 
@@ -526,6 +513,6 @@
 <script src="assets/vendor/gsap.min.js"></script>
 <script src="assets/vendor/ScrollTrigger.min.js"></script>
 <script src="assets/i18n.js"></script>
-<script src="assets/main.js?v=6"></script>
+<script src="assets/main.js?v=7"></script>
 </body>
 </html>

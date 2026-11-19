@@ -144,3 +144,9 @@ avec un runtime FPS, et il produit un jeu autonome.
 - **Comptes, backend, publication par lien, multijoueur** : nécessitent une
   infrastructure, non commencés.
 - **Éditeur de blocs visuels** : pas encore commencé.
+
+## Atelier Arena (format `kreo.asset` v1)
+
+Le bouton **Connexion à Arena** est une passerelle par prompt et fichiers, pas une connexion de compte. Le [protocole](editor/atelier/PROTOCOL.md) est disponible à l’agent par lien ou dans le dépôt déjà autorisé. Le brief peut contenir quelques repères, jamais des fichiers implicites. Les lots de retour sont des données uniquement : groupe de pivots, maillages matériels, clés de position/rotation/échelle. Pas de scripts ni d’URL d’assets.
+
+L’aperçu Three.js, le validateur en ligne de commande et les jeux utilisent les mêmes données ; le runtime d’export embarque le lecteur d’animations. Les animations sont décoratives : collisions statiques uniquement. Pour la découpe ou les matériaux, chaque maillage reste un objet de l’éditeur. Il ne s’agit pas d’un éditeur de squelette ou de rigging.
