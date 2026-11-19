@@ -10,6 +10,10 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { bindArenaAtelier } from './atelier/studio.js';
+import { KREO_ASSET_FORMAT } from './atelier/asset-format.mjs';
+import { kreoAssetObjects } from './atelier/assembly.js';
+import { linkKreoScene } from './atelier/animation.mjs';
 import { KreoRuntime, makeNoiseTexture, makeTexture, textureToThree, bindTextureGlobals } from './runtime.js';
 import {
   MESH_PRIMS, emptyMesh, boxMesh, meshToGeometry, cloneMesh, boundsOf,
@@ -66,7 +70,11 @@ const MODELS = new Map();          // nom → { gltf, animations, url }
 const modelInstances = new Map();  // recId → AnimationMixer
 const CAP = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function genId() { return 'obj-' + (nextId++); }
+function genId() {
+  let id;
+  do { id = 'obj-' + (nextId++); } while (reg.has(id));
+  return id;
+}
 function findRec(id) { return reg.get(id) || null; }
 function snapVal(v, step) { return view.snap ? Math.round(v / (step || 0.5)) * (step || 0.5) : v; }
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -367,8 +375,8 @@ function removeScene(i) {
   renderScenes();
   markDirty();
 }
-function pushHistory() {
-  undoStack.push(serialize());
+function pushHistory(snapshot = serialize()) {
+  undoStack.push(snapshot);
   if (undoStack.length > 60) undoStack.shift();
   redoStack.length = 0;
 }
@@ -429,6 +437,7 @@ function createObject(type, opts) {
         : t('ed.add' + CAP(type))),
     script: opts.script || { onStart: '', onUpdate: '', onCollide: '' },
     sound: opts.sound || null,
+    motion: opts.motion || null,
     def: opts.def || {},
     collidable: opts.collidable !== undefined ? opts.collidable : ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'mesh', 'terrain'].indexOf(type) !== -1,
     value: opts.value != null ? opts.value : 10,
@@ -680,6 +689,7 @@ function createObject(type, opts) {
     if (opts.material.emissive) obj3d.material.emissive.set(opts.material.emissive);
     if (opts.material.opacity != null && opts.material.opacity < 1) {
       obj3d.material.transparent = true;
+      obj3d.material.depthWrite = false;
       obj3d.material.opacity = opts.material.opacity;
     }
     obj3d.material.wireframe = !!opts.material.wireframe;
@@ -729,7 +739,8 @@ function recToProps(rec) {
     script: rec.script,
     mesh: (rec.type === 'mesh' || rec.type === 'terrain') ? rec.mesh : null,
     parent: rec.parent || null,
-    parentOffset: rec.parentOffset || null,
+    parentOffset: rec.parent ? o.position.toArray() : null,
+    ...(rec.motion ? { motion: rec.motion } : {}),
     // Les modèles importés sont désormais EMBARQUÉS (data URL) : sans ça, un
     // projet rouvert ou exporté remplaçait chaque modèle par un cube filaire.
     model: rec.model || null,
@@ -937,12 +948,26 @@ function duplicateObject(id) {
   const rec = findRec(id);
   if (!rec) return;
   pushHistory();
-  const p = recToProps(rec);
-  p.id = null;
-  p.name = rec.name + ' (2)';
-  p.position = [p.position[0] + 1.5, p.position[1] + 0.5, p.position[2] + 1.5];
-  const copy = createObject(rec.type, p);
-  select(copy.id);
+  const parts = new Map([[rec.id, rec]]);
+  rec.obj3d.traverse((node) => {
+    const child = findRec(node.userData.recId);
+    if (child) parts.set(child.id, child);
+  });
+  const ids = new Map(Array.from(parts.keys(), (key) => [key, genId()]));
+  const defs = Array.from(parts.values(), (part) => {
+    const p = recToProps(part);
+    p.id = ids.get(part.id);
+    p.parent = ids.get(p.parent) || p.parent;
+    if (part === rec) {
+      p.name += ' (2)';
+      p.position = [p.position[0] + 1.5, p.position[1] + 0.5, p.position[2] + 1.5];
+      p.parentOffset = p.parent ? p.position.slice() : null;
+    }
+    return p;
+  });
+  for (const p of defs) createObject(p.type, p);
+  restoreKreoGroups(defs);
+  select(ids.get(id));
   markDirty();
   toast('ed.copiedToast', '📄');
 }
@@ -1593,10 +1618,8 @@ function groupSelection() {
     if (rec.obj3d.parent) rec.obj3d.parent.remove(rec.obj3d);
     parent.obj3d.add(rec.obj3d);
     rec.obj3d.position.copy(parent.obj3d.worldToLocal(world.clone()));
-    // on mémorise le décalage : la sérialisation n'écrit que des positions
-    // monde, il faut pouvoir retrouver la pose locale à la reconstruction.
+    // La pose locale courante est sérialisée avec le parent.
     rec.parent = parent.id;
-    rec.parentOffset = [rec.obj3d.position.x, rec.obj3d.position.y, rec.obj3d.position.z];
   });
   select(parent.id);
   markDirty();
@@ -1626,9 +1649,24 @@ function renderHierarchy() {
     el.innerHTML = '<div class="h-empty">' + t('ed.empty') + '</div>';
     return;
   }
-  el.innerHTML = Array.from(reg.values()).slice().reverse().map(function (rec) {
+  const roots = [], branches = new Map();
+  Array.from(reg.values()).reverse().forEach((rec) => {
+    if (!reg.has(rec.parent)) roots.push(rec);
+    else {
+      if (!branches.has(rec.parent)) branches.set(rec.parent, []);
+      branches.get(rec.parent).push(rec);
+    }
+  });
+  const rows = [], todo = roots.reverse().map((rec) => [rec, 0]);
+  while (todo.length) {
+    const [rec, depth] = todo.pop();
+    rows.push([rec, depth]);
+    const children = branches.get(rec.id) || [];
+    for (let i = children.length - 1; i >= 0; i--) todo.push([children[i], depth + 1]);
+  }
+  el.innerHTML = rows.map(function ([rec, depth]) {
     return (
-      '<div class="h-row' + (rec.id === state.selectedId ? ' selected' : '') + (rec.obj3d.visible ? '' : ' hidden-obj') + '" data-id="' + rec.id + '">' +
+      '<div class="h-row' + (rec.id === state.selectedId ? ' selected' : '') + (rec.obj3d.visible ? '' : ' hidden-obj') + '" data-id="' + escapeHtml(rec.id) + '" style="padding-inline-start:' + (7 + Math.min(5, depth) * 10) + 'px">' +
         '<div class="h-dot" style="background:' + (TYPE_COLORS[rec.type] || '#999') + '"></div>' +
         '<div class="h-name" title="' + t('ed.renameHint') + '">' + escapeHtml(rec.name) + '</div>' +
         '<button class="h-eye">' + (rec.obj3d.visible
@@ -1731,6 +1769,12 @@ function renderInspector() {
   obj.hidden = false;
 
   $('#inspTitle').textContent = rec.name;
+  const motion = $('#inspMotion');
+  motion.hidden = !rec.motion;
+  if (rec.motion) {
+    const keys = ['position', 'rotation', 'scale'].reduce((n, key) => n + (rec.motion[key]?.length || 0), 0);
+    motion.textContent = t('atelier.animation') + ' · ' + rec.motion.duration + ' s · ' + keys + ' ' + t('atelier.keys');
+  }
   $('#inName').value = rec.name;
   $('#inVisible').checked = rec.obj3d.visible;
   syncTransformInputs();
@@ -1778,8 +1822,10 @@ function renderInspector() {
   }
 
   // Comportement
-  const meshTypes = ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus'];
-  $('#collideField').hidden = meshTypes.indexOf(rec.type) === -1;
+  const meshTypes = ['cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'mesh'];
+  let animated = false;
+  for (let o = rec.obj3d; o && !animated; o = o.parent) animated = !!findRec(o.userData.recId)?.motion;
+  $('#collideField').hidden = !meshTypes.includes(rec.type) || animated;
   $('#inCollidable').checked = rec.collidable !== false;
   $('#speedField').hidden = rec.type !== 'player';
   $('#jumpField').hidden = rec.type !== 'player';
@@ -2352,7 +2398,7 @@ function startPlay() {
   if (!play.saved) {
     play.saved = {};
     reg.forEach(function (rec) {
-      play.saved[rec.id] = { pos: rec.obj3d.position.clone(), rot: rec.obj3d.rotation.clone() };
+      play.saved[rec.id] = { pos: rec.obj3d.position.clone(), rot: rec.obj3d.rotation.clone(), visible: rec.obj3d.visible };
     });
   }
 
@@ -2398,6 +2444,7 @@ function startPlay() {
   $('#hud').hidden = false;
   $('#winOverlay').hidden = true;
   $('#loseOverlay').hidden = true;
+  $('#btnArena').disabled = true;
   $('#btnPlay').classList.add('playing');
   $('#playLabel').textContent = t('ed.stop');
   $('#playIcon').innerHTML = '<rect x="7" y="7" width="10" height="10" rx="2"/>';
@@ -2414,8 +2461,8 @@ function stopPlay() {
 
   // restauration de la scène d'édition
   reg.forEach(function (rec) {
-    rec.obj3d.visible = true;
     const s = play.saved && play.saved[rec.id];
+    rec.obj3d.visible = s ? s.visible : true;
     if (s) { rec.obj3d.position.copy(s.pos); rec.obj3d.rotation.copy(s.rot); }
   });
   if (play.playerRec) play.playerRec.obj3d.visible = true;
@@ -2432,6 +2479,7 @@ function stopPlay() {
   $('#winOverlay').hidden = true;
   $('#loseOverlay').hidden = true;
   $('#playHint').hidden = true;
+  $('#btnArena').disabled = false;
   $('#btnPlay').classList.remove('playing');
   $('#playLabel').textContent = t('ed.play');
   $('#playIcon').innerHTML = '<path d="M8 5.5v13l10-6.5z"/>';
@@ -2684,7 +2732,13 @@ async function grabGltfSource() {
 let RUNTIME_SOURCE = null;
 async function grabRuntimeSource() {
   if (RUNTIME_SOURCE) return RUNTIME_SOURCE;
-  RUNTIME_SOURCE = await (await fetch('runtime.js?raw=1')).text();
+  const read = async (path) => {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(path + ' · HTTP ' + res.status);
+    return res.text();
+  };
+  const [runtimeSource, animationSource] = await Promise.all([read('runtime.js?raw=1'), read('atelier/animation.mjs')]);
+  RUNTIME_SOURCE = animationSource + '\n' + runtimeSource.replace(/^import \{ createKreoMotion, linkKreoScene \} from '\.\/atelier\/animation\.mjs';$/m, '');
   return RUNTIME_SOURCE;
 }
 
@@ -2804,7 +2858,7 @@ function buildGameHtml(three, runtimeSrc, projectJson, title) {
     .replace(/^export \{[^}]*\};?$/gm, '');
   // le runtime importe three : on le rend autonome
   const rt = runtimeSrc
-    .replace(/^export const RUNTIME_VERSION[^\n]*$/m, 'const RUNTIME_VERSION = "1.0.0";')
+    .replace(/^export const /gm, 'const ')
     .replace(/^export function /gm, 'function ')
     .replace(/^export class /gm, 'class ')
     .replace(/^export default [^\n]*$/m, '');
@@ -2950,7 +3004,7 @@ const THREE = {
 ${bundled}
 
 /* ---------- projet ---------- */
-const PROJECT = ${projectJson};
+const PROJECT = ${projectJson.replace(/</g, '\\u003c')};
 
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -3483,7 +3537,9 @@ function importFile() {
     reader.onload = function () {
       try {
         const data = JSON.parse(String(reader.result));
-        if (data && Array.isArray(data.objects) && data.objects.length && data.objects[0].position) {
+        if (data?.format === KREO_ASSET_FORMAT) {
+          toast(t('atelier.useAtelier'), '◆');
+        } else if (data && Array.isArray(data.objects) && data.objects.length && data.objects[0].position) {
           pushHistory();
           rebuildFromData(data);
           toast('ed.importOk', '✅');
@@ -3501,6 +3557,55 @@ function importFile() {
     reader.readAsText(f);
   };
   input.click();
+}
+
+function restoreKreoGroups(objects) {
+  linkKreoScene(objects, (id) => findRec(id)?.obj3d);
+  for (const p of objects) {
+    const rec = findRec(p.id), parent = p.parent && findRec(p.parent);
+    if (rec && parent && rec.obj3d.parent === parent.obj3d) {
+      rec.parent = parent.id;
+    }
+  }
+}
+
+function getArenaContext(scope) {
+  const items = scope === 'selection' ? selectionRecs() : Array.from(reg.values());
+  return {
+    level: state.scene.name,
+    count: items.length,
+    objects: items.slice(0, 30).map((rec) => ({
+      id: rec.id, name: rec.name, type: rec.type,
+      world: rec.obj3d.getWorldPosition(new THREE.Vector3()).toArray(),
+      size: new THREE.Box3().setFromObject(rec.obj3d).getSize(new THREE.Vector3()).toArray(),
+      animated: !!rec.motion,
+    })),
+  };
+}
+
+function applyArenaAsset(asset) {
+  if (state.play) throw new Error(t('atelier.stopFirst'));
+  const parts = kreoAssetObjects(asset);
+  const before = serialize();
+  const ids = new Map(parts.map((p) => [p.id, genId()]));
+  const rootId = genId();
+  const defs = parts.map((p) => ({ ...p, id: ids.get(p.id), parent: p.parent ? ids.get(p.parent) : rootId }));
+  const root = { id: rootId, type: 'group', name: asset.name, position: [Math.round(orbit.target.x), 0, Math.round(orbit.target.z)], collidable: false };
+  try {
+    createObject(root.type, root);
+    for (const p of defs) createObject(p.type, p);
+    restoreKreoGroups(defs);
+  } catch (error) {
+    deleteObject(rootId, true);
+    for (const p of defs) deleteObject(p.id, true);
+    throw error;
+  }
+  pushHistory(before);
+  select(rootId);
+  focusSelection();
+  markDirty();
+  log('◆ ' + asset.name + ' · ' + parts.length, 'ok');
+  toast(t('atelier.inserted') + ' · ' + asset.name, '◆');
 }
 
 function rebuildFromData(data, keepHistory, keepSceneList) {
@@ -3569,17 +3674,8 @@ function rebuildFromData(data, keepHistory, keepSceneList) {
       created.mesh = cloneMesh(p.mesh);
       refreshMesh(created);
     }
-    if (created && p.parent && p.parentOffset) {
-      const par = findRec(p.parent);
-      if (par) {
-        created.parent = p.parent;
-        created.parentOffset = p.parentOffset;
-        if (created.obj3d.parent) created.obj3d.parent.remove(created.obj3d);
-        par.obj3d.add(created.obj3d);
-        created.obj3d.position.set(p.parentOffset[0], p.parentOffset[1], p.parentOffset[2]);
-      }
-    }
   });
+  restoreKreoGroups(data.objects || []);
 
   let max = 0;
   reg.forEach(function (rec) {
@@ -3790,7 +3886,7 @@ function animate(now) {
   const dt = Math.min(0.04, (now - lastTime) / 1000);
   lastTime = now;
 
-  if (!state.play) {
+  if (!state.play && !$('#arenaStudio').open) {
     orbit.update();
     // animations des modèles importés en mode édition
     reg.forEach(function (rec) {
@@ -3831,6 +3927,7 @@ function isTyping(e) {
   return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 }
 document.addEventListener('keydown', function (e) {
+  if ($('#arenaStudio').open) return;
   const key = e.key.toLowerCase();
   state.keys[key] = true;
   state.keys[e.code.toLowerCase()] = true;
@@ -3847,6 +3944,7 @@ document.addEventListener('keydown', function (e) {
   }
 
   if (e.code === 'Space') {
+    if (e.target.closest?.('button, a')) return;
     e.preventDefault();
     if (!state.play) togglePlay();
     return;
@@ -4113,12 +4211,6 @@ $('#btnMute').addEventListener('click', function () {
   toast(state.muted ? 'ed.muted' : 'ed.mute', state.muted ? '🔇' : '🔊');
 });
 
-/* Langue */
-$('#langToggle').addEventListener('click', function () {
-  const next = window.kreoCurrentLang() === 'fr' ? 'en' : 'fr';
-  window.kreoApplyLang(next);
-  $('#langLabel').textContent = next.toUpperCase();
-});
 /* API publique de l'éditeur : sert aux tests de rendu, aux extensions et à
    l'intégration (landing page, futurs plugins). Volontairement stable. */
 window.KREO_EDITOR = {
@@ -4213,5 +4305,6 @@ setInterval(function () {
   if (window.kreoT) document.title = window.kreoT('ed.title');
   log('KREO 3D · three.js r' + THREE.REVISION);
   log('✦ ' + t('ed.sceneSettings'));
+  bindArenaAtelier({ context: getArenaContext, apply: applyArenaAsset, download: downloadBlob, t });
   requestAnimationFrame(animate);
 })();

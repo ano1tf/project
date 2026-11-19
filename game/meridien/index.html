@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#071019" />
+    <meta
+      name="description"
+      content="Méridien — une enquête en monde ouvert sur les quais de Port-Lumière."
+    />
+    <title>Méridien — Sous la surface</title>
+    <link rel="icon" href="art/mark.svg" type="image/svg+xml" />
+    <link rel="preload" href="art/port-lumiere-cover.jpg" as="image" />
+    <link
+      rel="preload"
+      href="art/fonts/barlow-condensed-latin-700-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../../assets/vendor/three/three.module.js",
+          "three/addons/": "../../assets/vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <svg
+      class="symbol-library"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <symbol id="i-mark" viewBox="0 0 28 28">
+        <path d="M2 24V6l12 11L26 6v18M7 24v-7l7 6 7-6v7M14 2v7M10.5 5.5h7" />
+      </symbol>
+      <symbol id="i-view" viewBox="0 0 24 24">
+        <path
+          d="m2 12 2.4-2.7a10.1 10.1 0 0 1 15.2 0L22 12l-2.4 2.7a10.1 10.1 0 0 1-15.2 0Z"
+        />
+        <circle cx="12" cy="12" r="3.1" />
+      </symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M4 12h15m-6-6 6 6-6 6" />
+      </symbol>
+      <symbol id="i-replay" viewBox="0 0 24 24">
+        <path d="M4 11a8 8 0 1 1 1.6 6.7M4 5v6h6" />
+      </symbol>
+      <symbol id="i-wave" viewBox="0 0 24 24">
+        <path d="M3 12h2l2-4 3 9 3-13 3 16 2-8h3" />
+      </symbol>
+      <symbol id="i-anchor" viewBox="0 0 24 24">
+        <path
+          d="M12 8v12m-3-9h6M4 14c0 3.5 3.4 6 8 6s8-2.5 8-6m-16 0 2 1m14-1-2 1"
+        />
+        <circle cx="12" cy="5.4" r="2.4" />
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <path d="m8 5 12 7-12 7Z" fill="currentColor" stroke="none" />
+      </symbol>
+      <symbol id="i-keys" viewBox="0 0 24 24">
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path
+          d="M6 9h.1m4 0h.1m4 0h.1m4 0h.1M6 13h.1m4 0h.1m4 0h.1m4 0h.1M9 16h6"
+        />
+      </symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24">
+        <path d="M3 9h4l5-4v14l-5-4H3zM16 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12" />
+      </symbol>
+      <symbol id="i-muted" viewBox="0 0 24 24">
+        <path d="M3 9h4l5-4v14l-5-4H3zm13 0 5 6m0-6-5 6" />
+      </symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24">
+        <path d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4m-6 2v4" />
+      </symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24">
+        <path d="M19 10c0 5-7 10-7 10S5 15 5 10a7 7 0 0 1 14 0Z" />
+        <circle cx="12" cy="10" r="2.3" />
+      </symbol>
+      <symbol id="i-map" viewBox="0 0 24 24">
+        <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zm6-3v15m6-12v15" />
+      </symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24">
+        <rect x="6" y="2" width="12" height="20" rx="2" />
+        <path d="M11 17.5h2" />
+      </symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24">
+        <path d="M9 5v14m6-14v14" />
+      </symbol>
+      <symbol id="i-close" viewBox="0 0 24 24">
+        <path d="m6 6 12 12M18 6 6 18" />
+      </symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 7v5l3 2" />
+      </symbol>
+      <symbol id="i-weather" viewBox="0 0 24 24">
+        <path
+          d="M6 17a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 16 9.5a3.8 3.8 0 1 1 2 7.5z"
+        />
+      </symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24">
+        <path d="m12 2 2 8 8 2-8 2-2 8-2-8-8-2 8-2Z" />
+      </symbol>
+      <symbol id="i-diamond" viewBox="0 0 24 24">
+        <path d="m12 3 9 9-9 9-9-9z" />
+        <path d="M12 10v4m-2-2h4" />
+      </symbol>
+      <symbol id="i-bag" viewBox="0 0 24 24">
+        <path d="M4 8h16l1 13H3zm5 0V6a3 3 0 0 1 6 0v2" />
+      </symbol>
+      <symbol id="i-message" viewBox="0 0 24 24">
+        <path d="M4 5h16v12h-9l-5 4v-4H4zm4 4h8m-8 4h5" />
+      </symbol>
+      <symbol id="i-up" viewBox="0 0 24 24">
+        <path d="M12 19V5m-6 6 6-6 6 6" />
+      </symbol>
+      <symbol id="i-down" viewBox="0 0 24 24">
+        <path d="M12 5v14m-6-6 6 6 6-6" />
+      </symbol>
+      <symbol id="i-left" viewBox="0 0 24 24">
+        <path d="M19 12H5m6-6-6 6 6 6" />
+      </symbol>
+    </svg>
+
+    <main id="title-screen" class="title-screen" aria-labelledby="game-title">
+      <div class="cover" aria-hidden="true"></div>
+      <div class="cover-shade" aria-hidden="true"></div>
+      <div class="cover-frame" aria-hidden="true"></div>
+      <header class="title-header wrap">
+        <div class="brand">
+          <svg class="brand-icon"><use href="#i-mark" /></svg
+          ><span>MÉRIDIEN</span>
+          <span class="brand-studio"
+            >KREO ORIGINAL<br />
+            ARCHIVES DE L’ESTUAIRE</span
+          >
+        </div>
+        <nav class="title-nav" aria-label="Menu principal">
+          <button
+            id="title-sound"
+            class="nav-button"
+            type="button"
+            aria-pressed="true"
+          >
+            <svg><use href="#i-sound" /></svg><span>SON ACTIVÉ</span>
+          </button>
+          <button
+            id="title-settings"
+            class="nav-button"
+            type="button"
+            aria-label="Paramètres"
+          >
+            <svg><use href="#i-settings" /></svg><span>PARAMÈTRES</span>
+          </button>
+        </nav>
+      </header>
+      <section class="hero wrap">
+        <div class="hero-copy">
+          <p class="hero-kicker">
+            <span></span> PORT-LUMIÈRE <i></i> DOSSIER D’ENQUÊTE
+          </p>
+          <h1 id="game-title">MÉRIDIEN<span>.</span></h1>
+          <p class="chapter"><b>CHAPITRE 01</b><span></span>SOUS LA SURFACE</p>
+          <p class="synopsis">
+            À Port-Lumière, la marée emporte tout sauf les secrets. Suivez Noa
+            Vidal sur la piste d’un signal que personne n’aurait dû entendre.
+          </p>
+          <div class="title-actions">
+            <button id="start-game" class="primary" type="button">
+              <svg><use href="#i-play" /></svg><span>ENTRER DANS LA VILLE</span
+              ><svg class="go"><use href="#i-arrow" /></svg>
+            </button>
+            <button id="title-controls" class="secondary" type="button">
+              <svg><use href="#i-keys" /></svg>Commandes
+            </button>
+          </div>
+          <p id="start-status" class="start-status" role="status" hidden></p>
+          <button id="new-game" class="text-button" type="button" hidden>
+            Commencer une nouvelle partie
+          </button>
+        </div>
+      </section>
+      <footer class="title-footer wrap">
+        <div class="title-location">
+          <div class="footer-icon">
+            <svg><use href="#i-pin" /></svg>
+          </div>
+          <div>
+            <strong>PORT-LUMIÈRE</strong><small>LES DOCKS DE L’ESTUAIRE</small>
+          </div>
+        </div>
+        <div class="cover-details">
+          <span>47°16′ N &nbsp; 02°12′ O</span
+          ><span class="cover-divider"></span
+          ><span>SECTEUR 01 · ILLUSTRATION GÉNÉRÉE</span>
+        </div>
+        <div class="title-edition">
+          <span class="status-dot"></span> ÉDITION JOUABLE <b>0.7</b>
+        </div>
+      </footer>
+    </main>
+
+    <main
+      id="play-screen"
+      class="play-screen"
+      aria-label="Port-Lumière, vue de jeu"
+      hidden
+    >
+      <div
+        id="viewport"
+        class="viewport"
+        tabindex="0"
+        aria-label="Vue de jeu. Déplacements ZQSD, interaction E, point de vue B, pause Échap."
+      ></div>
+      <div class="game-vignette" aria-hidden="true"></div>
+      <svg
+        id="aim-reticle"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M12 3v4m0 10v4M3 12h4m10 0h4" />
+        <circle cx="12" cy="12" r="1.15" />
+      </svg>
+      <div id="world-label" class="world-label" hidden>
+        <span></span><small></small>
+      </div>
+      <div id="hud" class="hud">
+        <div class="hud-top">
+          <div class="district">
+            <div class="port-seal" aria-hidden="true">
+              <svg><use href="#i-anchor" /></svg><b>PL</b>
+            </div>
+            <div>
+              <span>PORT AUTONOME · P.L.</span
+              ><strong id="district">LES DOCKS</strong
+              ><small
+                ><svg><use href="#i-weather" /></svg
+                ><span id="world-time"></span
+              ></small>
+              <small id="display-mode" hidden></small>
+            </div>
+          </div>
+          <div class="vhf" aria-hidden="true">
+            <svg><use href="#i-wave" /></svg><span>VEILLE VHF</span><b>16</b
+            ><i></i>
+          </div>
+          <div class="hud-right">
+            <div class="hud-wallet">
+              <span id="cash">240 €</span
+              ><span id="heat" aria-label="Niveau d’alerte" hidden></span>
+            </div>
+            <button
+              id="toggle-view"
+              class="icon-button"
+              type="button"
+              aria-label="Vue à la première personne"
+              aria-keyshortcuts="B"
+              aria-pressed="false"
+              title="Basculer le point de vue (B)"
+              hidden
+            >
+              <svg aria-hidden="true"><use href="#i-view" /></svg>
+            </button>
+            <button
+              id="open-map"
+              class="icon-button"
+              type="button"
+              aria-label="Carte (M)"
+              title="Carte (M)"
+            >
+              <svg><use href="#i-map" /></svg>
+            </button>
+            <button
+              id="open-phone"
+              class="icon-button"
+              type="button"
+              aria-label="Téléphone (Tab)"
+              title="Téléphone (Tab)"
+            >
+              <svg><use href="#i-phone" /></svg>
+            </button>
+            <button
+              id="open-pause"
+              class="icon-button"
+              type="button"
+              aria-label="Pause (Échap)"
+              title="Pause (Échap)"
+            >
+              <svg><use href="#i-pause" /></svg>
+            </button>
+          </div>
+        </div>
+        <section class="objective" aria-label="Registre de bord">
+          <div class="log-tab">
+            <span>REGISTRE DE BORD</span><b id="log-index">01 / 04</b>
+          </div>
+          <div class="objective-core">
+            <div class="objective-icon" aria-hidden="true">
+              <svg><use href="#i-diamond" /></svg>
+            </div>
+            <div class="objective-content">
+              <p id="objective-type">HISTOIRE · CHAPITRE 01</p>
+              <h2 id="objective-title" aria-live="polite">Prendre contact</h2>
+              <p id="objective-text">Rejoignez Inès au café Le Sillage.</p>
+              <div class="objective-route">
+                <span id="route-turn" hidden>
+                  <svg aria-hidden="true"><use href="#i-up" /></svg
+                  ><span id="route-copy"></span>
+                </span>
+                <small id="objective-distance"></small>
+              </div>
+            </div>
+          </div>
+        </section>
+        <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+        <div class="hud-bottom">
+          <div class="radar">
+            <div class="radar-label" aria-hidden="true">
+              <b>CARTE LOCALE</b><i></i>
+            </div>
+            <button
+              id="radar-open"
+              type="button"
+              title="Ouvrir la carte"
+              aria-label="Ouvrir la carte"
+            >
+              <canvas
+                id="radar-map"
+                width="344"
+                height="284"
+                aria-hidden="true"
+              ></canvas
+              ><span class="radar-north">N</span>
+            </button>
+            <div class="radar-footer">
+              <span id="radar-road">QUAI DES MARÉES</span><kbd>M</kbd>
+            </div>
+            <div id="stamina" class="stamina" aria-label="Endurance">
+              <i></i>
+            </div>
+            <small id="display-stats" class="display-stats" hidden></small>
+          </div>
+          <div id="interaction" class="interact" hidden>
+            <button type="button" id="interact-button" aria-keyshortcuts="E">
+              <kbd aria-hidden="true">E</kbd><span id="interaction-text"></span>
+            </button>
+            <button
+              type="button"
+              id="street-button"
+              aria-keyshortcuts="F"
+              hidden
+            >
+              <kbd aria-hidden="true">F</kbd><span id="street-text"></span>
+            </button>
+          </div>
+          <div class="hud-drive">
+            <div id="speedometer" class="speedometer" hidden>
+              <span id="vehicle-name"></span>
+              <div class="drive-digits">
+                <strong id="drive-gear" aria-label="Rapport engagé">N</strong>
+                <div><b id="speed">0</b><small>KM/H</small></div>
+              </div>
+              <div class="speed-line"><i id="speed-fill"></i></div>
+              <div class="drive-meta">
+                <span id="drive-grip"></span><span id="car-condition"></span>
+              </div>
+            </div>
+            <div id="keyhint" class="keyhint">
+              <kbd>ZQSD</kbd> Bouger <span></span> <kbd>C</kbd> Discrétion
+            </div>
+            <div id="mouse-hint" class="keyhint mouse-hint" hidden></div>
+          </div>
+        </div>
+        <div class="touch-controls" aria-label="Commandes tactiles">
+          <div class="touch-pad">
+            <button
+              class="touch-up"
+              type="button"
+              data-hold="forward"
+              aria-label="Avancer"
+            >
+              <svg><use href="#i-up" /></svg>
+            </button>
+            <button
+              class="touch-left"
+              type="button"
+              data-hold="left"
+              aria-label="Gauche"
+            >
+              <svg><use href="#i-left" /></svg>
+            </button>
+            <button
+              class="touch-down"
+              type="button"
+              data-hold="back"
+              aria-label="Reculer"
+            >
+              <svg><use href="#i-down" /></svg>
+            </button>
+            <button
+              class="touch-right"
+              type="button"
+              data-hold="right"
+              aria-label="Droite"
+            >
+              <svg><use href="#i-arrow" /></svg>
+            </button>
+          </div>
+          <div class="touch-actions">
+            <button type="button" data-act="crouch" aria-label="S’accroupir">
+              C</button
+            ><button
+              type="button"
+              data-act="jump"
+              aria-label="Sauter / freiner"
+            >
+              ↑
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="station-transfer" aria-hidden="true" hidden>
+        <div class="transfer-plate">
+          <small>INTERPELLATION / TRANSFERT</small>
+          <b>Commissariat des Docks</b>
+          <span>PORT-LUMIÈRE · SÛRETÉ PORTUAIRE</span>
+        </div>
+      </div>
+      <div id="letterbox" class="letterbox" hidden>
+        <div id="scene-slate" class="scene-slate" aria-hidden="true">
+          <svg><use href="#i-mark" /></svg>
+          <div><span></span><b></b></div>
+          <small></small>
+        </div>
+      </div>
+    </main>
+
+    <dialog id="overlay" class="overlay" aria-labelledby="panel-title">
+      <div class="panel-inner">
+        <div class="panel-head">
+          <div>
+            <p id="panel-kicker" class="panel-kicker"></p>
+            <h2 id="panel-title" tabindex="-1"></h2>
+          </div>
+          <button
+            id="close-panel"
+            class="icon-button"
+            type="button"
+            aria-label="Fermer"
+          >
+            <svg><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <div id="panel-body" class="panel-body"></div>
+      </div>
+    </dialog>
+    <template id="controls-template">
+      <div class="control-list">
+        <div>
+          <span>Avancer, reculer, se déplacer / braquer</span
+          ><span><kbd>ZQSD</kbd> <kbd>WASD</kbd> <kbd>↑ ← ↓ →</kbd></span>
+        </div>
+        <div>
+          <span>Orienter la caméra 3D / recentrer</span>
+          ><span><kbd>SOURIS</kbd> <kbd>V</kbd></span>
+        </div>
+        <div>
+          <span>Basculer entre l’épaule et la première personne</span>
+          <span><kbd>B</kbd></span>
+        </div>
+        <div>
+          <span>Interagir, monter ou descendre à l’arrêt</span
+          ><span><kbd>E</kbd></span>
+        </div>
+        <div>
+          <span>Voler un passant / braquer une voiture à l’arrêt</span>
+          <span><kbd>F</kbd></span>
+        </div>
+        <div>
+          <span>Courir / marcher lentement</span
+          ><span><kbd>MAJ</kbd> <kbd>X</kbd></span>
+        </div>
+        <div>
+          <span>S’accroupir / se relever</span><span><kbd>C</kbd></span>
+        </div>
+        <div>
+          <span>Sauter / frein à main (frein: S ou ↓)</span
+          ><span><kbd>ESPACE</kbd></span>
+        </div>
+        <div>
+          <span>Carte / téléphone / pause</span
+          ><span><kbd>M</kbd> <kbd>TAB</kbd> <kbd>ÉCHAP</kbd></span>
+        </div>
+      </div>
+      <p class="muted">
+        En 3D, cliquez une fois dans la vue, puis bougez la souris sans glisser.
+        À pied, maintenez ensuite le clic gauche pour avancer dans la direction
+        regardée. Échap libère la souris ; un nouvel appui ouvre la pause.
+      </p>
+      <p class="muted">
+        Pour orienter la caméra sans activer ce mode, glissez avec le bouton
+        droit, utilisez Alt + ← / →, ou glissez au doigt sur écran tactile. En
+        Plan, le nord reste en haut et les déplacements suivent l’écran.
+      </p>
+      <p class="muted">
+        Sur écran tactile, touchez l’action affichée près d’un passant ou d’une
+        voiture immobilisée. Les vols déclenchent une intervention de la sûreté.
+        Les personnages de l’histoire et des commerces ne sont pas des cibles.
+      </p>
+      <p class="muted">
+        Près d’une patrouille, l’immobilisation déclenche un contrôle : amende
+        au niveau 1, transfert au commissariat des Docks aux niveaux 2 et 3.
+        Parlez à l’agent au guichet pour sortir.
+      </p>
+    </template>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

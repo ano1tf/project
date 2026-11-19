@@ -7,7 +7,8 @@
 <meta name="description" content="KREO — l'éditeur de jeux 3D qui commence sans code et va plus loin avec du vrai code JavaScript.">
 <link rel="icon" href="../assets/kreo-logo-web.png">
 <meta name="theme-color" content="#17181D">
-<link rel="stylesheet" href="editor.css?v=5">
+<link rel="stylesheet" href="editor.css?v=6">
+<link rel="stylesheet" href="atelier/atelier.css">
 <script type="importmap">
 {
   "imports": {
@@ -130,6 +131,12 @@
         </button>
         <div class="obj-count" id="objCount">0</div>
       </div>
+
+      <button type="button" class="atelier-entry" id="btnArena" aria-haspopup="dialog" aria-controls="arenaStudio">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m12 2 8.5 5v10L12 22l-8.5-5V7L12 2Z"/><path d="M7 12h3l2-4 2 8 2-4h2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span><strong data-i18n="atelier.connect">Connexion à Arena</strong><small data-i18n="atelier.entrySub">3D &amp; animation</small></span>
+        <span aria-hidden="true" class="atelier-entry-arrow">↗</span>
+      </button>
 
       <div class="add-bar" id="addBar">
         <button class="obj-btn" data-add="cube" data-tip="Cube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg></button>
@@ -317,6 +324,7 @@
           <div class="inspector-title" id="inspTitle">—</div>
           <label class="switch" title="Visible"><input type="checkbox" id="inVisible" checked><span></span></label>
         </div>
+        <p id="inspMotion" class="atelier-motion-badge" hidden></p>
 
         <div class="field"><label data-i18n="ed.name">Nom</label><input type="text" id="inName"></div>
 
@@ -503,10 +511,78 @@
   </div>
 </div>
 
+<!-- Module d’échange local : aucune donnée de projet ne quitte la page sans action. -->
+<dialog class="atelier-dialog" id="arenaStudio" aria-labelledby="atelierTitle">
+  <div class="atelier-shell">
+    <header class="atelier-heading">
+      <div class="atelier-mark" aria-hidden="true"><svg viewBox="0 0 38 38" fill="none"><path d="M19 3 33 11v16L19 35 5 27V11zM5 11l14 8 14-8M19 19v16" stroke="currentColor" stroke-width="1.5"/><path d="m11 16 8-5 8 5v9l-8 5-8-5z" stroke="currentColor" opacity=".4"/></svg></div>
+      <div class="atelier-heading-copy">
+        <div class="atelier-kicker"><span data-i18n="atelier.kicker">KREO / OUTILS DE CRÉATION</span><span class="atelier-badge" data-i18n="atelier.local">Échange local</span></div>
+        <h2 id="atelierTitle" data-i18n="atelier.title">Atelier Arena</h2>
+        <p data-i18n="atelier.subtitle">Décris un objet, fais-le créer par Arena, puis vérifie son mouvement avant de l’ajouter à ta scène.</p>
+      </div>
+      <button type="button" class="atelier-close" id="atelierClose" aria-label="Fermer" data-i18n-aria-label="ed.close">×</button>
+    </header>
+    <div class="atelier-columns">
+      <section class="atelier-column atelier-brief-col" aria-labelledby="atelierBriefTitle">
+        <div class="atelier-step"><span>01</span><h3 id="atelierBriefTitle" data-i18n="atelier.briefTitle">Préparer le brief</h3></div>
+        <div class="atelier-row atelier-label-row"><label for="atelierBrief" data-i18n="atelier.brief">Objet &amp; mouvement</label><button type="button" class="atelier-text" id="atelierExampleBrief" data-i18n="atelier.exampleBrief">Exemple de brief</button></div>
+        <textarea id="atelierBrief" rows="3" maxlength="1200" data-i18n-placeholder="atelier.briefPlaceholder" placeholder="Une balise en laiton, avec un anneau qui tourne lentement…"></textarea>
+        <label for="atelierScope" data-i18n="atelier.scope">Repères à inclure</label>
+        <select id="atelierScope">
+          <option value="none" data-i18n="atelier.noContext">Aucun · juste mon brief</option>
+          <option value="selection" data-i18n="atelier.selection">Sélection · noms, positions, tailles</option>
+          <option value="level" data-i18n="atelier.level">Niveau actif · noms, positions, tailles</option>
+        </select>
+        <p class="atelier-note" id="atelierScopeNote"></p>
+        <div class="atelier-step atelier-secondary"><span>02</span><h3 data-i18n="atelier.handoff">Transmettre à Arena</h3></div>
+        <label for="atelierPrompt" data-i18n="atelier.prompt">Prompt pour le mode Agent</label>
+        <textarea rows="4" readonly id="atelierPrompt" spellcheck="false"></textarea>
+        <div class="atelier-row atelier-actions">
+          <button type="button" class="atelier-primary" id="atelierCopy" data-i18n="atelier.copy">Copier le prompt</button>
+          <button type="button" class="atelier-ghost" id="atelierRequest" data-i18n="atelier.request">Télécharger le brief</button>
+        </div>
+        <p class="atelier-note atelier-copy-note" id="atelierCopyHint" role="status"></p>
+      </section>
+      <section class="atelier-column atelier-review" aria-labelledby="atelierReviewTitle">
+        <div class="atelier-row atelier-review-head">
+          <div class="atelier-step"><span>03</span><h3 id="atelierReviewTitle" data-i18n="atelier.review">Vérifier &amp; insérer</h3></div>
+          <button type="button" class="atelier-ghost atelier-sample" id="atelierSample" data-i18n="atelier.sample">Charger l’exemple</button>
+        </div>
+        <div class="atelier-preview" id="atelierStage">
+          <canvas hidden aria-label="Aperçu 3D de l’asset" data-i18n-aria-label="atelier.canvas"></canvas>
+          <div class="atelier-blank" id="atelierBlank">
+            <svg viewBox="0 0 96 72" fill="none" aria-hidden="true"><path d="m48 4 33 19v26L48 68 15 49V23L48 4Z M15 23l33 20 33-20M48 43v25M15 49l33-20 33 20M48 4v25" stroke="currentColor" stroke-width="1.2"/><path d="M48 13 69 25v22L48 59 27 47V25z" stroke="#b3abff" opacity=".33"/><circle cx="48" cy="43" r="3" fill="#b3abff"/></svg>
+            <span id="atelierBlankTitle" data-i18n="atelier.empty">En attente d’un asset 3D</span>
+          </div>
+          <span class="atelier-viewplate" data-i18n="atelier.preview">APERÇU 3D</span>
+        </div>
+        <div class="atelier-timeline">
+          <button type="button" class="atelier-ghost" id="atelierPlay" aria-pressed="false" disabled data-i18n="atelier.play">Lire</button>
+          <input type="range" id="atelierTime" min="0" max="1" step="0.01" value="0" disabled aria-label="Temps de l’animation" data-i18n-aria-label="atelier.time">
+          <output id="atelierStamp" for="atelierTime">0,00 / 0,00 s</output>
+        </div>
+        <div class="atelier-row atelier-label-row"><label for="atelierResponse" data-i18n="atelier.response">Réponse JSON d’Arena</label><label class="atelier-file" data-i18n-title="atelier.file" title="Ouvrir un fichier JSON"><input type="file" id="atelierFile" accept=".json,application/json" aria-label="Ouvrir un fichier JSON" data-i18n-aria-label="atelier.file"><span data-i18n="atelier.file">Ouvrir un JSON</span></label></div>
+        <textarea id="atelierResponse" rows="2" spellcheck="false" data-i18n-placeholder="atelier.responsePlaceholder" placeholder="Colle le contenu de creation.kreo-asset.json…"></textarea>
+        <p id="atelierSummary" class="atelier-summary" hidden></p>
+        <p class="atelier-note atelier-validation" id="atelierValidation" role="status" data-i18n="atelier.awaitValidation">Vérifie le fichier avant toute modification de ta scène.</p>
+        <div class="atelier-row atelier-actions">
+          <button type="button" class="atelier-ghost" id="atelierValidate" data-i18n="atelier.validate">Vérifier le JSON</button>
+          <button type="button" class="atelier-primary" id="atelierInsert" disabled data-i18n="atelier.insert">Ajouter au niveau</button>
+        </div>
+      </section>
+    </div>
+    <footer class="atelier-footer">
+      <p data-i18n="atelier.trust">Aucun accès automatique à ton projet. Le lien ouvre le protocole, pas tes fichiers. L’ajout est annulable.</p>
+      <a id="atelierGuide" href="atelier/#protocole" target="_blank" rel="noopener" data-i18n="atelier.guide">Face technique ↗</a>
+    </footer>
+  </div>
+</dialog>
+
 <div id="toastContainer"></div>
 
 <script src="../assets/i18n.js"></script>
 <script src="i18n-editor.js"></script>
-<script type="module" src="editor3d.js?v=3"></script>
+<script type="module" src="editor3d.js?v=4"></script>
 </body>
 </html>
