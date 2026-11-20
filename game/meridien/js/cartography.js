@@ -1,3 +1,4 @@
+import { CLIENTS } from "./port.mjs";
 import {
   BOUNDS,
   X,
@@ -11,9 +12,14 @@ import {
   DELIVERY_BAYS,
   GARDENS,
   QUAY_WALK,
+  PROMENADE,
   SILLAGE_SQUARE,
 } from "./data.mjs";
 import { clamp, distance } from "./core.mjs";
+import { WORLD } from "./sectors.mjs";
+import { GREVES_BRIDGE } from "./rive-layout.mjs";
+import { paintRive, paintSondes } from "./rive-paper.js";
+import { launchAt } from "./sondes.mjs";
 
 export const CHART_COLORS = {
   sea: "#152e38",
@@ -30,6 +36,7 @@ export const CHART_COLORS = {
   routeEnd: "#f0d79e",
   place: "#ddd4bb",
   side: "#e3c479",
+  transport: "#91d5ce",
   shop: "#99d5bc",
   station: "#9fbded",
   owned: "#a4dce2",
@@ -38,7 +45,8 @@ export const CHART_COLORS = {
   hero: "#fff7df",
 };
 const ink = CHART_COLORS,
-  extent = { x: -254, z: -179, w: 443, d: 347 },
+  left = WORLD.extent.minX - 19,
+  extent = { x: left, z: -179, w: 189 - left, d: 352 },
   north = BOUNDS.minZ,
   south = BOUNDS.maxZ,
   west = BOUNDS.minX,
@@ -46,6 +54,13 @@ const ink = CHART_COLORS,
 const sheets = new WeakMap();
 const names = {
   cafe: "Le Sillage",
+  bridge: "Pont des Grèves",
+  greves: "Atelier des Grèves",
+  sondesPort: "S2 · Les Marées",
+  sondesGreves: "S2 · Les Grèves",
+  ondes: "Atelier des Ondes",
+  comptoir: "Comptoir 12",
+  watch: "Poste de veille",
   semaphore: "Sémaphore",
   hangar: "Hangar 07",
   station: "Commissariat",
@@ -121,6 +136,7 @@ function sheet(world) {
   Z.forEach((z, i) => c.fillRect(west, z - WZ[i] / 2, east - west, WZ[i]));
   c.fillStyle = ink.walk;
   QUAY_WALK.forEach((lot) => rect(c, lot));
+  PROMENADE.forEach((lot) => rect(c, lot));
   rect(c, SILLAGE_SQUARE);
   c.fillStyle = ink.garden;
   GARDENS.forEach((lot) => rect(c, lot));
@@ -148,6 +164,8 @@ function sheet(world) {
       if (!X.some((n, i) => Math.abs(x - n) < WX[i] * 0.5 + 2.6))
         c.fillRect(x, z - 0.14, 2.35, 0.28);
   });
+  paintRive(c);
+  paintSondes(c);
   for (const f of world.buildings) {
     const x = f.x - f.w * 0.5,
       z = f.z - f.d * 0.5;
@@ -187,6 +205,8 @@ function sheet(world) {
   c.lineWidth = 0.72;
   c.beginPath();
   c.moveTo(west, north);
+  c.lineTo(west, GREVES_BRIDGE.bounds.minZ);
+  c.moveTo(west, GREVES_BRIDGE.bounds.maxZ);
   c.lineTo(west, south);
   c.stroke();
   sheets.set(world, tile);
@@ -288,6 +308,16 @@ export function drawChart(canvas, g, full = false) {
     extent.w * s,
     extent.d * s,
   );
+  const launch = launchAt(g.progress.time);
+  if (full || distance(hero, launch) < 52)
+    marker(
+      c,
+      mx(launch.x),
+      mz(launch.z),
+      full ? 3.5 : 4.1,
+      ink.transport,
+      "diamond",
+    );
   if (full) {
     c.textAlign = "center";
     c.strokeStyle = "#243938";
@@ -365,9 +395,13 @@ export function drawChart(canvas, g, full = false) {
       full ? 4.9 : 3.4,
     );
   }
+  const job = g.progress.port.job;
+  const freightBay = job?.stage === "loaded" ? CLIENTS[job.id].bay : "depot";
   for (const [id, bay] of Object.entries(DELIVERY_BAYS)) {
-    if (!full || pos === bay || g.progress.courier.stage !== id) continue;
-    add(bay, "side", "Arrêt livraison", "square", 4.8);
+    if (!full || pos === bay) continue;
+    if (job && id === freightBay) add(bay, "side", bay.label, "square", 4.8);
+    else if (g.progress.courier.stage === id)
+      add(bay, "side", "Arrêt livraison", "square", 4.8);
   }
   for (const v of g.life.allCars()) {
     if (!v.id || v === hero.car) continue;

@@ -471,7 +471,7 @@ class HarborMotion {
     const root = batchFloat(src);
     this.scene.add(root);
     root.position.set(x, y, z);
-    this.floats.push({
+    const f = {
       root,
       x,
       y,
@@ -480,7 +480,9 @@ class HarborMotion {
       seed,
       amplitude,
       range,
-    });
+    };
+    this.floats.push(f);
+    return f;
   }
   flag(x, y, z, w, h) {
     const g = new T.PlaneGeometry(w, h, 14, 4).translate(w * 0.5, 0, 0),
@@ -515,7 +517,9 @@ class HarborMotion {
     const eco = mode === "low";
     for (const f of this.floats) {
       const range = eco ? f.range * 0.76 : f.range;
-      f.root.visible = (f.x - eye.x) ** 2 + (f.z - eye.z) ** 2 < range * range;
+      f.root.visible =
+        f.enabled !== false &&
+        (f.x - eye.x) ** 2 + (f.z - eye.z) ** 2 < range * range;
       if (!f.root.visible) continue;
       const u = t * 0.96 + f.seed;
       f.root.position.y = f.y + Math.sin(u) * f.amplitude;

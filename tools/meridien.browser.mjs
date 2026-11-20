@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { DELIVERY_BAYS, PLACES, SEMAPHORE } from "../game/meridien/js/data.mjs";
 import { angleDelta } from "../game/meridien/js/core.mjs";
+import { SAVE_KEY } from "../game/meridien/js/progress.mjs";
 
 const moduleName = process.env.PLAYWRIGHT_MODULE
   ? pathToFileURL(resolve(process.env.PLAYWRIGHT_MODULE)).href
@@ -378,6 +379,7 @@ async function checkTouchCockpit() {
       touchPoints: [],
     });
   }
+  // The preceding drag must not swallow the first independent HUD tap.
   await touch.locator("#open-pause").tap();
   await touch.getByRole("dialog", { name: "Partie en pause" }).waitFor();
   await touch.close();
@@ -428,9 +430,8 @@ async function checkStreetAndStation() {
     const g = window.gameForTest(),
       life = g.life,
       { SILLAGE_ZEBRA } = await import("./js/data.mjs"),
-      { sampleRoute, stopClearance, trafficOverhang } = await import(
-        "./js/core.mjs"
-      );
+      { sampleRoute, stopClearance, trafficOverhang } =
+        await import("./js/core.mjs");
     const report = [];
     const pc = life.people.at(-1),
       was = { ...pc },
@@ -641,29 +642,32 @@ async function checkStreetAndStation() {
     return { id: c.trafficId, x: c.x, z: c.z };
   });
   await field.keyboard.press("f");
-  const booked = await field.evaluate((id) => {
-    const g = window.gameForTest(),
-      p = g.progress;
-    const inCar = g.hero.car?.id,
-      was = p.courier.time;
-    for (let n = 0; n < 420 && !p.custody; n++) g.step(1 / 60);
-    const c = g.life.vehicle(id),
-      saved = JSON.parse(localStorage.getItem("meridien:progress:v1"));
-    return {
-      inCar,
-      holding: p.custody?.level,
-      stage: p.stage,
-      car: saved.activeVehicle,
-      court: [c?.x, c?.z, c?.damage, c?.model.driver === null],
-      time: p.courier.time,
-      loss: was - p.courier.time,
-      alert: g.life.alert.level,
-      roof: g.world.isRoofed(g.hero),
-      card: !document.querySelector("#station-transfer").hidden,
-      first: g.firstPerson,
-      locked: g.world.station.gate.enabled,
-    };
-  }, theftAt.id);
+  const booked = await field.evaluate(
+    ({ id, key }) => {
+      const g = window.gameForTest(),
+        p = g.progress;
+      const inCar = g.hero.car?.id,
+        was = p.courier.time;
+      for (let n = 0; n < 420 && !p.custody; n++) g.step(1 / 60);
+      const c = g.life.vehicle(id),
+        saved = JSON.parse(localStorage.getItem(key));
+      return {
+        inCar,
+        holding: p.custody?.level,
+        stage: p.stage,
+        car: saved.activeVehicle,
+        court: [c?.x, c?.z, c?.damage, c?.model.driver === null],
+        time: p.courier.time,
+        loss: was - p.courier.time,
+        alert: g.life.alert.level,
+        roof: g.world.isRoofed(g.hero),
+        card: !document.querySelector("#station-transfer").hidden,
+        first: g.firstPerson,
+        locked: g.world.station.gate.enabled,
+      };
+    },
+    { id: theftAt.id, key: SAVE_KEY },
+  );
   assert.ok(booked.loss > 1.9 && booked.loss < 7.1);
   assert.deepEqual(
     { ...booked, loss: 0, time: 0 },
@@ -915,7 +919,10 @@ try {
   await press("Tab");
   await modal("LA TRAVERSE").waitFor();
   assert.match(
-    await page.locator(".message").innerText(),
+    await page
+      .locator(".message")
+      .filter({ hasText: "INÈS KADER" })
+      .innerText(),
     /fréquence de ton frère/,
   );
   await button("Contacts").click();
@@ -1676,10 +1683,10 @@ try {
   // Pause first: reloading can save once more on visibilitychange while the car is coasting.
   await page.locator("#open-pause").click();
   await button("Sauvegarder").click();
-  const saved = await page.evaluate(() => {
-    const p = JSON.parse(localStorage.getItem("meridien:progress:v1"));
+  const saved = await page.evaluate((key) => {
+    const p = JSON.parse(localStorage.getItem(key));
     return { position: p.position, alert: p.alert.level, cash: p.cash };
-  });
+  }, SAVE_KEY);
   await page.reload();
   await button("REPRENDRE LA PARTIE").click();
   await page.locator("#play-screen").waitFor();

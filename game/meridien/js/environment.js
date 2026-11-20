@@ -61,10 +61,10 @@ const smooth = (v, a, b) => {
 };
 const palette = {
   night: c(0x13223d),
-  dusk: c(0x284966),
+  dusk: c(0x284263),
   day: c(0x427dad),
-  horizonNight: c(0x304453),
-  horizonDusk: c(0x92a5ae),
+  horizonNight: c(0x344358),
+  horizonDusk: c(0xbcb3a5),
   horizonDay: c(0xb3cbd2),
   warm: c(0xffac79),
   cloud: c(0x51677c),
@@ -81,14 +81,19 @@ void main(){
  col=mix(col,col*.73+sunTint*.24,ribbon*power*(1.08-overcast*.35));
  float ds=max(dot(d,sunDir),0.);
  float glow=ds*ds;glow*=glow;float spot=glow*glow;
- col+=sunTint*power*(glow*.48+spot*spot*.23+smoothstep(.9994,.99984,ds)*.83);
+ col+=sunTint*power*(glow*.34+spot*.25+pow(ds,34.)*.31+smoothstep(.9996,.99992,ds)*1.17);
  vec2 uv=d.xz/(max(.05,u)+.14)*.175+vec2(t*.0022,-t*.00072);
  float f=texture2D(grain,uv).r;
  #ifndef ECO
    f = mix(f,texture2D(grain,uv*1.97+vec2(.3, f*.15)).b,.23);
+   vec3 moon = normalize(vec3(.48,.54,-.8));
+   float disk = max(dot(d,moon),0.);
+   float litEdge = 1.-smoothstep(.99990,.99998,dot(d,normalize(moon+vec3(.012,.003,.006))));
+   col += vec3(.56,.65,.78)*night*(pow(disk,86.)*.062+smoothstep(.99982,.99993,disk)*litEdge*.62)*(1.-overcast*.79);
  #endif
  float spread=smoothstep(.37-overcast*.14,.70-overcast*.10,f)*smoothstep(.0,.19,u);
- vec3 clouds=cloudColor*(.56+.69*smoothstep(.29,.64,f))+sunTint*glow*power*.14;
+ float rim=pow(ds,7.)*(1.-smoothstep(.43,.77,f));
+ vec3 clouds=cloudColor*(.52+.71*smoothstep(.29,.64,f))+sunTint*power*(.24*rim+.10*glow);
  col=mix(col,clouds,spread*(.66+overcast*.28));
  col+=sunTint*power*glow*(1.-smoothstep(.015,.27,u))*.18;
  gl_FragColor=vec4(col,1.);${output}
@@ -208,13 +213,13 @@ export class Climate {
     this.sun.castShadow = true;
     scene.add(this.sun, this.sun.target);
     const sh = this.sun.shadow;
-    sh.mapSize.set(1024, 1024);
+    sh.mapSize.set(1280, 1280);
     sh.camera.left = sh.camera.bottom = -40;
     sh.camera.right = sh.camera.top = 40;
     sh.camera.near = 0.8;
     sh.camera.far = 210;
-    sh.normalBias = 0.11;
-    sh.bias = -0.00015;
+    sh.normalBias = 0.062;
+    sh.bias = -0.00017;
     sh.radius = 2;
     sh.autoUpdate = false;
     this.lights = Array.from({ length: 3 }, () => {
@@ -232,8 +237,18 @@ export class Climate {
     this.sampleWeather(progress.time, true);
     this.roadWet = this.current === "rain" ? 0.88 : 0.27;
   }
-  setQuality(mode) {
-    this.world.batch.setQuality(mode);
+  setQuality(mode, shadows) {
+    this.world.batch.setQuality(mode, shadows);
+    this.shadows = shadows;
+    this.sun.castShadow = shadows;
+    const sh = this.sun.shadow,
+      shadowSize = mode === "high" ? 1280 : 768;
+    if (!shadows || sh.mapSize.x !== shadowSize) {
+      sh.map?.dispose();
+      sh.map = null;
+    }
+    sh.mapSize.set(shadowSize, shadowSize);
+    sh.radius = mode === "high" ? 2.35 : 1.48;
     const eco = mode === "low";
     this.sky.scale.setScalar(eco ? 328 : 520);
     [this.sky.material, this.waterMat].forEach((m) => {
@@ -539,6 +554,7 @@ export class Climate {
     const clear = 1 - this.wet * 0.5 - this.mist * 0.54,
       over = clamp(0.16 + Math.max(this.wet, this.mist) * 0.89, 0, 1);
     const u = this.skyUniform;
+    this.scene.environmentIntensity = 0.19 + 0.22 * day + 0.045 * twilight;
     u.top.value
       .copy(palette.night)
       .lerp(palette.dusk, smooth(sunArc, -0.32, 0.13))
@@ -566,30 +582,43 @@ export class Climate {
       .copy(u.horizon.value)
       .lerp(palette.cityFog, over * 0.24)
       .multiplyScalar(0.75 + day * 0.13);
-    this.fog.density = 0.00215 + this.wet * 0.00135 + this.mist * 0.0068;
-    this.hemi.intensity = 1.06 + day * 0.95 + twilight * 0.23;
-    this.hemi.groundColor.setHex(0x686660);
+    this.fog.density =
+      (quality === "low" ? 0.00215 : 0.00168) +
+      this.wet * 0.00138 +
+      this.mist * 0.0068;
+    const shelter = this.world.isRoofed(p);
+    this.hemi.intensity =
+      (0.84 + day * 1.04 + twilight * 0.26) * (shelter ? 0.77 : 1);
+    this.hemi.color
+      .setHex(0xcde2ef)
+      .lerp(u.horizon.value, 0.15 + twilight * 0.22);
+    this.hemi.groundColor.setHex(0x747364);
     this.sun.color
       .copy(u.sunTint.value)
       .lerp(palette.horizonDay, (1 - day) * 0.29);
-    this.sun.intensity = (0.5 + 1.94 * day + 0.78 * twilight) * clear;
-    const shadowStamp = Math.floor(elapsed * (quality === "high" ? 12 : 4));
-    if (shadowStamp !== this.shadowStamp) {
-      this.shadowStamp = shadowStamp;
-      const a = quality === "high" ? 36 : 32,
-        dx = Math.round(p.x / 0.19) * 0.19,
-        dz = Math.round(p.z / 0.19) * 0.19;
-      const sh = this.sun.shadow;
+    this.sun.intensity = (0.18 + 2.22 * day + 0.62 * twilight) * clear;
+    // Use a local shadow cache rather than drawing the city again each frame.
+    const stamp = Math.floor(elapsed * (quality === "high" ? 8 : 5));
+    const sh = this.sun.shadow;
+    sh.intensity =
+      smooth(u.sunDir.value.y, 0.05, 0.33) * (0.95 - this.mist * 0.43);
+    if (stamp !== this.shadowStamp) {
+      this.shadowStamp = stamp;
+      const a = quality === "high" ? 40 : 34,
+        texel = (a * 2) / sh.mapSize.x,
+        dx = Math.round(p.x / texel) * texel,
+        dz = Math.round(p.z / texel) * texel;
       sh.camera.left = sh.camera.bottom = -a;
       sh.camera.right = sh.camera.top = a;
       sh.camera.updateProjectionMatrix();
       this.sun.position.set(
         dx + u.sunDir.value.x * 95,
-        25 + Math.max(0.09, u.sunDir.value.y) * 84,
+        Math.max(0.11, u.sunDir.value.y) * 95,
         dz + u.sunDir.value.z * 95,
       );
       this.sun.target.position.set(dx, 0, dz);
-      if (quality === "high") sh.needsUpdate = true;
+      if (this.shadows && (sh.intensity > 0.01 || !sh.map))
+        sh.needsUpdate = true;
     }
     const power = 1 - smooth(sunArc, 0.14, 0.55) * 0.87;
     this.world.batch.lighting(this, camera.position, { day, twilight, power });
@@ -637,7 +666,9 @@ export class Climate {
       l.position.set(a.x, a.y, a.z);
       l.color.setHex(a.rgb);
       l.distance = a.span;
-      l.intensity = a.power * power * (1 + this.wet * 0.05);
+      const inside = shelter && this.world.isRoofed(a);
+      l.intensity =
+        a.power * Math.max(power, inside ? 0.77 : 0) * (1 + this.wet * 0.05);
     });
     const rain = this.rain;
     rain.lines.visible =

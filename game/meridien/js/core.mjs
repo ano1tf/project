@@ -1,5 +1,4 @@
 import {
-  BOUNDS,
   X,
   Z,
   WX,
@@ -8,6 +7,8 @@ import {
   SILLAGE_ZEBRA,
   junctionZebra,
 } from "./data.mjs";
+import { inRect, PORT_BOUNDS, PORT_ID, WORLD } from "./sectors.mjs";
+import { RIVE, GREVES_BRIDGE } from "./rive-layout.mjs";
 export const TAU = Math.PI * 2;
 export const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 export const lerp = (a, b, f) => a + (b - a) * f;
@@ -39,13 +40,36 @@ export const nearestJunction = (p) => [
   closestIndex(Z, p.z),
 ];
 export const junction = (i, j) => ({ x: X[i], z: Z[j] });
-export const onRoad = (x, z) =>
-  X.some((n, i) => Math.abs(n - x) < WX[i] * 0.5) ||
-  Z.some((n, i) => Math.abs(n - z) < WZ[i] * 0.5);
+export function onRoad(x, z) {
+  if (inRect(PORT_BOUNDS, x, z))
+    return (
+      X.some((n, i) => Math.abs(n - x) < WX[i] * 0.5) ||
+      Z.some((n, i) => Math.abs(n - z) < WZ[i] * 0.5)
+    );
+  return RIVE_ROADS.some((r) => inRect(r, x, z));
+}
+const RIVE_ROADS = [RIVE.road, RIVE.apron, RIVE.turn, GREVES_BRIDGE.road];
+export function nearestRiveRoad(p) {
+  let best = null,
+    d = Infinity;
+  for (const r of RIVE_ROADS) {
+    const a = {
+      x: clamp(p.x, r.minX + 2.6, r.maxX - 2.6),
+      z: clamp(p.z, r.minZ + 1.6, r.maxZ - 1.6),
+    };
+    const n = distance(p, a);
+    if (n < d) {
+      best = a;
+      d = n;
+    }
+  }
+  return best;
+}
 
 // A single spatial index serves movement, visibility and the follow camera.
 export class Solids {
-  constructor(cellSize = 24) {
+  constructor(cellSize = 24, domain = WORLD) {
+    this.domain = domain;
     this.size = cellSize;
     this.cells = new Map();
   }
@@ -71,13 +95,7 @@ export class Solids {
     return b;
   }
   blocked(x, z, radius = 0.35, y = 0, height = 1.5) {
-    if (
-      x - radius < BOUNDS.minX ||
-      x + radius > BOUNDS.maxX ||
-      z - radius < BOUNDS.minZ ||
-      z + radius > BOUNDS.maxZ
-    )
-      return true;
+    if (!this.domain.allows(x, z, radius)) return true;
     const s = this.size,
       r = radius;
     for (let i = Math.floor((x - r) / s); i <= Math.floor((x + r) / s); i++)
@@ -455,6 +473,45 @@ function roadRoute(a, b) {
     }
   return best.filter((p, i) => !i || distance(p, best[i - 1]) > 0.85);
 }
-export const navRoute = roadRoute;
+// Keep the original orthogonal router inside Port-Lumière. The new road is a
+// short two-way spine; the bridge has a marked lane in each direction.
+export function navRoute(a, b) {
+  const from = WORLD.at(a.x, a.z),
+    to = WORLD.at(b.x, b.z);
+  if (!from || !to) return [];
+  if (from.id === PORT_ID && to.id === PORT_ID) return roadRoute(a, b);
+  const [port, bank] = GREVES_BRIDGE.drive;
+  // Don't point back to the anchor once the car has committed to the ramp.
+  const onPortRamp =
+    from.id === PORT_ID &&
+    a.x <= port.x &&
+    Math.abs(a.z - GREVES_BRIDGE.z) < 4.4;
+  const start =
+    from.id === PORT_ID ? (onPortRamp ? a : port) : nearestRiveRoad(a);
+  const end =
+    to.id === PORT_ID ? port : onRoad(b.x, b.z) ? b : nearestRiveRoad(b);
+  const west = end.x < start.x;
+  const z = GREVES_BRIDGE.z + (west ? -1 : 1) * GREVES_BRIDGE.lane;
+  const path = from.id === PORT_ID && !onPortRamp ? roadRoute(a, port) : [a];
+  if (Math.abs(start.x - end.x) >= 8) {
+    // Merge gently with the spine, not at a right angle at the freight bay.
+    const lead = Math.min(7, Math.abs(end.x - start.x) / 3) * (west ? -1 : 1);
+    path.push({ x: start.x + lead, z });
+    if (from.id === PORT_ID || to.id === PORT_ID || from !== to) {
+      const anchors = west ? [port.x - 10, bank.x] : [bank.x, port.x - 10];
+      for (const x of anchors)
+        if (
+          west
+            ? x < start.x + lead && x > end.x - lead
+            : x > start.x + lead && x < end.x - lead
+        )
+          path.push({ x, z });
+    }
+    path.push({ x: end.x - lead, z });
+  }
+  if (to.id === PORT_ID) path.push(...roadRoute(port, b));
+  else path.push(end);
+  return path.filter((p, i) => !i || distance(p, path[i - 1]) > 0.85);
+}
 export const pathLength = (p) =>
   p.slice(1).reduce((sum, v, i) => sum + distance(v, p[i]), 0);

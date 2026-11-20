@@ -4,9 +4,13 @@ import {
   closestIndex,
   distance,
   navRoute,
+  nearestRiveRoad,
   onRoad,
   pathLength,
 } from "./core.mjs";
+
+import { PORT_ID, WORLD } from "./sectors.mjs";
+import { RIVE, GREVES_BRIDGE } from "./rive-layout.mjs";
 
 const D = [
   [1, 0],
@@ -91,7 +95,10 @@ export class WalkRoutes {
     return state;
   }
   visible(a, b, pad = 0.42) {
-    return this.solids.trace(a.x, 0.56, a.z, b.x, 0.56, b.z, pad) > 0.99;
+    return (
+      this.solids.domain.segment(a, b, pad) &&
+      this.solids.trace(a.x, 0.56, a.z, b.x, 0.56, b.z, pad) > 0.99
+    );
   }
   nearest(p, external = false) {
     const nx = clamp(
@@ -195,7 +202,7 @@ export class WalkRoutes {
     )
       path.push(b);
     const simplified = [a];
-    for (let i = 0; i < path.length - 1; ) {
+    for (let i = 0; i < path.length - 1;) {
       let k = i + 1;
       // Stop at an actual obstruction: no diagonal guides through pillars or a closed wall.
       while (
@@ -228,6 +235,55 @@ export class WalkRoutes {
     return navRoute(a, point);
   }
 }
+// Lazily build a separate walk grid for the new bank. Long routes cross at
+// the actual gangway, not through a larger rectangular A* raster of the sea.
+export class WorldRoutes extends WalkRoutes {
+  route(a, b) {
+    const f = WORLD.at(a.x, a.z),
+      t = WORLD.at(b.x, b.z);
+    if (!f || !t) return [];
+    if (f.id === PORT_ID && t.id === PORT_ID) return super.route(a, b);
+    this.rive ??= new WalkRoutes(this.solids, this.cell, RIVE.bounds);
+    if (f === RIVE && t === RIVE) return this.rive.route(a, b);
+    const port = GREVES_BRIDGE.walk[0],
+      shore = GREVES_BRIDGE.walk[1];
+    const anchor = (s, p) => (s.id === PORT_ID ? port : s === RIVE ? shore : p);
+    const local = (s, u, v) =>
+      s.id === PORT_ID
+        ? super.route(u, v)
+        : s === RIVE
+          ? this.rive.route(u, v)
+          : [u, v];
+    const start = anchor(f, a),
+      end = anchor(t, b);
+    const left = local(f, a, start),
+      right = local(t, end, b);
+    if (
+      !left.length ||
+      !right.length ||
+      !this.visible(start, end) ||
+      distance(left.at(-1), start) > 0.2
+    )
+      return [];
+    return [...left, ...right].filter(
+      (p, i, path) => !i || distance(p, path[i - 1]) > 0.05,
+    );
+  }
+  drive(a, b, exact = false) {
+    const f = WORLD.at(a.x, a.z),
+      t = WORLD.at(b.x, b.z);
+    if (f?.id === PORT_ID && t?.id === PORT_ID) return super.drive(a, b, exact);
+    if (t?.id === PORT_ID && !exact) {
+      const x = X[closestIndex(X, b.x)],
+        z = Z[closestIndex(Z, b.z)];
+      const p =
+        Math.abs(x - b.x) < Math.abs(z - b.z) ? { x, z: b.z } : { x: b.x, z };
+      return navRoute(a, p);
+    }
+    return navRoute(a, exact || t?.id === PORT_ID ? b : nearestRiveRoad(b));
+  }
+}
+
 export function pathTurn(path, facing, origin = path[0]) {
   if (path.length < 2) return null;
   const a = origin,
@@ -244,4 +300,75 @@ export function pathTurn(path, facing, origin = path[0]) {
     distance: dist,
     remaining: pathLength(path) - distance(path[0], b) + dist,
   };
+}
+
+// A curbside route may begin on the far side of Noa's parked vehicle. Keep
+// the static district graph cached; only detour the first walking segment.
+export function parkingDetour(path, parked, visible) {
+  if (path.length < 2) return path;
+  const [start] = path;
+  let route = path;
+  for (const car of parked) {
+    if (distance(start, car) > 6.6) continue;
+    const f = Math.sin(car.heading),
+      n = -Math.cos(car.heading);
+    const local = (p) => {
+      const x = p.x - car.x,
+        z = p.z - car.z;
+      return [-n * x + f * z, f * x + n * z];
+    };
+    const w = car.spec.width * 0.47 + 0.43,
+      l = car.spec.length * 0.48 + 0.43;
+    const free = (a, b) => {
+      const u = local(a),
+        v = local(b);
+      let near = 0,
+        far = 1;
+      for (const [axis, radius] of [w, l].entries()) {
+        const p = u[axis],
+          d = v[axis] - p;
+        if (Math.abs(d) < 1e-8) {
+          if (Math.abs(p) > radius) return true;
+          continue;
+        }
+        const t = (-radius - p) / d,
+          end = (radius - p) / d;
+        near = Math.max(near, Math.min(t, end));
+        far = Math.min(far, Math.max(t, end));
+        if (near > far) return true;
+      }
+      return false;
+    };
+    const first = route[1],
+      landing = local(first);
+    // If the car is the destination, the door interaction is offered before
+    // the endpoint is reached. Don't direct the player around their target.
+    if (Math.abs(landing[0]) <= w && Math.abs(landing[1]) <= l) continue;
+    if (free(start, first)) continue;
+    const corners = D.slice(4).map(([a, b]) => {
+      const x = a * (w + 0.47),
+        z = b * (l + 0.47);
+      return { x: car.x - x * n + z * f, z: car.z + x * f + z * n };
+    });
+    const clear = (a, b) => free(a, b) && visible(a, b);
+    let best = null,
+      len = Infinity;
+    for (const a of corners) {
+      if (!clear(start, a)) continue;
+      for (const b of corners) {
+        if (a !== b && !clear(a, b)) continue;
+        if (!clear(b, first)) continue;
+        const d = distance(start, a) + distance(a, b) + distance(b, first);
+        if (d < len) {
+          len = d;
+          best = a === b ? [a] : [a, b];
+        }
+      }
+    }
+    if (best) route = [start, ...best, ...route.slice(1)];
+    // Local detour touches one recently parked car. A moving or second
+    // obstruction still uses the live collision checks, not the map.
+    if (best) break;
+  }
+  return route;
 }

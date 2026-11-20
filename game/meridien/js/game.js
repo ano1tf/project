@@ -1,8 +1,8 @@
 import * as T from "three";
 import {
-  BOUNDS,
   START,
   STATION,
+  ONDES,
   PLACES,
   VEHICLES,
   STORY,
@@ -33,6 +33,41 @@ import {
   beginCustody,
   endCustody,
 } from "./progress.mjs";
+import { echoBrief, echoEvent, echoPhase } from "./echo.mjs";
+import {
+  inspectJoint,
+  nextBench,
+  residentAdvice,
+  shorePeople,
+  shiftPhase,
+} from "./littoral.mjs";
+import { GREVES_WORKSHOP } from "./rive-layout.mjs";
+import {
+  PASSAGE_TITLE,
+  PASSAGE_REWARD,
+  passageBrief,
+  passageEvent,
+  passagePhase,
+} from "./passage.mjs";
+import {
+  LINE_NAME,
+  DOCKS,
+  RIDE_MINUTES,
+  beginRide,
+  finishRide,
+  departures,
+  otherDock,
+  ridePose,
+} from "./sondes.mjs";
+import {
+  advancePort,
+  cancelFreight,
+  CLIENTS,
+  handleFreight,
+  manageVenture,
+  signFreight,
+} from "./port.mjs";
+import { CASH_LIMIT, gameMinute, postCash } from "./accounts.mjs";
 import { DistrictWorld } from "./world.js";
 import { Climate } from "./environment.js";
 import { CityLife } from "./dynamics.js";
@@ -40,7 +75,7 @@ import { ModelForge, poseHuman } from "./models.js";
 import { RenderBudget } from "./render-budget.mjs";
 import { PlanView } from "./plan-view.js";
 import { RouteRibbon } from "./route-ribbon.js";
-import { WalkRoutes, pathTurn } from "./navigation.mjs";
+import { WorldRoutes, parkingDetour, pathTurn } from "./navigation.mjs";
 import { STAGES, shotFrame } from "./cinema.mjs";
 import { advanceGait, intention } from "./acting.mjs";
 
@@ -53,22 +88,27 @@ const FOOT_PITCH = 0.114;
 const DRIVE_PITCH = 0.124;
 const SEIZE_SPEED = 1.55; // Fictional interaction is offered only at a stop or a crawl.
 const DOORS = {
+  ondes: ONDES.door,
   cafe: { x: -130, z: 93.45, height: 2.92, sign: "ENTRÉE · LE SILLAGE" },
   archive: { x: -118, z: -97.63, height: 2.84, sign: "ENTRÉE · HANGAR 07" },
 };
 const navNames = {
   story: "HISTOIRE · CHAPITRE 01",
   courier: "ACTIVITÉ · LIVRAISON",
+  echo: "ENQUÊTE · DOSSIER 02",
+  passage: "ENQUÊTE · DOSSIER 03",
+  freight: "FRET · LA RELÈVE DU PORT",
   custom: "NAVIGATION · POINT LIBRE",
 };
 export class Meridien {
-  constructor(view, progress, prefs, storage, audio, hooks) {
+  constructor(view, progress, prefs, storage, audio, hooks, slot = 0) {
     this.view = view;
     this.progress = progress;
     this.prefs = prefs;
     this.viewPref = prefs.view;
     this.cabinYaw = 0;
     this.storage = storage;
+    this.slot = slot;
     this.audio = audio;
     this.hooks = hooks;
     this.cachedMats = new WeakMap();
@@ -89,9 +129,14 @@ export class Meridien {
     this.anchor = v3();
     this.world = new DistrictWorld(this.scene);
     this.world.station.hold(!!progress.custody);
-    this.walkRoutes = new WalkRoutes(this.world.solids);
+    this.world.setEcho(progress.echo);
+    this.world.rive.setRecord(progress.passage.outcome);
+    this.world.portSite.sync(progress.port.venture);
+    this.world.portSite.recover(progress);
+    this.walkRoutes = new WorldRoutes(this.world.solids);
     this.ribbon = new RouteRibbon(this.scene);
     this.forge = new ModelForge();
+    this.shoreModels = new Map();
     this.life = new CityLife(
       this.scene,
       this.world,
@@ -135,6 +180,7 @@ export class Meridien {
         : this.safePoint(hero.x, hero.z);
       Object.assign(hero, recover);
     }
+    if (progress.transit.ride) this.positionOnLaunch();
     this.yaw = hero.heading;
     if (
       !hero.car &&
@@ -189,9 +235,9 @@ export class Meridien {
     const info = gl.getExtension("WEBGL_debug_renderer_info");
     this.software = Boolean(
       info &&
-        /swiftshader|llvmpipe|software rasterizer|softpipe/i.test(
-          gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || "",
-        ),
+      /swiftshader|llvmpipe|software rasterizer|softpipe/i.test(
+        gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || "",
+      ),
     );
     canvas.setAttribute("aria-hidden", "true");
     canvas.addEventListener("webglcontextlost", (e) => {
@@ -203,6 +249,9 @@ export class Meridien {
     });
     canvas.addEventListener("webglcontextrestored", () => {
       this.gpuLost = false;
+      // A restored GPU context has no valid contents in the cached sun map.
+      this.climate.shadowStamp = -1;
+      if (this.climate.shadows) this.climate.sun.shadow.needsUpdate = true;
       this.redraw = true;
       this.hooks.recovered?.();
     });
@@ -355,7 +404,8 @@ export class Meridien {
           ),
         );
       } else {
-        this.life.present(dt, this.hero, this.mode);
+        this.life.present(dt, this.hero, this.mode, this.motion);
+        this.presentShore(dt);
         if (!this.hero.car) this.syncHero(dt);
       }
       this.updateCamera(dt);
@@ -370,11 +420,17 @@ export class Meridien {
         shot?.stage,
         visualTime,
       );
+      this.forge.conditions(
+        this.climate,
+        this.motion ? 0 : visualTime,
+        this.mode === "low",
+      );
       this.world.animateHarbor?.(
         visualTime,
         this.camera.position,
         this.mode,
         this.motion,
+        this.progress.time,
       );
       this.ribbon.show(
         this.prefs.guide && !shot ? this.route() : null,
@@ -383,6 +439,77 @@ export class Meridien {
       this.renderer.render(this.scene, this.camera);
     }
     this.hooks.frame?.(this);
+  }
+  localPeople() {
+    return distance(this.hero, GREVES_WORKSHOP) < 79
+      ? shorePeople(this.progress.time)
+      : [];
+  }
+  presentShore(dt) {
+    const people = this.localPeople();
+    for (const model of this.shoreModels.values()) model.root.visible = false;
+    for (const p of people) {
+      let model = this.shoreModels.get(p.id);
+      if (!model) {
+        model = this.forge.person(p.style, { hue: p.hue, scale: 0.97 });
+        this.shoreModels.set(p.id, model);
+        this.scene.add(model.root);
+        this.adoptMaterials(model.root);
+      }
+      model.root.visible = true;
+      model.root.position.set(p.x, this.world.floor(p) ?? 0.08, p.z);
+      model.root.rotation.y = -p.heading;
+      poseHuman(model, dt, this.motion ? 0 : p.speed);
+    }
+  }
+  canWait() {
+    const p = this.progress;
+    return (
+      !p.custody &&
+      !this.hero.car &&
+      !this.life.alert.level &&
+      !p.port.job &&
+      !p.transit.ride &&
+      p.courier.stage === "idle" &&
+      this.paused
+    );
+  }
+  // A deliberate wait uses the same boundary events as ordinary play.
+  waitUntil(at) {
+    if (
+      !this.canWait() ||
+      !Number.isSafeInteger(at) ||
+      at <= gameMinute(this.progress) ||
+      at - gameMinute(this.progress) >= 1440
+    )
+      return false;
+    const p = this.progress,
+      before = p.time;
+    p.time = at % 1440;
+    advancePort(p, before, p.time);
+    this.climate.updateConditions(0, this.elapsed, p.time);
+    this.uiAt = -1;
+    this.redraw = true;
+    this.save();
+    return true;
+  }
+  restAtBench(at) {
+    return (
+      this.action()?.type === "greves-bench" &&
+      shiftPhase(this.progress.time) !== "bench" &&
+      at === nextBench(gameMinute(this.progress)) &&
+      this.waitUntil(at)
+    );
+  }
+  inspectAtBench(index) {
+    if (this.action()?.type !== "greves-bench")
+      return { status: "unavailable" };
+    const result = inspectJoint(this.progress, index);
+    if (result.status === "paid") this.portChanged();
+    return result;
+  }
+  greetShore(who) {
+    this.notice(`${who.name} · ${residentAdvice(who.id, this.progress.time)}`);
   }
   quality(setting) {
     const hasGraphics =
@@ -404,6 +531,7 @@ export class Meridien {
       this.nextPaint = 0;
       this.footIntent = null;
       if (q === "plan") {
+        this.world.rive.release();
         this.showCockpit(null);
         this.plan ??= new PlanView(this.world);
         this.plan.cut();
@@ -416,11 +544,13 @@ export class Meridien {
           this.redraw = true;
         });
         this.view.replaceChildren(this.renderer.domElement);
-        this.renderer.shadowMap.enabled = q === "high";
-        this.renderer.shadowMap.autoUpdate = true;
-        this.renderer.shadowMap.needsUpdate = q === "high";
+        const shadows =
+          q === "high" ||
+          (q === "standard" && !this.software && !this.smallDevice);
+        this.renderer.shadowMap.enabled = shadows;
+        this.renderer.shadowMap.needsUpdate = shadows;
         this.camera.far = q === "low" ? 690 : 1280;
-        this.climate.setQuality(q);
+        this.climate.setQuality(q, shadows);
         this.adoptMaterials(this.scene);
         if (wasPlan) {
           this.yaw = this.previousYaw;
@@ -452,6 +582,7 @@ export class Meridien {
           emissiveMap: base.emissiveMap,
           emissiveIntensity: base.emissiveIntensity,
           transparent: base.transparent,
+          forceSinglePass: base.forceSinglePass,
           opacity: base.opacity,
           depthWrite: base.depthWrite,
           alphaTest: base.alphaTest,
@@ -547,6 +678,10 @@ export class Meridien {
       this.notice("Contrôle en cours · présentez-vous au guichet de sortie.");
       return;
     }
+    if (echoPhase(this.progress) === "lead")
+      this.notice("Salomé Renaud · nouveau message dans La Traverse.");
+    else if (passagePhase(this.progress) === "lead")
+      this.notice("Le Cahier de la passe · Salomé vous attend aux Ondes.");
     if (!this.fallback && this.progress.stage === "contact")
       this.notice(
         this.prefs.guide
@@ -556,11 +691,13 @@ export class Meridien {
           : "Inès Kader · nouveau message sur le téléphone",
       );
   }
-  save(manual = false) {
+  save(manual = false, replaceDamaged = false) {
     const h = this.hero,
       p = this.progress;
     const heading = this.firstPerson && !h.car ? this.yaw : h.heading;
-    p.position = { x: h.x, z: h.z, heading: wrap(heading, TAU) };
+    // Current deck position is derived from timetable on restore, never from a water coordinate.
+    const dry = p.transit.ride ? DOCKS[p.transit.ride.from] : h;
+    p.position = { x: dry.x, z: dry.z, heading: wrap(heading, TAU) };
     p.activeVehicle = h.car?.id ?? null;
     const snapshot = (c) => ({
       x: c.x,
@@ -571,7 +708,7 @@ export class Meridien {
     for (const [id, c] of this.life.owned) p.vehicles[id] = snapshot(c);
     for (const [id, c] of this.life.seized) p.street.seized[id] = snapshot(c);
     p.alert = { ...this.life.alert };
-    const saved = writeSave(this.storage, p);
+    const saved = writeSave(this.storage, p, this.slot, replaceDamaged);
     this.autoSavedAt = this.elapsed;
     if (manual)
       this.notice(
@@ -594,7 +731,7 @@ export class Meridien {
     this.uiAt = -1;
     this.save();
   }
-  target() {
+  target(tracking = this.progress.tracking) {
     const p = this.progress;
     if (p.custody)
       return {
@@ -603,7 +740,33 @@ export class Meridien {
         text: "Parlez à l’agent pour régler le contrôle et quitter le commissariat.",
         point: STATION.release,
       };
-    if (p.tracking === "custom" && p.waypoint)
+    if (p.transit.ride) {
+      const r = p.transit.ride,
+        now = gameMinute(p);
+      const waiting = now < r.departure;
+      return {
+        type: "NAVETTE · LIGNE S2",
+        title: waiting
+          ? "À bord · départ imminent"
+          : `En route · ${DOCKS[otherDock(r.from)].label}`,
+        text: "Noa descend automatiquement à l’arrivée. Le véhicule reste stationné à quai.",
+        timer: Math.max(
+          0,
+          ((waiting ? r.departure : r.departure + RIDE_MINUTES) - now) / 1.03,
+        ),
+        point: null,
+      };
+    }
+    if (tracking === "passage") {
+      const brief = passageBrief(p);
+      if (brief?.target)
+        return {
+          ...brief,
+          type: navNames.passage,
+          point: PLACES[brief.target],
+        };
+    }
+    if (tracking === "custom" && p.waypoint)
       return {
         type: navNames.custom,
         title: p.waypoint.label,
@@ -611,12 +774,52 @@ export class Meridien {
         point: p.waypoint,
         custom: true,
       };
-    const courier = p.tracking === "courier",
+    const freight = tracking === "freight" && p.port.job;
+    if (freight) {
+      const collecting = freight.stage === "collect",
+        c = CLIENTS[freight.id];
+      const car = this.life.vehicle(freight.vehicle);
+      const hasCar = this.hero.car === car;
+      return {
+        type: navNames.freight,
+        title: !hasCar
+          ? `Reprendre la ${VEHICLES[freight.vehicle].name}`
+          : collecting
+            ? "Charger à la Balise Nord"
+            : `Livrer · ${c.name}`,
+        text: !hasCar
+          ? "Seul le véhicule inscrit sur le bordereau peut transporter ces caisses."
+          : collecting
+            ? "Immobilisez-vous dans la baie de fret et chargez à la portière."
+            : `Déposez ${freight.qty} caisses (${c.goods}) dans la baie réservée.`,
+        point: hasCar
+          ? DELIVERY_BAYS[collecting ? "depot" : c.bay]
+          : car
+            ? {
+                x: car.x,
+                z: car.z,
+                height: 2.35,
+                sign: car.spec.name.toUpperCase(),
+              }
+            : null,
+        timer: Math.max(0, (freight.due - gameMinute(p)) / 1.03),
+        bay: hasCar,
+      };
+    }
+    const echo = tracking === "echo" ? echoBrief(p) : null;
+    if (echo?.target)
+      return {
+        type: navNames.echo,
+        title: echo.title,
+        text: echo.text,
+        point: PLACES[echo.target],
+      };
+    const courier = tracking === "courier",
       m = courier ? COURIER[p.courier.stage] : STORY[p.stage];
     const bay =
       courier && this.hero.car ? DELIVERY_BAYS[p.courier.stage] : null;
     return {
-      type: navNames[p.tracking] || navNames.story,
+      type: navNames[tracking] || navNames.story,
       title: m.title,
       text: bay
         ? "Arrêtez-vous dans la zone de livraison pour remettre le colis ou le reçu sans descendre."
@@ -643,7 +846,13 @@ export class Meridien {
     if (h.car) {
       park = !onRoad(p.x, p.z);
       path = this.walkRoutes.drive(a, p, !park);
-    } else path = this.walkRoutes.route(a, p);
+    } else {
+      path = parkingDetour(
+        this.walkRoutes.route(a, p),
+        [...this.life.owned.values(), ...this.life.seized.values()],
+        (u, v) => this.walkRoutes.visible(u, v),
+      );
+    }
     this.navState = { k: key, start: a, path, t: this.elapsed, park };
     return path;
   }
@@ -664,6 +873,16 @@ export class Meridien {
       h.x > -136.7 && h.x < -99.3 && h.z > -124.9 && h.z < -97.55;
     if (p === PLACES.cafe && !inCafe) return DOORS.cafe;
     if (p === PLACES.archive && !inHangar) return DOORS.archive;
+    if (
+      [PLACES.grevesDesk, PLACES.grevesLog].includes(p) &&
+      this.world.rive.floor(h) == null
+    )
+      return PLACES.greves;
+    if (
+      [PLACES.ondes, PLACES.badge, PLACES.receiver].includes(p) &&
+      !this.world.isRoofed(h)
+    )
+      return DOORS.ondes;
     return p;
   }
   guidance(target) {
@@ -684,7 +903,7 @@ export class Meridien {
     let text;
     if (
       h.car &&
-      p === DELIVERY_BAYS[this.progress.courier.stage] &&
+      (p === DELIVERY_BAYS[this.progress.courier.stage] || target.bay) &&
       steer.remaining < 10
     )
       text = "Arrêt livraison";
@@ -708,7 +927,12 @@ export class Meridien {
     if (this.world.solids.blocked(x, z, radius, y, height)) return true;
     if (y > 1.07) return false;
     return this.life.allCars().some((c) => {
-      if (c === ignore || Math.abs(c.x - x) > 3.8 || Math.abs(c.z - z) > 3.8)
+      if (
+        c.parked ||
+        c === ignore ||
+        Math.abs(c.x - x) > 3.8 ||
+        Math.abs(c.z - z) > 3.8
+      )
         return false;
       const dx = x - c.x,
         dz = z - c.z,
@@ -742,17 +966,35 @@ export class Meridien {
         0,
       );
     if (h.car) this.stepCar(dt, input);
-    else this.stepHero(dt, input, actionJump);
+    else if (!p.transit.ride) this.stepHero(dt, input, actionJump);
     this.elapsed += dt;
     this.followHeading(dt);
-    p.time = wrap(p.time + dt * 1.03, 1440);
+    const before = p.time,
+      job = p.port.job;
+    p.time = wrap(before + dt * 1.03, 1440);
+    if (
+      Math.floor(before) !== Math.floor(p.time) &&
+      advancePort(p, before, p.time)
+    ) {
+      if (job && !p.port.job) {
+        this.notice(
+          "Bordereau expiré · consultez Fret dans La Traverse.",
+          "warning",
+        );
+        this.navState = null;
+      } else if (p.port.news[0]?.kind === "settled")
+        this.notice("Comptoir 12 · Jo a soldé une tournée.", "reward");
+      this.uiAt = -1;
+      this.save();
+    }
+    if (p.transit.ride) this.stepLaunch();
     p.sprintBonus = Math.max(0, p.sprintBonus - dt);
     this.climate.updateConditions(dt, this.elapsed, p.time);
-    const result = this.life.tick(dt, h);
+    const result = this.life.tick(dt, h, p.time);
     if (result?.type === "arrest") this.arrest(result.level);
     else if (result?.type === "fine") {
       const fine = Math.min(p.cash, result.fine);
-      p.cash -= fine;
+      postCash(p, -fine, "fine");
       this.notice(`Contrôle terminé · ${fine} € d’amende`, "warning");
       this.save();
     } else if (result?.type === "evaded") {
@@ -781,7 +1023,7 @@ export class Meridien {
         patrol = null,
         sirenDistance = 63;
       for (const c of this.life.allCars()) {
-        if (c.id) continue;
+        if (c.id || c.parked) continue;
         const n = distance(c, h);
         if (n < d) {
           near = c;
@@ -802,6 +1044,7 @@ export class Meridien {
               1,
             )
           : 0;
+      const cover = this.world.isRoofed(h);
       this.audio.tick({
         car: h.car,
         traffic: near,
@@ -809,7 +1052,11 @@ export class Meridien {
         pan: pan(near),
         sirenDistance,
         sirenPan: pan(patrol),
-        cover: this.world.isRoofed(h),
+        cover,
+        workshop: cover && distance(h, ONDES) < 11,
+        square:
+          clamp(1 - distance(h, ONDES.door) / 39, 0, 1) * (cover ? 0.26 : 1),
+        minutes: p.time,
         wet: this.climate.wet,
         roadWet: this.climate.roadWet,
         ocean: clamp(1 - (h.x + 190) / 78, 0, 1),
@@ -823,6 +1070,7 @@ export class Meridien {
     const h = this.hero,
       turn = Number(!!input.right) - Number(!!input.left),
       move = Number(!!input.forward) - Number(!!input.back),
+      priorHeading = h.heading,
       strength = Math.hypot(turn, move);
     const buff = this.progress.sprintBonus > 0,
       sprint = !!(
@@ -839,7 +1087,7 @@ export class Meridien {
     const desire = strength ? speed : 0;
     h.linear = lerp(h.linear || 0, desire, expEase(strength ? 15 : 19, dt));
     h.landing = Math.max(0, (h.landing || 0) - dt * 4.5);
-    const ground = onRoad(h.x, h.z) ? 0.016 : 0.083;
+    const ground = this.world.floor(h) ?? (onRoad(h.x, h.z) ? 0.016 : 0.083);
     let landed = false;
     if (wantJump && !h.air && !h.crouch) {
       h.air = true;
@@ -885,6 +1133,10 @@ export class Meridien {
       h.heading += angleDelta(h.heading, this.yaw) * expEase(12, dt);
     }
     const actual = Math.hypot(x - h.x, z - h.z) / dt;
+    const bank =
+      clamp(angleDelta(priorHeading, h.heading) * 0.76, -0.085, 0.085) *
+      clamp(actual / 3.64, 0, 1);
+    h.bank = lerp(h.bank || 0, bank, expEase(10, dt));
     h.walkSpeed = lerp(h.walkSpeed, actual, expEase(15, dt));
     h.x = x;
     h.z = z;
@@ -910,7 +1162,11 @@ export class Meridien {
     h.model.root.position.set(h.x, h.y, h.z);
     h.model.root.rotation.y = -h.heading;
     const shadow = h.model.contact;
-    shadow.position.y = (onRoad(h.x, h.z) ? 0.022 : 0.097) - h.y;
+    const floor = this.world.floor(h);
+    shadow.position.y = this.progress.transit.ride
+      ? 0.033
+      : (floor != null ? floor + 0.008 : onRoad(h.x, h.z) ? 0.022 : 0.097) -
+        h.y;
     shadow.material.opacity = h.air ? 0.4 - clamp(h.y, 0, 0.63) * 0.28 : 0.55;
     const reach = Math.max(0, (h.reachUntil || 0) - this.elapsed) / 0.54;
     const gesture = this.motion ? 0 : Math.sin(Math.PI * reach) * 0.68;
@@ -918,6 +1174,7 @@ export class Meridien {
       gesture,
       gaitPhase: h.gaitPhase,
       lean: gesture * 0.27,
+      bank: this.motion ? 0 : h.bank || 0,
       crouch: h.crouch,
       air: h.air,
       vertical: h.vy,
@@ -999,12 +1256,14 @@ export class Meridien {
     h.y = c.y;
   }
   crouch() {
+    if (this.progress.transit.ride) return;
     if (!this.hero.car && !this.hero.air) {
       this.hero.crouch = !this.hero.crouch;
       this.uiAt = -1;
     }
   }
   jump() {
+    if (this.progress.transit.ride) return;
     this.jumpQueued = true;
   }
   recenter() {
@@ -1289,10 +1548,110 @@ export class Meridien {
   story(event, ending) {
     if (!storyEvent(this.progress, event, ending)) return false;
     this.progress.tracking = "story";
+    if (event === "finish")
+      this.notice("La Traverse · Salomé vous a laissé un message.");
     this.uiAt = -1;
     this.navState = null;
     this.save();
     return true;
+  }
+  investigate(event, choice) {
+    const expected = {
+      accept: "ondes",
+      finish: "ondes",
+      watch: "watch",
+      badge: "badge",
+      tune: "receiver",
+    }[event];
+    if (
+      this.action()?.type !== expected ||
+      !echoEvent(this.progress, event, choice)
+    )
+      return false;
+    this.world.setEcho(this.progress.echo);
+    this.uiAt = -1;
+    this.navState = null;
+    this.redraw = true;
+    this.save();
+    return true;
+  }
+  caseAction(event, choice) {
+    const expected = event === "accept" ? "ondes" : "greves-log";
+    if (
+      this.action()?.type !== expected ||
+      this.life.alert.level ||
+      !passageEvent(this.progress, event, choice)
+    )
+      return false;
+    this.world.rive.setRecord(this.progress.passage.outcome);
+    this.portChanged();
+    if (event === "accept")
+      this.notice(`${PASSAGE_TITLE} · rendez-vous à l’embarcadère des Marées.`);
+    if (event === "file")
+      this.notice(`Dossier clos · +${PASSAGE_REWARD} €`, "reward");
+    return true;
+  }
+  restAtDock(from, at) {
+    const offer = this.action();
+    return (
+      offer?.type === "sondes-dock" &&
+      offer.from === from &&
+      at === departures(from, gameMinute(this.progress)).opens &&
+      this.waitUntil(at)
+    );
+  }
+  boardLaunch(from, departure) {
+    const offer = this.action();
+    if (
+      offer?.type !== "sondes-dock" ||
+      offer.from !== from ||
+      this.life.alert.level ||
+      !beginRide(this.progress, from, departure)
+    )
+      return false;
+    this.positionOnLaunch();
+    if (this.mode !== "plan") this.yaw = this.hero.heading - Math.PI * 0.38;
+    this.cameraCut = true;
+    this.portChanged();
+    this.notice(`${LINE_NAME} · place enregistrée, départ à l’horaire.`);
+    return true;
+  }
+  positionOnLaunch() {
+    const pose = ridePose(this.progress);
+    Object.assign(this.hero, pose, {
+      vy: 0,
+      walkSpeed: 0,
+      air: false,
+      crouch: false,
+    });
+  }
+  stepLaunch() {
+    const p = this.progress,
+      ride = finishRide(p);
+    if (!ride) {
+      this.positionOnLaunch();
+      return;
+    }
+    const d = DOCKS[otherDock(ride.from)],
+      h = this.hero;
+    const point = this.blockHero(d.x, d.z, 0.37, 0.08, 1.57)
+      ? this.safePoint(d.x, d.z)
+      : d;
+    Object.assign(h, point, {
+      y: 0.08,
+      heading: ride.from === "port" ? -Math.PI / 2 : Math.PI / 2,
+    });
+    if (this.mode !== "plan") this.yaw = h.heading;
+    const sample = passageEvent(p, "sample", ride);
+    this.cameraCut = true;
+    this.plan?.cut();
+    this.portChanged();
+    this.notice(
+      sample
+        ? "Plan tamponné des amers · relevé ajouté au Journal."
+        : `${d.label} · arrivée de la navette.`,
+      sample ? "reward" : "info",
+    );
   }
   takeCourier(event) {
     const prior = this.progress.courier.best;
@@ -1312,6 +1671,77 @@ export class Meridien {
     );
     this.save();
   }
+  signedFreight(id, vehicle, qty) {
+    if (this.life.alert.level || !signFreight(this.progress, id, vehicle, qty))
+      return false;
+    this.portChanged();
+    this.notice("Bordereau signé · rendez-vous à la Balise Nord.");
+    return true;
+  }
+  cancelFreight() {
+    if (!cancelFreight(this.progress)) return false;
+    this.portChanged();
+    return true;
+  }
+  freightAt(car) {
+    const j = this.progress.port.job;
+    if (!j || car.id !== j.vehicle || this.life.alert.level) return null;
+    const source = distance(car, DELIVERY_BAYS.depot) < 2.8;
+    const drop =
+      j.stage === "loaded" &&
+      distance(car, DELIVERY_BAYS[CLIENTS[j.id].bay]) < 2.8;
+    if (!source && !drop) return null;
+    if (Math.abs(car.speed) > 1.05)
+      return { type: "freight-stop", label: "Immobiliser le véhicule · fret" };
+    return drop
+      ? { type: "freight-drop", label: "Remettre les caisses de fret" }
+      : j.stage === "collect"
+        ? { type: "freight-load", label: "Charger les caisses de fret" }
+        : { type: "freight-return", label: "Bordereau · retourner le fret" };
+  }
+  freightAction(kind) {
+    const j = this.progress.port.job;
+    if (
+      !this.hero.car ||
+      this.action()?.type !== `freight-${kind}` ||
+      !handleFreight(this.progress, kind, this.hero.car.id)
+    )
+      return false;
+    this.portChanged();
+    this.audio.blip(kind === "drop" ? "reward" : "info");
+    if (kind === "drop")
+      this.notice(
+        `Fret remis · +${j.pay} € · confiance de ${CLIENTS[j.id].person} +1`,
+        "reward",
+      );
+    else
+      this.notice(
+        kind === "load"
+          ? "Caisses arrimées · restez avec le véhicule déclaré."
+          : "Caisses restituées à la Balise Nord.",
+      );
+    return true;
+  }
+  portChanged() {
+    if (this.world.portSite.sync(this.progress.port.venture))
+      this.walkRoutes.occupancy.fill(0);
+    this.navState = null;
+    this.uiAt = -1;
+    this.redraw = true;
+    this.save();
+  }
+  managePort(command) {
+    const access = command === "buy" ? "port-property" : "port-desk";
+    if (
+      this.action()?.type !== access ||
+      this.life.alert.level ||
+      !manageVenture(this.progress, command)
+    )
+      return false;
+    this.portChanged();
+    return true;
+  }
+
   buy(kind, id) {
     if (!transactions(this.progress, kind, id)) return false;
     if (kind === "car") {
@@ -1363,6 +1793,8 @@ export class Meridien {
       return this.usable(STATION.release, 1.65)
         ? { type: "release", label: "Terminer le contrôle" }
         : null;
+    if (p.transit.ride)
+      return { type: "sondes-ride", label: "Consulter le passage en cours" };
     if (h.car) {
       const stage = p.courier.stage,
         bay = DELIVERY_BAYS[stage];
@@ -1380,6 +1812,8 @@ export class Meridien {
               : "Déposer le reçu à la portière",
         };
       }
+      const freight = this.freightAt(h.car);
+      if (freight) return freight;
       return {
         type: "exit",
         label:
@@ -1399,6 +1833,27 @@ export class Meridien {
           ? "Sûreté en alerte · Aya attend"
           : "Parler à Aya",
       };
+    const dossier = echoPhase(p);
+    if (this.usable(PLACES.watch, 2.2))
+      return { type: "watch", label: "Consulter le registre de veille" };
+    if (p.echo.accepted && this.usable(PLACES.badge, 1.44))
+      return { type: "badge", label: "Lire la plaque de commutation" };
+    if (this.usable(PLACES.receiver, 1.7))
+      return {
+        type: "receiver",
+        label: ["closed", "debrief"].includes(dossier)
+          ? "Consulter le relevé du récepteur"
+          : "Examiner le récepteur",
+      };
+    if (this.usable(this.life.salome, 2.45))
+      return { type: "ondes", label: "Parler à Salomé" };
+    if (!p.port.venture.owned && this.usable(PLACES.comptoir, 1.9))
+      return {
+        type: "port-property",
+        label: "Consulter la concession · Comptoir 12",
+      };
+    if (p.port.venture.owned && this.usable(PLACES.comptoirDesk, 1.85))
+      return { type: "port-desk", label: "Ouvrir la caisse du Comptoir 12" };
     const cafeCounter = { x: -136.32, z: 84.0 };
     if (this.usable(cafeCounter, 2.85))
       return { type: "cafe", label: "Commander au café Le Sillage" };
@@ -1414,6 +1869,20 @@ export class Meridien {
       return { type: "garage", label: "Voir le stock du Garage Estuaire" };
     if (this.usable(PLACES.repair, 4.8))
       return { type: "repair", label: "Consulter l’atelier du Ressac" };
+    for (const [from, d] of Object.entries(DOCKS))
+      if (this.usable(d, 2.25))
+        return { type: "sondes-dock", from, label: `Horaires · ${LINE_NAME}` };
+    if (this.usable(PLACES.grevesLog, 1.74))
+      return { type: "greves-log", label: "Lire le registre des Calfats" };
+    if (this.usable(PLACES.grevesDesk, 1.64))
+      return { type: "greves-bench", label: "Consulter le banc de contrôle" };
+    for (const resident of this.localPeople())
+      if (this.usable(resident, 1.65))
+        return {
+          type: "greves-greet",
+          label: `Parler · ${resident.name}`,
+          resident,
+        };
     let nearest = null,
       d = 3.35;
     for (const car of this.life.allCars()) {
@@ -1433,12 +1902,26 @@ export class Meridien {
     const walker = this.life.civilians.find(
       (a) => !(a.alarmUntil > this.life.time) && this.usable(a, 1.55),
     );
-    if (walker) return { type: "greet", label: "Saluer le passant", walker };
+    if (walker)
+      return {
+        type: "greet",
+        label: walker.role
+          ? `Saluer · ${walker.role.name}`
+          : "Saluer le passant",
+        walker,
+      };
     return null;
   }
   streetAction() {
     const h = this.hero;
-    if (h.car || h.air || h.inCustody || this.sceneShot || this.paused)
+    if (
+      h.car ||
+      h.air ||
+      h.inCustody ||
+      this.progress.transit.ride ||
+      this.sceneShot ||
+      this.paused
+    )
       return null;
     let target = null,
       nearest = 3.35;
@@ -1470,11 +1953,11 @@ export class Meridien {
     if (a.type === "rob") {
       const p = a.walker;
       const take = Math.min(
-        999999 - this.progress.cash,
+        CASH_LIMIT - this.progress.cash,
         12 + ((p.civilian * 11 + 7) % 15),
       );
       this.progress.street.robbed.push(p.civilian);
-      this.progress.cash += take;
+      postCash(this.progress, take, "street");
       h.reachUntil = this.elapsed + 0.54;
       this.life.alarmPerson(p, h);
       this.life.crime(h, `Vol signalé · +${take} € · sûreté alertée`);
@@ -1518,6 +2001,7 @@ export class Meridien {
       linear: 0,
       walkSpeed: 0,
       landing: 0,
+      bank: 0,
       reachUntil: 0,
       gaitPhase: 0,
     });
@@ -1677,6 +2161,6 @@ export class Meridien {
       "Au belvédère, on voit même le phare par temps clair.",
       "Bonsoir. Faites attention aux feux sur le boulevard.",
     ];
-    this.notice(lines[walker.hue % lines.length]);
+    this.notice(walker.role?.advice || lines[walker.hue % lines.length]);
   }
 }

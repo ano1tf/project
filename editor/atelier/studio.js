@@ -3,7 +3,11 @@ import { arenaPrompt, createKreoRequest, exampleBrief, KREO_REQUEST_FILENAME } f
 import { makeAtelierPreview } from './preview.js';
 
 const guideUrl = new URL('./#protocole', import.meta.url).href;
-const sampleUrl = new URL('./exemples/semaphore.kreo-asset.json', import.meta.url);
+const samples = new Map([
+  ['exemple', new URL('./exemples/semaphore.kreo-asset.json', import.meta.url)],
+  ['comptoir', new URL('./exemples/comptoir-12.kreo-asset.json', import.meta.url)],
+  ['greves', new URL('./exemples/atelier-des-greves.kreo-asset.json', import.meta.url)],
+]);
 
 export function bindArenaAtelier({ context, apply, download, t }) {
   const id = (key) => document.getElementById(key);
@@ -20,10 +24,11 @@ export function bindArenaAtelier({ context, apply, download, t }) {
   const insert = id('atelierInsert'),
     summary = id('atelierSummary'),
     status = id('atelierValidation');
-  const sampleBtn = id('atelierSample'),
+  const sampleButtons = [id('atelierSample'), id('atelierComptoir'), id('atelierGreves')],
     blank = id('atelierBlank'),
     copyHint = id('atelierCopyHint');
   const blankTitle = id('atelierBlankTitle');
+  const lockSamples = (locked) => sampleButtons.forEach((b) => (b.disabled = locked));
   let pending = null,
     playing = false,
     preview = null,
@@ -129,7 +134,7 @@ export function bindArenaAtelier({ context, apply, download, t }) {
   };
   const loadSource = async (loader) => {
     const revision = ++sourceRevision;
-    sampleBtn.disabled = true;
+    lockSamples(true);
     clear();
     setStatus('atelier.loading');
     try {
@@ -139,20 +144,20 @@ export function bindArenaAtelier({ context, apply, download, t }) {
       if (revision === sourceRevision && dialog.open)
         setStatus('atelier.invalid', 'error', error.message);
     } finally {
-      if (revision === sourceRevision) sampleBtn.disabled = false;
+      if (revision === sourceRevision) lockSamples(false);
     }
   };
-  const loadSample = () =>
+  const loadSample = (key) =>
     loadSource(async () => {
-      const res = await fetch(sampleUrl);
+      const res = await fetch(samples.get(key));
       if (!res.ok) throw Error(`HTTP ${res.status}`);
       return res.text();
     });
-  const open = (withSample = false) => {
+  const open = (sample = null) => {
     if (dialog.open || id('btnArena').disabled) return;
     updatePrompt();
     dialog.showModal();
-    if (withSample) loadSample();
+    if (sample) loadSample(sample);
     else if (response.value.trim()) validate();
     else clear();
     brief.focus({ preventScroll: true });
@@ -162,7 +167,7 @@ export function bindArenaAtelier({ context, apply, download, t }) {
   id('atelierClose').addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => {
     ++sourceRevision;
-    sampleBtn.disabled = false;
+    lockSamples(false);
     scope.value = 'none';
     pause();
     preview?.clear();
@@ -197,13 +202,13 @@ export function bindArenaAtelier({ context, apply, download, t }) {
   });
   response.addEventListener('input', () => {
     ++sourceRevision;
-    sampleBtn.disabled = false;
+    lockSamples(false);
     clear();
     setStatus('atelier.awaitValidation');
   });
   id('atelierValidate').addEventListener('click', () => {
     ++sourceRevision;
-    sampleBtn.disabled = false;
+    lockSamples(false);
     validate();
   });
   file.addEventListener('change', () => {
@@ -215,7 +220,9 @@ export function bindArenaAtelier({ context, apply, download, t }) {
       return selected.text();
     });
   });
-  sampleBtn.addEventListener('click', loadSample);
+  sampleButtons[0].addEventListener('click', () => loadSample('exemple'));
+  sampleButtons[1].addEventListener('click', () => loadSample('comptoir'));
+  sampleButtons[2].addEventListener('click', () => loadSample('greves'));
   scrub.addEventListener('input', () => {
     const target = Number(scrub.value);
     pause();
@@ -250,5 +257,6 @@ export function bindArenaAtelier({ context, apply, download, t }) {
       updateTime();
     }
   });
-  if (new URLSearchParams(location.search).get('atelier') === 'exemple') open(true);
+  const sample = new URLSearchParams(location.search).get('atelier');
+  if (samples.has(sample)) open(sample);
 }

@@ -2639,14 +2639,17 @@ function onRtMouseMove(e) {
   runtime.input.lookX = e.movementX * 0.0022;
   runtime.input.lookY = e.movementY * 0.0022;
 }
+// Browsers may deny capture in an embedded preview; Play must still start.
+// The same helper is embedded in standalone exports.
+function requestOptionalPointerLock(target) {
+  try { target.requestPointerLock?.()?.catch(() => {}); } catch {}
+}
 function onRtMouseDown(e) {
   if (!runtime || !state.play) return;
   rtKeys.mouse = rtKeys.mouse || {};
   rtKeys.mouse[e.button] = true;
   if (e.button === 0) {
-    if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
-      try { canvas.requestPointerLock(); } catch (err) {}
-    }
+    if (document.pointerLockElement !== canvas) requestOptionalPointerLock(canvas);
     // le verrou de souris n'est pas une condition pour tirer
     if (runtime.onFireDown) runtime.onFireDown();
     else if (runtime.onFire) runtime.onFire();
@@ -2667,9 +2670,7 @@ function bindRuntimeInput() {
   document.addEventListener('mousemove', onRtMouseMove);
   document.addEventListener('mousedown', onRtMouseDown);
   document.addEventListener('mouseup', onRtMouseUp);
-  if (canvas.requestPointerLock) {
-    try { canvas.requestPointerLock(); } catch (e) {}
-  }
+  requestOptionalPointerLock(canvas);
 }
 function unbindRuntimeInput() {
   document.removeEventListener('keydown', onRtKeyDown, true);
@@ -3113,6 +3114,7 @@ addEventListener('resize', resize);
 resize();
 
 /* ---------- entrées ---------- */
+${requestOptionalPointerLock.toString()}
 const keys = {};
 addEventListener('keydown', (e) => {
   if (paused && e.code !== 'escape') return;
@@ -3153,9 +3155,7 @@ let dragging = false;
  */
 canvas.addEventListener('mousedown', (e) => {
   if (paused) return;
-  if (!document.pointerLockElement && canvas.requestPointerLock) {
-    try { canvas.requestPointerLock(); } catch (err) {}
-  }
+  if (!document.pointerLockElement) requestOptionalPointerLock(canvas);
   if (e.button === 0 && rt.onFireDown) rt.onFireDown();
   else if (e.button === 0 && rt.onFire) rt.onFire();
   if (e.button === 2) { rt.input.ads = true; }
@@ -3189,7 +3189,7 @@ addEventListener('keydown', (e) => {
 });
 document.getElementById('btnResume').addEventListener('click', () => {
   setPaused(false);
-  canvas.requestPointerLock && canvas.requestPointerLock();
+  requestOptionalPointerLock(canvas);
 });
 document.getElementById('btnRestart').addEventListener('click', () => location.reload());
 let sens = 1.0;
@@ -3201,7 +3201,7 @@ document.getElementById('btnSens').addEventListener('click', (e) => {
 document.getElementById('btnStart').addEventListener('click', () => {
   document.getElementById('start').style.display = 'none';
   document.getElementById('hud').hidden = false;
-  canvas.requestPointerLock && canvas.requestPointerLock();
+  requestOptionalPointerLock(canvas);
   rt.start();
 });
 </script>

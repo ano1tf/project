@@ -120,6 +120,13 @@ export class SceneAudio {
 }
 
 export const STAGES = {
+  ondes: {
+    workshop: true,
+    hero: { x: 41.53, y: 0.096, z: 21.27 },
+    npc: { x: 42.3, y: 0.096, z: 19.25 },
+    light: { x: 44.3, y: 2.73, z: 20.59, color: 0xffd0a2, power: 27 },
+    lightTwo: { x: 40.18, y: 2.24, z: 18.9, color: 0xade4da, power: 12 },
+  },
   sillage: {
     hero: { x: -129.76, y: 0.107, z: 87.73 },
     npc: { x: -130.55, y: 0.107, z: 86.18 },
@@ -166,9 +173,11 @@ export function shotFrame(stage, key, aspect, glide) {
           : 1.38) -
     glide * 0.22;
   const along = wide
-    ? coast
-      ? 0.46
-      : 0.85
+    ? stage.workshop
+      ? -1.46
+      : coast
+        ? 0.46
+        : 0.85
     : profile
       ? -1.43
       : reverse
@@ -181,7 +190,15 @@ export function shotFrame(stage, key, aspect, glide) {
     y: (wide ? 1.74 : profile ? 1.57 : 1.62) - glide * 0.055,
     z: Z + sideZ * flank + z * along,
     targetX: X - sideX * (wide ? 0.055 : 0.0),
-    targetY: wide ? (portrait ? 1.12 : 1.25) : profile ? 1.42 : 1.46,
+    targetY: wide
+      ? portrait
+        ? 1.12
+        : stage.workshop
+          ? 1.29
+          : 1.25
+      : profile
+        ? 1.42
+        : 1.46,
     targetZ: Z - sideZ * (wide ? 0.055 : 0.0),
     fov: wide
       ? portrait
