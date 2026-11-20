@@ -1,3 +1,6 @@
 
 # jeux générés par l'éditeur (reproductibles)
 demo/*.html
+
+# caches Python
+__pycache__/
