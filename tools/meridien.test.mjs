@@ -54,6 +54,14 @@ import {
   writeSave,
 } from "../game/meridien/js/progress.mjs";
 
+import {
+  ECHO_OUTCOMES,
+  echoBrief,
+  echoEvent,
+  echoPhase,
+  echoScene,
+  freshEcho,
+} from "../game/meridien/js/echo.mjs";
 import { PROFILES, RenderBudget } from "../game/meridien/js/render-budget.mjs";
 import { WalkRoutes, pathTurn } from "../game/meridien/js/navigation.mjs";
 import {
@@ -132,7 +140,7 @@ test("transaction : pas de découvert ni de duplication, inventaire utilisable",
   assert.equal(p.cash, 372);
 });
 
-test("sauvegarde v1 : position, progression, propriétés et conduite reprises exactement", () => {
+test("sauvegarde v2 : position, progression, propriétés et conduite reprises exactement", () => {
   const m = new Map(),
     storage = {
       getItem: (k) => m.get(k) ?? null,
@@ -714,4 +722,88 @@ test("animation : phase déterministe à 60 Hz, deux appuis par cycle, pieds au 
         0.001,
     );
   }
+});
+
+test("Fréquences de veille : indices dans les deux ordres, calage et récompense unique sans modifier la fin", () => {
+  for (const [ending, evidence, result] of [
+    ["publish", ["badge", "watch"], "archive"],
+    ["protect", ["watch", "badge"], "seal"],
+  ]) {
+    const p = freshProgress();
+    assert.equal(echoPhase(p), "locked");
+    assert.equal(echoEvent(p, "accept"), false);
+    goToEnd(p);
+    assert.ok(storyEvent(p, "finish", ending));
+    const cash = p.cash;
+    assert.equal(echoBrief(p).target, "ondes");
+    assert.equal(echoEvent(p, "watch"), false);
+    assert.ok(courierEvent(p, "start"));
+    assert.ok(echoEvent(p, "accept"));
+    assert.equal(p.tracking, "courier");
+    assert.deepEqual(p.courier, {
+      stage: "relay",
+      time: 155,
+      runs: 0,
+      best: null,
+    });
+    assert.equal(echoEvent(p, "tune", { track: "C", stamp: "0217" }), false);
+    assert.equal(echoEvent(p, "finish", result), false);
+    for (const id of evidence) {
+      assert.ok(echoEvent(p, id));
+      assert.equal(echoEvent(p, id), false);
+    }
+    assert.equal(echoBrief(p).target, "receiver");
+    assert.equal(echoEvent(p, "tune", { track: "A", stamp: "0217" }), false);
+    assert.equal(echoEvent(p, "tune", { track: "C", stamp: "0209" }), false);
+    assert.ok(echoEvent(p, "tune", { track: "C", stamp: "0217" }));
+    assert.equal(echoEvent(p, "finish", [result]), false);
+    assert.ok(beginCustody(p, 2));
+    assert.equal(echoEvent(p, "finish", result), false);
+    endCustody(p);
+    const beforeReward = p.cash;
+    assert.ok(echoEvent(p, "finish", result));
+    assert.equal(echoEvent(p, "finish", result), false);
+    assert.equal(p.cash, beforeReward + ECHO_OUTCOMES[result].reward);
+    assert.equal(p.stage, "done");
+    assert.equal(p.ending, ending);
+    assert.equal(echoBrief(p).target, null);
+    assert.equal(validateProgress(p).echo.outcome, result);
+    assert.ok(cash < p.cash);
+  }
+  assert.notEqual(
+    echoScene("publish").lines[0].text,
+    echoScene("protect").lines[0].text,
+  );
+});
+
+test("dossier facultatif en v1 : une ancienne sauvegarde reste intacte et le calage incomplet est rejeté", () => {
+  const draft = {
+    accepted: true,
+    watch: true,
+    badge: false,
+    tuned: true,
+    outcome: "archive",
+  };
+  const p = freshProgress();
+  assert.deepEqual(
+    validateProgress({ ...p, echo: draft, tracking: "echo" }).echo,
+    freshEcho(),
+  );
+  goToEnd(p);
+  storyEvent(p, "finish", "protect");
+  delete p.echo;
+  assert.deepEqual(validateProgress({ ...p, version: 1 }), {
+    ...p,
+    echo: freshEcho(),
+  });
+  const invalid = validateProgress({ ...p, echo: draft, tracking: "echo" });
+  assert.deepEqual(invalid.echo, { ...draft, tuned: false, outcome: null });
+  assert.equal(echoBrief(invalid).target, "badge");
+  assert.equal(
+    validateProgress({
+      ...p,
+      echo: { ...draft, badge: true, outcome: ["archive"] },
+    }).echo.outcome,
+    null,
+  );
 });

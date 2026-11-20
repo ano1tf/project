@@ -416,6 +416,25 @@ export function makeMaterials() {
     concrete = stone([119, 126, 121], 57, "concrete"),
     warehouse = stone([80, 103, 111], 72, "corrugated"),
     roof = stone([72, 84, 87], 23, "corrugated");
+  const foliage = surface(256, (c, n) => {
+    scatter(c, n, [159, 176, 141], 51, 37);
+    const r = rng(708),
+      inks = ["#253e3ba0", "#9ab581a9", "#e1d6a485", "#526748ad", "#c5d5ab8a"];
+    for (let i = 0; i < 2300; i++) {
+      c.fillStyle = inks[i % inks.length];
+      c.beginPath();
+      c.ellipse(
+        r() * n,
+        r() * n,
+        0.72 + 2.66 * r(),
+        0.46 + 1.26 * r(),
+        r() * Math.PI,
+        0,
+        Math.PI * 2,
+      );
+      c.fill();
+    }
+  });
   const paintWear = repeated(
     surface(256, (c, n) => {
       scatter(c, n, [239, 235, 225], 19, 512);
@@ -510,12 +529,9 @@ export function makeMaterials() {
     dirt: standard(0x4b5740, { map: pavers }),
     grass: standard(0x435949, { map: pavers }),
     trunks: standard(0x5b5145),
-    leaves: [
-      standard(0x3e5b46),
-      standard(0x4b6955),
-      standard(0x52664b),
-      standard(0x6d7150),
-    ],
+    leaves: [0x547453, 0x618667, 0x78865a, 0x959161].map((color) =>
+      standard(color, { map: foliage, roughness: 0.91 }),
+    ),
     cargo: [
       standard(0x993b2e, {
         map: warehouse,

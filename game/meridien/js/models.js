@@ -1,6 +1,6 @@
 import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { clamp, expEase, lerp, TAU } from "./core.mjs";
+import { clamp, expEase, lerp, onRoad, TAU } from "./core.mjs";
 import { radialTexture, standard } from "./materials.js";
 import { advanceGait, gait } from "./acting.mjs";
 import { instrumentFace, DIAL_START, DIAL_SWEEP } from "./instruments.js";
@@ -341,6 +341,9 @@ function scalp(style, width) {
   return g;
 }
 const clothColors = {
+  salome: [0x507164, 0x283937],
+  dock: [0x875d37, 0x493e35],
+  messenger: [0x566e90, 0x33445c],
   ruste: [0x9e512d, 0x7d3b25],
   night: [0x314250, 0x243744],
   rain: [0xb5a34b, 0x82733e],
@@ -363,7 +366,7 @@ const fade = (x) => {
 };
 // A single, depth-tested tint. Head-on panes read through to the cabin, while
 // shallower views pick up the cool reflection; no transmission render pass.
-function windshield() {
+function windshield(weather) {
   return new T.ShaderMaterial({
     name: "Vitrage · teinte et réflexion rasante",
     side: T.DoubleSide,
@@ -374,6 +377,7 @@ function windshield() {
     uniforms: {
       ...T.UniformsUtils.clone(T.UniformsLib.fog),
       cabinView: { value: 0 },
+      ...weather,
     },
     vertexShader: `
       #include <fog_pars_vertex>
@@ -391,13 +395,27 @@ function windshield() {
       #include <fog_pars_fragment>
       varying vec3 paneNormal, paneRay;
       varying vec2 paneUV;
-      uniform float cabinView;
+      uniform float cabinView, paneRain, paneClock;
+      uniform vec3 paneSky, paneHorizon;
       void main() {
-        float edge = 1. - clamp(abs(dot(normalize(paneNormal), normalize(paneRay))), 0., 1.);
-        float gloss = pow(edge, 2.6);
-        float band = 1. - smoothstep(.02, .12, abs(paneUV.y - .63 + paneUV.x * .21));
-        vec3 tint = mix(vec3(.055, .102, .112), vec3(.23, .33, .38), gloss + band * .14);
-        gl_FragColor = vec4(tint, mix(.17 + gloss * .45 + band * .043, .045 + gloss * .22, cabinView));
+        vec3 n = normalize(paneNormal), ray = normalize(paneRay);
+        float edge = 1. - clamp(abs(dot(n,ray)), 0., 1.);
+        float gloss = edge*edge;
+        float sky = max(0., dot(reflect(-ray,n), mat3(viewMatrix)*vec3(0.,1.,0.)));
+        vec3 reflectance = mix(paneHorizon, paneSky, sky);
+        vec3 tint = mix(vec3(.048,.086,.091), reflectance, .15 + .74*gloss);
+        float opacity = mix(.13 + gloss*.53, .035 + gloss*.21, cabinView);
+        // Small streaks on the existing glazing. Not a second screen-space pass.
+        if (cabinView > .5 && paneRain > .045) {
+          vec2 at = paneUV*vec2(108.,28.);
+          at.x += paneUV.y*.32;
+          float lane = floor(at.x);
+          at.y += fract(lane*.721)*7.2 + paneClock * mix(.24,1.83,fract(lane*.279));
+          float trail = (1.-smoothstep(.03,.16,abs(fract(at.x)-.5)))*smoothstep(.51,.96,fract(at.y));
+          tint = mix(tint,paneHorizon,trail*.43);
+          opacity += paneRain*(.011+trail*.28);
+        }
+        gl_FragColor = vec4(tint, opacity);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         #include <fog_fragment>
@@ -407,12 +425,18 @@ function windshield() {
 
 export class ModelForge {
   constructor() {
+    this.glassWeather = {
+      paneSky: { value: new T.Color(0x557d96) },
+      paneHorizon: { value: new T.Color(0xb8c4c6) },
+      paneRain: { value: 0 },
+      paneClock: { value: 0 },
+    };
     this.common = {
       tire: standard(0x232526, { roughness: 0.96 }),
       tireEdge: standard(0x2e302e, { roughness: 0.88 }),
       under: standard(0x182527, { roughness: 0.49, metalness: 0.29 }),
       grille: standard(0x202c33, { roughness: 0.56, metalness: 0.44 }),
-      glass: windshield(),
+      glass: windshield(this.glassWeather),
       seat: standard(0x424644),
       piping: standard(0x817565),
       metal: standard(0x9aabad, { roughness: 0.35, metalness: 0.73 }),
@@ -494,13 +518,20 @@ export class ModelForge {
     o.renderOrder = 2;
     return o;
   }
+  conditions(climate, time, eco) {
+    const w = this.glassWeather;
+    w.paneSky.value.copy(climate.skyUniform.top.value);
+    w.paneHorizon.value.copy(climate.skyUniform.horizon.value);
+    w.paneRain.value = eco ? 0 : climate.wet;
+    w.paneClock.value = time;
+  }
   paint(color) {
     return new T.MeshPhysicalMaterial({
       color,
-      roughness: 0.31,
-      metalness: 0.48,
-      clearcoat: 0.49,
-      clearcoatRoughness: 0.23,
+      roughness: 0.29,
+      metalness: 0.38,
+      clearcoat: 0.62,
+      clearcoatRoughness: 0.18,
       side: T.DoubleSide,
     });
   }
@@ -999,6 +1030,20 @@ export class ModelForge {
         0.039,
         0.031,
       ).rotation.z = side * -0.18;
+      for (let finger = 0; finger < 3; finger++) {
+        const knuckle = ell(
+          hands,
+          skin,
+          hx + side * (0.028 - finger * 0.0135),
+          hy + 0.025 - finger * 0.0037,
+          0.047,
+          0.0105,
+          0.019,
+          0.015,
+        );
+        knuckle.rotation.x = -0.39;
+        knuckle.rotation.z = -side * 0.18;
+      }
       ell(
         hands,
         skin,
@@ -1142,7 +1187,7 @@ export class ModelForge {
       root = group(null),
       body = group(root),
       staticG = group(null),
-      glazing = detail ? m.glass.clone() : m.glass,
+      glazing = detail ? windshield(this.glassWeather) : m.glass,
       paint = this.paint(spec.accent),
       h = spec.height,
       d = spec.length * 0.5,
@@ -1768,6 +1813,64 @@ export class ModelForge {
         0.011,
         0.006,
       );
+    } else if (style === "dock") {
+      const highVis = standard(0xbba766, { roughness: 0.76 });
+      for (const y of [0.04, 0.084])
+        for (const side of [-1, 1])
+          line(
+            g,
+            highVis,
+            [0, y, side * 0.117],
+            [side * 0.161, y, side * 0.071],
+            0.026,
+            0.018,
+          );
+      box(g, this.common.darkMetal, -0.098, 0.196, -0.126, 0.096, 0.086, 0.028);
+      box(g, this.detail, -0.098, 0.218, -0.146, 0.084, 0.019, 0.012);
+    } else if (style === "messenger") {
+      const leather = this.common.leather;
+      line(
+        g,
+        leather,
+        [0.105, 0.336, -0.098],
+        [-0.14, 0.071, -0.118],
+        0.039,
+        0.021,
+      );
+      const satchel = box(
+        g,
+        leather,
+        -0.114,
+        -0.005,
+        0.139,
+        0.274,
+        0.283,
+        0.146,
+      );
+      satchel.rotation.z = 0.19;
+      box(g, fold, -0.119, 0.048, 0.22, 0.25, 0.139, 0.026).rotation.z = 0.19;
+      box(g, this.detail, -0.124, 0.007, 0.236, 0.046, 0.043, 0.01);
+    } else if (style === "salome") {
+      // Workshop apron, pockets and ruled pencil; baked into the existing skin batches.
+      box(g, fold, 0, 0.11, -0.104, 0.286, 0.34, 0.046);
+      box(g, this.common.leather, -0.058, 0.12, -0.136, 0.14, 0.113, 0.017);
+      line(
+        g,
+        standard(0xc29563),
+        [-0.074, 0.126, -0.151],
+        [-0.081, 0.244, -0.151],
+        0.014,
+        0.012,
+      );
+      for (const s of [-1, 1])
+        line(
+          g,
+          fold,
+          [s * 0.06, 0.237, -0.13],
+          [s * 0.074, 0.378, -0.066],
+          0.031,
+          0.018,
+        );
     } else if (style === "ines") {
       box(g, fold, -0.102, 0.183, -0.119, 0.093, 0.091, 0.02);
       box(g, this.detail, -0.115, 0.214, -0.132, 0.074, 0.022, 0.004);
@@ -1827,7 +1930,7 @@ export class ModelForge {
     tag.rotation.y = 0.12;
     flatten(g, chest, hero);
     const h = group(null),
-      main = hero || style === "ines" || style === "aya";
+      main = hero || style === "ines" || style === "aya" || style === "salome";
     const shape = style === "ines" ? 1.07 : style === "aya" ? 0.93 : 1;
     const jaw = bone(head, 0, 0.072, -0.084);
     const lids = [],
@@ -1952,6 +2055,28 @@ export class ModelForge {
         }
         ell(h, hair, 0.019, 0.202, -0.055, 0.064, 0.035, 0.036).rotation.z =
           -0.31;
+      } else if (style === "salome") {
+        ell(h, hairL, -0.012, 0.178, 0.097, 0.059, 0.058, 0.048);
+        for (const s of [-1, 1]) {
+          const rim = standard(0x5e584a, { metalness: 0.34 });
+          const ring = new T.Mesh(
+            new T.TorusGeometry(0.024, 0.0026, 5, 16),
+            rim,
+          );
+          ring.position.set(s * 0.033, 0.143, -0.103);
+          ring.scale.y = 0.72;
+          ring.rotation.y = -s * 0.08;
+          h.add(ring);
+          line(
+            h,
+            rim,
+            [s * 0.057, 0.145, -0.106],
+            [s * 0.09, 0.149, 0.006],
+            0.006,
+            0.008,
+          );
+        }
+        box(h, this.common.leather, 0, 0.147, -0.106, 0.024, 0.005, 0.006);
       } else if (hero) {
         ell(h, hair, 0.016, 0.133, 0.109, 0.052, 0.047, 0.051).rotation.z =
           -0.22;
@@ -1966,6 +2091,10 @@ export class ModelForge {
       ell(h, hair, 0, 0.13, 0.063, 0.086, 0.076, 0.048).rotation.x = -0.28;
       ell(h, hairL, -0.012, 0.221, -0.028, 0.053, 0.037, 0.054).rotation.x =
         -0.42;
+    }
+    if (style === "dock") {
+      ell(h, fold, 0, 0.228, 0.005, 0.106, 0.063, 0.105);
+      ell(h, coat, 0, 0.204, -0.008, 0.105, 0.021, 0.114);
     }
     if (style === "guard") {
       ell(h, fold, 0, 0.231, 0, 0.107, 0.045, 0.106);
@@ -2148,6 +2277,7 @@ export function poseHuman(
     headTurn = 0,
     tilt = 0,
     lean = 0,
+    bank = 0,
     brow = 0,
     mouth = 0,
     acting = false,
@@ -2184,12 +2314,14 @@ export function poseHuman(
     bob +
     breath * 0.005 * still -
     landing * 0.063;
-  o.pelvis.rotation.z = s * v * 0.041 + still * Math.sin(o.t * 0.96) * 0.018;
+  o.pelvis.rotation.z =
+    s * v * 0.041 + still * Math.sin(o.t * 0.96) * 0.018 + bank;
   o.pelvis.rotation.y = s * v * (0.037 + run * 0.041);
   o.torso.rotation.x =
     -b * 0.43 - run * 0.24 - lean - landing * 0.13 - tuck * 0.17;
   o.chest.rotation.y = -s * v * 0.134 + gesture * 0.32;
-  o.chest.rotation.z = -o.pelvis.rotation.z * 0.7 + gesture * 0.05;
+  o.chest.rotation.z =
+    -o.pelvis.rotation.z * 0.7 + gesture * 0.05 + bank * 0.46;
   o.head.rotation.x = 0.027 + b * 0.26 + run * 0.13 + tilt - breath * 0.025;
   o.head.rotation.z = gesture * -0.068 - o.pelvis.rotation.z * 0.34;
   o.mouthOpen = lerp(o.mouthOpen, mouth, expEase(23, dt));
@@ -2241,27 +2373,42 @@ export function poseHuman(
     lower.rotation.z = side * emphasis * 0.13;
   });
 }
-export function poseVehicle(car, dt, t, level = 0) {
+const rideTuning = {
+  coupe: [0.051, 0.105, 0.018, 7.2],
+  sedan: [0.045, 0.092, 0.014, 7.8],
+  sport: [0.038, 0.078, 0.011, 8.9],
+  van: [0.071, 0.133, 0.028, 5.8],
+};
+export function poseVehicle(car, dt, t, level = 0, reduced = false) {
   const m = car.model;
   m.root.position.set(car.x, car.y ?? 0, car.z);
   m.root.rotation.y = -car.heading;
   const speed = car.speed || 0,
     steer = car.steer || 0;
+  const [dive, roll, travel, response] =
+    rideTuning[car.spec.type] || rideTuning.coupe;
   const lean = clamp(
-    (car.yawRate ?? steer * 0.67) * speed * 0.0095,
-    -0.092,
-    0.092,
+    (car.yawRate ?? steer * 0.67) * speed * roll * 0.093,
+    -roll,
+    roll,
   );
-  m.body.rotation.z = lerp(m.body.rotation.z, -lean, expEase(7, dt));
+  m.body.rotation.z = lerp(m.body.rotation.z, -lean, expEase(response, dt));
   m.body.rotation.x = lerp(
     m.body.rotation.x,
-    clamp((car.accelG ?? 0) * -0.052, -0.064, 0.064) + car.damage * 0.023,
-    expEase(9, dt),
+    clamp((car.accelG ?? 0) * -dive, -0.082, 0.082) + car.damage * 0.023,
+    expEase(response + 1.3, dt),
   );
+  const meters = Math.abs(speed),
+    terrain = onRoad(car.x, car.z) ? 0.67 : 1.52;
   m.suspension =
-    ((m.suspension || 0) + dt * (7 + Math.abs(speed) * 0.61)) % TAU;
-  m.body.position.y =
-    Math.sin(m.suspension) * 0.013 * clamp(Math.abs(speed) / 12, 0, 1);
+    ((m.suspension || 0) + dt * meters * (terrain > 1 ? 4.25 : 1.9)) % TAU;
+  const bounce = reduced
+    ? 0
+    : (Math.sin(m.suspension) * 0.73 + Math.sin(m.suspension * 2) * 0.27) *
+      travel *
+      terrain *
+      clamp(meters / 13, 0, 1);
+  m.body.position.y = lerp(m.body.position.y, bounce, expEase(12, dt));
   if (m.cockpit) {
     const { wheel, needle, max } = m.cockpit;
     wheel.rotation.z = -steer * 0.82;

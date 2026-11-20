@@ -47,6 +47,7 @@ export class HarborAudio {
         this.tires = this.noiseVoice(325, 0, "bandpass");
         this.spray = this.noiseVoice(1690, 0, "bandpass", this.grit);
         this.water = this.noiseVoice(335, 0.095, "bandpass");
+        this.streetRoom = this.noiseVoice(312, 0, "bandpass", this.grit);
         this.vehicle = this.engineVoice(false);
         this.traffic = this.engineVoice(true);
         const voice = c.createOscillator(),
@@ -182,6 +183,9 @@ export class HarborAudio {
     sirenDistance,
     sirenPan,
     cover,
+    workshop = false,
+    square = 0,
+    minutes = 0,
   }) {
     if (!this.canPlay() || this.paused) return;
     this.target(
@@ -194,6 +198,23 @@ export class HarborAudio {
       this.water.gain.gain,
       0.27 * ocean * (0.83 + 0.17 * Math.sin(time * 1.2)),
     );
+    const active = minutes > 6 * 60 && minutes < 21.25 * 60;
+    this.target(
+      this.streetRoom.gain.gain,
+      workshop ? 0.076 : square * (active ? 0.062 : 0.02),
+      0.36,
+    );
+    this.target(
+      this.streetRoom.flt.frequency,
+      workshop ? 178 : 382 + 48 * Math.sin(time * 0.62),
+      0.42,
+    );
+    if (ocean > 0.58 && !cover && !car && time > (this.nextBell ?? 16)) {
+      this.nextBell = time + 36 + 12 * wet;
+      const now = this.context.currentTime;
+      this.tap(now, 413, 409, ocean * 0.036, 1.03, this.ambBus);
+      this.tap(now + 0.019, 627, 626, ocean * 0.021, 0.75, this.ambBus);
+    }
     const slip = clamp(Math.abs(car?.slip || 0) * 3.4 - 0.21, 0, 1),
       speed = Math.abs(car?.speed || 0);
     this.target(
@@ -273,8 +294,8 @@ export class HarborAudio {
   canPlay() {
     return Boolean(
       this.context?.state === "running" &&
-        this.options.sound &&
-        !this.background,
+      this.options.sound &&
+      !this.background,
     );
   }
   envelope(node, output, now, level, duration, tail) {
@@ -311,6 +332,25 @@ export class HarborAudio {
     this.envelope(source, output, now, level, duration);
     source.start(now);
     source.stop(now + duration + 0.008);
+  }
+  radio(locked) {
+    if (!this.canPlay() || this.context.currentTime < (this.nextRadio || 0))
+      return;
+    const now = this.context.currentTime;
+    this.nextRadio = now + (locked ? 0.89 : 0.35);
+    this.burst(
+      now,
+      "bandpass",
+      1780,
+      1.6,
+      locked ? 0.11 : 0.17,
+      locked ? 0.32 : 0.19,
+      this.master,
+    );
+    if (!locked) return;
+    this.tap(now + 0.075, 460, 395, 0.18, 0.23, this.master, "triangle");
+    this.tap(now + 0.312, 740, 724, 0.15, 0.29, this.master);
+    this.tap(now + 0.64, 521, 512, 0.11, 0.18, this.master);
   }
   footstep(surface, wetness, force, land = false, side = 0) {
     if (!this.canPlay() || this.paused) return;

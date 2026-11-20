@@ -7,6 +7,7 @@ import {
   DELIVERY_BAYS,
   GARDENS,
   QUAY_WALK,
+  PROMENADE,
   SILLAGE_SQUARE,
   SEMAPHORE,
   SILLAGE_ZEBRA,
@@ -15,10 +16,16 @@ import {
   STATION,
 } from "./data.mjs";
 import { clamp, distance, expEase, lerp, signalState, rng } from "./core.mjs";
+import { berthAt } from "./port.mjs";
+import { COMPTOIR } from "./port-layout.mjs";
+import { WORLD } from "./sectors.mjs";
+import { drawLaunch, paintRive, paintSondes } from "./rive-paper.js";
+import { launchAt } from "./sondes.mjs";
+import { LOG_TABLE } from "./rive-layout.mjs";
 
-const left = -232,
+const left = WORLD.extent.minX - 22,
   top = -198,
-  width = 437,
+  width = 205 - left,
   height = 383;
 const signalColors = { red: "#ffa38e", amber: "#f6d479", green: "#89d5b7" };
 const land = "#293e43",
@@ -88,7 +95,7 @@ function backdrop(world) {
   c.fillStyle = "#192a33";
   X.forEach((x, i) => c.fillRect(x - WX[i] / 2, minZ, WX[i], h));
   Z.forEach((z, i) => c.fillRect(minX, z - WZ[i] / 2, w, WZ[i]));
-  for (const f of [...QUAY_WALK, SILLAGE_SQUARE, ...GARDENS]) {
+  for (const f of [...QUAY_WALK, SILLAGE_SQUARE, ...PROMENADE, ...GARDENS]) {
     const garden = GARDENS.includes(f),
       x = f.x - f.w * 0.5,
       z = f.z - f.d * 0.5;
@@ -193,6 +200,8 @@ function backdrop(world) {
       }
     }),
   );
+  paintRive(c, true);
+  paintSondes(c, true);
   for (const bay of Object.values(DELIVERY_BAYS)) {
     c.save();
     c.translate(bay.x, bay.z);
@@ -231,7 +240,8 @@ function backdrop(world) {
           Math.abs(mid.x - f.x) < f.w / 2 + 0.55 &&
           Math.abs(mid.z - f.z) < f.d / 2 + 0.55,
       ) &&
-      b.bottom < 1
+      b.bottom < 1 &&
+      !b.dynamic
     ) {
       c.fillStyle = b.h < 1.65 ? "#796957" : "#aa9074";
       c.fillRect(b.x1, b.z1, b.x2 - b.x1, b.z2 - b.z1);
@@ -398,6 +408,60 @@ export class PlanView {
     c.scale(s, s);
     c.translate(-this.x, -this.z);
     c.drawImage(this.tiles, left, top, width, height);
+    const shutter = g.world.portSite.door;
+    if (shutter.enabled) {
+      c.fillStyle = "#eaad6d";
+      c.fillRect(
+        shutter.x1,
+        shutter.z1,
+        shutter.x2 - shutter.x1,
+        shutter.z2 - shutter.z1,
+      );
+    }
+    c.fillStyle = g.progress.port.venture.owned ? "#add6b3" : "#d1ab7a";
+    c.font = "600 0.89px monospace";
+    c.textAlign = "center";
+    c.fillText("COMPTOIR 12", COMPTOIR.x, COMPTOIR.z + 5.7);
+    const launch = launchAt(g.progress.time);
+    if (distance(p, launch) < (Math.max(w, h) / s) * 0.72)
+      drawLaunch(c, launch);
+    const record = g.progress.passage.outcome,
+      t = LOG_TABLE;
+    if (distance(p, t) < 26) {
+      c.fillStyle = "#766756";
+      c.fillRect(t.x - t.w / 2, t.z - t.d / 2, t.w, t.d);
+      c.fillStyle = record === "bulletin" ? "#cee3c0" : "#b1885e";
+      c.fillRect(t.x - 0.41, t.z - 0.28, 0.82, 0.49);
+      c.textAlign = "right";
+      c.font = "600 .98px monospace";
+      c.fillText(
+        record === "bulletin"
+          ? "TRACÉ AFFICHÉ"
+          : record === "families"
+            ? "POCHETTE DES FAMILLES"
+            : "REGISTRE",
+        t.x + t.w * 0.5,
+        t.z + 1.65,
+      );
+    }
+    const vessel = berthAt(g.progress.time);
+    if (vessel) {
+      c.save();
+      c.translate(vessel.x, vessel.z);
+      c.rotate(-vessel.yaw);
+      c.fillStyle = "#9c6252";
+      c.beginPath();
+      c.moveTo(0, -11);
+      c.lineTo(2.8, -6);
+      c.lineTo(2.8, 8);
+      c.lineTo(-2.8, 8);
+      c.lineTo(-2.8, -6);
+      c.closePath();
+      c.fill();
+      c.fillStyle = "#bfc6b1";
+      c.fillRect(-2, -5, 4, 4.7);
+      c.restore();
+    }
     const gate = g.world.station.gate;
     if (gate.enabled) {
       c.fillStyle = "#f4ac74";
@@ -504,6 +568,7 @@ export class PlanView {
     for (const q of g.life.fixed)
       if (q !== shot?.npc && distance(follow, q) < (Math.max(w, h) / s) * 0.8)
         person(q, "#d4cb9a");
+    for (const q of g.localPeople()) person(q, "#9bdec7");
     for (const q of g.life.officers)
       if (distance(p, q) < (Math.max(w, h) / s) * 0.8) person(q, "#ed9784");
     if (shot) {

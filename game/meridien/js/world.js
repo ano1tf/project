@@ -14,11 +14,18 @@ import {
   SILLAGE_ZEBRA,
   JUNCTION_ZEBRA,
   STATION,
+  ONDES,
+  WATCH,
 } from "./data.mjs";
 import { Solids, rng, signalState, onRoad, TAU } from "./core.mjs";
 import { makeMaterials, labelMaterial } from "./materials.js";
 import { dressHarbor } from "./harbor-set.js";
 import { buildStation } from "./station-set.js";
+import { civicSet } from "./civic-set.js";
+import { PortSite } from "./port-site.js";
+import { RiveSite } from "./rive-site.js";
+import { buildSondes } from "./sondes-site.js";
+import { GREVES_BRIDGE } from "./rive-layout.mjs";
 
 const BOX = new T.BoxGeometry(1, 1, 1),
   CYL = new T.CylinderGeometry(1, 1, 1, 9),
@@ -137,6 +144,7 @@ export class DistrictWorld {
     this.batch = new DistrictBatches(scene);
     this.footprints = [];
     this.interiors = [];
+    this.canopyContacts = [];
     this.lamps = [];
     this.bulbs = [];
     this.rnd = rng(470184);
@@ -144,6 +152,8 @@ export class DistrictWorld {
     this.roadGeometry();
     this.deliveryBays();
     this.buildDistrict();
+    this.portSite = new PortSite(this);
+    this.rive = new RiveSite(this);
     this.harbor();
     this.skyline();
   }
@@ -159,8 +169,16 @@ export class DistrictWorld {
       surface,
     });
     this.streetFinish();
+    const rig = { box, beam, sign, corner, mapped, surface, cylinder };
+    this.rive.build(rig);
+    this.sondes = buildSondes(this, rig);
     this.workboat(-203.7, 18.3, -0.19, 0.76, true);
-    this.staticGroup = this.batch.build(this.lamps);
+    this.portSite.vessel = this.workboat(-200, -108, 0, 0.89, true);
+    this.portDetail = onDetail;
+    this.staticGroup = this.batch.build(this.lamps, [
+      ...this.footprints,
+      ...this.canopyContacts,
+    ]);
     this.installSignals();
     this.tickSignals(0);
     // Plan (including the no-WebGL fallback) never requests the 3D lot.
@@ -181,8 +199,19 @@ export class DistrictWorld {
   collision(g, x, z, w, d, h, bottom = 0) {
     return this.solids.add(g.position.x + x, g.position.z + z, w, d, h, bottom);
   }
-  animateHarbor(t, eye, mode, reduced) {
+  animateHarbor(t, eye, mode, reduced, time) {
+    this.portSite.present(eye, time, mode, this.portDetail);
+    this.rive.present(eye, mode, this.portDetail);
+    this.sondes?.present(eye, time);
     this.harborMotion?.update(t, eye, mode, reduced);
+    if (this.civicNotice)
+      this.civicNotice.visible =
+        (eye.x - WATCH.x) ** 2 + (eye.z - WATCH.z) ** 2 < 53 ** 2;
+    if (this.civicGlazing) {
+      const range = mode === "low" ? 43 : 72;
+      this.civicGlazing.visible =
+        (eye.x - ONDES.x) ** 2 + (eye.z - ONDES.z) ** 2 < range ** 2;
+    }
     const asset = this.semaphoreAsset;
     if (!asset) return;
     const { x, z } = SEMAPHORE,
@@ -190,7 +219,10 @@ export class DistrictWorld {
     asset.root.visible = (eye.x - x) ** 2 + (eye.z - z) ** 2 < range ** 2;
     if (asset.root.visible) asset.sample(reduced ? 0 : t);
   }
-  isRoofed({ x, y, z }) {
+  setEcho(echo) {
+    this.setCivicNotice(echo.outcome);
+  }
+  isRoofed({ x, y = 0, z }) {
     return (
       y < 5 &&
       this.interiors.some(
@@ -199,6 +231,9 @@ export class DistrictWorld {
           Math.abs(z - lot.z) < lot.d * 0.5 - 0.24,
       )
     );
+  }
+  floor(p) {
+    return this.portSite.floor(p) ?? this.rive.floor(p);
   }
   groundSound(x, z) {
     if (this.isRoofed({ x, y: 0, z })) return "interior";
@@ -440,7 +475,14 @@ export class DistrictWorld {
       border: false,
       night: 0.04,
     });
-    for (const bay of Object.values(DELIVERY_BAYS)) {
+    const freight = labelMaterial("FRET", {
+      bg: "#33403e",
+      ink: "#edcd8c",
+      border: false,
+      night: 0.04,
+    });
+    for (const [id, bay] of Object.entries(DELIVERY_BAYS)) {
+      if (id === "grevesFreight") continue; // Styled with the lights of the industrial bank.
       const g = corner(bay.x, bay.z, -bay.heading);
       for (const side of [-1, 1]) {
         roadInk(g, m.roadGold, side * 1.34, 0.019, 0, 0.084, 0.012, 6.4);
@@ -459,7 +501,16 @@ export class DistrictWorld {
           tick.rotation.y = Math.PI * 0.29;
         }
       }
-      const sign = surface(g, mark, 0, 0.025, 0, 1.67, 0.46, 1);
+      const sign = surface(
+        g,
+        id === "garageFreight" ? freight : mark,
+        0,
+        0.025,
+        0,
+        1.67,
+        0.46,
+        1,
+      );
       const uv = sign.geometry.attributes.uv;
       for (let i = 0; i < 4; i++) uv.setXY(i, i % 2, 1 - (i >> 1));
       this.batch.add(g);
@@ -473,6 +524,7 @@ export class DistrictWorld {
       rgb,
       power,
       span,
+      sheltered: Boolean(g.userData.shelter),
     });
   }
   lampPost(x, z, dir = 1, street = true) {
@@ -585,6 +637,16 @@ export class DistrictWorld {
     this.service();
     this.market();
     this.quayPavilion();
+    civicSet(this, {
+      box,
+      cylinder,
+      corner,
+      mapped,
+      facade,
+      sign,
+      surface,
+      beam,
+    });
     this.station = buildStation(this, STATION, {
       box,
       corner,
@@ -607,7 +669,6 @@ export class DistrictWorld {
       [161, -42, 21, 34, 35, "slate"],
       [-59, 25, 20, 38, 14, "brick"],
       [-34, 25, 18, 30, 12, "cream"],
-      [20, 22, 35, 35, 21, "slate"],
       [107, 12, 43, 23, 14, "cream"],
       [160, 25, 24, 40, 24, "glass"],
       [-121, 73, 27, 13, 11, "brick"],
@@ -1409,6 +1470,13 @@ export class DistrictWorld {
       }
   }
   streetTree(x, z, factor = 1) {
+    this.canopyContacts.push({
+      x,
+      z,
+      w: 0.47 * factor,
+      d: 0.47 * factor,
+      kind: "tree",
+    });
     const m = this.m,
       g = corner(x, z),
       rr = this.rnd,
@@ -1510,12 +1578,22 @@ export class DistrictWorld {
     const m = this.m,
       g = corner(-186, 0);
     box(g, m.seaWall, 0, -0.05, -5.4, 1.35, 0.31, 337);
-    box(g, m.rail, 0, 1.015, -5.4, 0.071, 0.071, 335);
-    box(g, m.rail, 0, 0.62, -5.4, 0.056, 0.064, 334);
+    // The shore keeps its old collision everywhere except the deck opening.
+    const { minZ: entry, maxZ: exit } = GREVES_BRIDGE.bounds;
+    for (const [a, b] of [
+      [-172.9, entry],
+      [exit, 162.1],
+    ]) {
+      const z = (a + b) / 2,
+        d = b - a;
+      box(g, m.rail, 0, 1.015, z, 0.071, 0.071, d);
+      box(g, m.rail, 0, 0.62, z, 0.056, 0.064, d);
+      this.solids.add(-186, z, 0.29, d, 1.14);
+    }
     for (let z = -170; z < 160; z += 3.75)
-      box(g, m.iron, 0, 0.58, z, 0.082, 1.15, 0.091);
+      if (z <= entry || z >= exit)
+        box(g, m.iron, 0, 0.58, z, 0.082, 1.15, 0.091);
     this.batch.add(g);
-    this.solids.add(-186, -5.4, 0.29, 335, 1.14);
     for (const [x, z, s] of [
       [-179, -143, 1.05],
       [-177, -67, 0.88],
@@ -1564,7 +1642,6 @@ export class DistrictWorld {
       this.batch.add(s);
       this.lampPost(-178.8, zz - 5, 1, false);
     }
-    this.workboat(-211, 84, -0.33);
     this.workboat(-272, -211, 0.61, 0.86);
     const distant = corner(-306, -188);
     mapped(distant, m.seaWall, 0, -0.62, 0, 66, 2.06, 11, 5, false);
@@ -1773,7 +1850,7 @@ export class DistrictWorld {
       }
       beam(g, m.rail, [1.39, 0.62, 3.87], [0, 2.93, 4.04], 0.12);
       beam(g, m.iron, [0, 2.93, 4.04], [-1.3, 2.92, 6.43], 0.1);
-      this.harborMotion.float(g, x, -1.02, z, 2.44, 0.13);
+      return this.harborMotion.float(g, x, -1.02, z, 2.44, 0.13);
     } else this.batch.add(g);
   }
   crane(x, z, s) {

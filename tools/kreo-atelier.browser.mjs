@@ -28,9 +28,12 @@ const browser = await chromium.launch({
 const errors = [];
 const observe = (p) => {
   p.setDefaultTimeout(50000);
-  p.on('pageerror', (error) => errors.push(error.stack));
+  p.on('pageerror', (error) => errors.push(`${p.url()} · ${error.stack || error.message || String(error)}`));
   p.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
+    if (msg.type() === 'error') {
+      const { url, lineNumber } = msg.location();
+      errors.push(`${p.url()} · ${url || '(navigateur)'}:${lineNumber} · ${msg.text() || '(message vide)'}`);
+    }
   });
 };
 const url = (path) => new URL(path, origin).href;
@@ -84,6 +87,7 @@ async function checkRuntime(page, getter) {
     };
   }, getter);
   assert.ok(result.playing && result.parented && result.solid && !result.movingSolid);
+  assert.ok(await page.evaluate(() => window.testLockAttempts > 0));
   assert.equal(result.clips, 2);
   assert.deepEqual(result.relative, [0, 2.92, 0]);
   assert.ok(Math.abs(result.rotation - ((result.time % 12) / 12) * Math.PI * 2) < 0.001);
@@ -96,6 +100,15 @@ async function checkAtelier() {
     acceptDownloads: true,
   });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // An embedded preview or a file origin may reject pointer capture asynchronously.
+  // Check that Play, including the exported builds, still runs without page errors.
+  await context.addInitScript(() => {
+    window.testLockAttempts = 0;
+    Element.prototype.requestPointerLock = function () {
+      window.testLockAttempts++;
+      return Promise.reject(new DOMException('Capture bloquée dans cet aperçu', 'NotAllowedError'));
+    };
+  });
   const page = await context.newPage();
   observe(page);
   try {
@@ -237,6 +250,58 @@ async function checkAtelier() {
   }
 }
 
+async function checkComptoir() {
+  const page = await browser.newPage({ viewport: { width: 1110, height: 750 } });
+  observe(page);
+  try {
+    await page.goto(url('editor/?atelier=comptoir'));
+    const summary = page.locator('#atelierSummary');
+    await summary.waitFor();
+    assert.match(await summary.innerText(), /Comptoir 12/);
+    assert.ok(await page.locator('#atelierPlay').isDisabled(), 'a building has no motion clips');
+    await page.locator('#atelierStage canvas').waitFor();
+    await page.locator('#atelierInsert').click();
+    await page.locator('#arenaStudio').waitFor({ state: 'hidden' });
+    const root = await page.evaluate(() => KREO_EDITOR.selected);
+    const objects = (await snapshot(page)).objects;
+    const groupBy = (name) => objects.find((o) => o.name?.startsWith(name) && o.type === 'group');
+    const facade = groupBy('Enveloppe ·'), interior = groupBy('Bureau des manutentions'),
+      shutter = groupBy('Fermeture ·'), reserve = groupBy('Extension de la réserve');
+    assert.ok([facade, interior, shutter].every((group) => group?.parent === root));
+    assert.equal(reserve?.parent, interior.id);
+    await page.evaluate((id) => KREO_EDITOR.select(id), shutter.id);
+    await page.locator('#inspectorObj .switch:has(#inVisible)').click();
+    assert.equal((await snapshot(page)).objects.find((o) => o.id === shutter.id).visible, false);
+    assert.ok((await snapshot(page)).objects.find((o) => o.id === interior.id).visible);
+    console.log('✓ Comptoir 12 : exemple intégré, ajout au niveau et rideau masquable sans cacher le bureau');
+  } finally {
+    await page.close();
+  }
+}
+
+async function checkGreves() {
+  const page = await browser.newPage({viewport: {width:1110,height:750}});
+  observe(page);
+  try {
+    await page.goto(url('editor/?atelier=greves'));
+    await page.locator('#atelierSummary').filter({hasText:'banc de contrôle et réserve'}).waitFor();
+    await page.locator('#atelierStage canvas').waitFor();
+    await page.locator('#atelierInsert').click();
+    await page.locator('#arenaStudio').waitFor({state:'hidden'});
+    const root=await page.evaluate(()=>KREO_EDITOR.selected), objects=(await snapshot(page)).objects;
+    const bench=objects.find(o=>o.type==='group' && o.parent===root && o.name.startsWith('Banc de contrôle'));
+    const rack=objects.find(o=>o.type==='group' && o.parent===root && o.name.startsWith('Rayonnage'));
+    assert.ok(bench && rack);
+    assert.ok(objects.filter(o=>o.type==='mesh' && o.parent===bench.id).length>=20);
+    await page.evaluate(id=>KREO_EDITOR.select(id),rack.id);
+    await page.locator('#inspectorObj .switch:has(#inVisible)').click();
+    const desc=(await snapshot(page)).objects;
+    assert.equal(desc.find(o=>o.id===rack.id).visible,false);
+    assert.equal(desc.find(o=>o.id===bench.id).visible,true);
+    console.log('✓ Les Grèves : lot ouvert, ajouté, banc et réserve éditables séparément');
+  } finally {await page.close();}
+}
+
 async function checkLanding() {
   const desktop = await browser.newPage({
     viewport: { width: 1220, height: 674 },
@@ -255,7 +320,7 @@ async function checkLanding() {
       playable.map((name) => `game/${name}`),
     );
     await desktop.locator('.hero-demos').click();
-    await desktop.waitForURL('**/#showcase');
+    await desktop.waitForURL(url('#showcase'));
     await desktop.locator('#langToggle').click();
     assert.equal(await desktop.locator('#showcase-title').innerText(), 'Playable demos.');
     assert.equal(
@@ -266,13 +331,20 @@ async function checkLanding() {
     for (const [i, start] of ['#start-game', '#btnStart', '#btnPlay'].entries()) {
       const key = playable[i];
       if (i === 1) {
-        // Avoid waiting for 3 seconds of simulated time at software-rendered FPS.
+        // Keep the real WebGL path, but render only on race-state changes in
+        // software. A full-size shadow/HDR pass every RAF can starve the click.
         await desktop.route('**/game/course/js/main.js*', async (route) => {
           const response = await route.fetch();
+          const source = await response.text();
+          const render = 'post.render(dt, now / 1000);';
+          assert.ok(source.includes(render));
+          const body = process.env.WEBGL_SOFTWARE
+            ? source.replace(render, `if (window.testPaint !== race.state) { window.testPaint = race.state; ${render} }`)
+            : source;
           await route.fulfill({
             response,
             body:
-              (await response.text()) +
+              body +
               `
             window.raceForTest = () => race;
             window.roadFacesUp = () => {
@@ -335,7 +407,7 @@ async function checkLanding() {
     await phone.locator('#burger').tap();
     assert.equal(await phone.locator('#burger').getAttribute('aria-expanded'), 'true');
     await phone.locator('#mobileMenu a[href="#showcase"]').tap();
-    await phone.waitForURL('**/#showcase');
+    await phone.waitForURL(url('#showcase'));
     assert.equal(await phone.locator('#burger').getAttribute('aria-expanded'), 'false');
     const layout = await phone.locator('.demo-link').evaluateAll((links) =>
       links.map((a) => {
@@ -362,7 +434,11 @@ async function checkLanding() {
 }
 
 try {
-  if (process.env.KREO_TEST_PART !== 'landing') await checkAtelier();
+  if (process.env.KREO_TEST_PART !== 'landing') {
+    await checkAtelier();
+    await checkComptoir();
+    await checkGreves();
+  }
   if (process.env.KREO_TEST_PART !== 'atelier') await checkLanding();
   assert.deepEqual(errors, []);
 } finally {

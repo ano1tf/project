@@ -1,9 +1,50 @@
 import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { BOUNDS } from "./data.mjs";
+import { clamp } from "./core.mjs";
 
 // WebGL 2 texture arrays tile independently, including at lower mip levels. Windows,
 // masonry, pavement and sign art share one material instead of one submission per print.
 const TILE = 256;
+const groundSpan = [
+  BOUNDS.minX,
+  BOUNDS.minZ,
+  BOUNDS.maxX - BOUNDS.minX,
+  BOUNDS.maxZ - BOUNDS.minZ,
+];
+// Sub-metre, static occlusion from actual footprints. A single channel replaces
+// per-building decals (no extra submission, overdraw or animated shadow pass).
+function contactMap(lots) {
+  const size = 512,
+    data = new Uint8Array(size * size);
+  const [x0, z0, w, d] = groundSpan,
+    sx = size / w,
+    sz = size / d;
+  for (const lot of lots) {
+    const { x, z, w, d, kind } = lot;
+    if (kind === "interior" || kind === "canopy") continue;
+    const pad =
+        kind === "tree" ? 2.4 : Math.min(3.3, 0.91 + Math.min(w, d) * 0.076),
+      darkness = kind === "tree" ? 81 : 117;
+    const x1 = clamp(Math.floor((x - w / 2 - pad - x0) * sx), 0, size - 1),
+      x2 = clamp(Math.ceil((x + w / 2 + pad - x0) * sx), 0, size - 1),
+      z1 = clamp(Math.floor((z - d / 2 - pad - z0) * sz), 0, size - 1),
+      z2 = clamp(Math.ceil((z + d / 2 + pad - z0) * sz), 0, size - 1);
+    for (let j = z1; j <= z2; j++) {
+      const dz = Math.max(0, Math.abs(z0 + (j + 0.5) / sz - z) - d / 2);
+      for (let i = x1; i <= x2; i++) {
+        const dx = Math.max(0, Math.abs(x0 + (i + 0.5) / sx - x) - w / 2),
+          amount = Math.max(0, 1 - Math.sqrt(dx * dx + dz * dz) / pad),
+          n = i + j * size;
+        data[n] = Math.max(data[n], Math.round(darkness * amount * amount));
+      }
+    }
+  }
+  const texture = new T.DataTexture(data, size, size, T.RedFormat);
+  texture.minFilter = texture.magFilter = T.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
 class DistrictPrints {
   constructor() {
     this.layers = [new Uint8Array(TILE * TILE * 4).fill(255)];
@@ -94,7 +135,7 @@ class DistrictPrints {
 }
 
 const vertex = `
-#ifdef CINEMA
+#ifdef CAST_SUN
 #include <common>
 #include <shadowmap_pars_vertex>
 #endif
@@ -110,17 +151,20 @@ varying vec3 vPaint, vEmit, vNormal;
 varying vec2 vPrint;
 varying vec4 vSurface;
 varying vec3 vView;
-#ifdef CINEMA
+#ifdef CAST_SUN
 varying vec3 vDirect;
 #endif
 void main(){
   vec4 p = modelViewMatrix * vec4(position, 1.);
   vView = vec3(cameraPosition.x-position.x,cameraPosition.y-position.y,cameraPosition.z-position.z);
   float fromSky = clamp(normal.y*.57+.45,.06,1.);
-  float edge = mix(surface.w,1.,max(normal.y,0.));
-  float sun = max(dot(normal,sunVector),0.);
-  vPaint = tint*(mix(penumbra,fill,fromSky)+lampRGB*night)*edge;
-  #ifdef CINEMA
+  bool roofed = surface.w < 0.;
+  float edge = mix(abs(surface.w),1.,max(normal.y,0.));
+  float skyAccess = roofed ? .40 : 1.;
+  float sun = max(dot(normal,sunVector),0.) * (roofed ? .12 : 1.);
+  vec3 bounce = mix(penumbra,fill,fromSky)*skyAccess;
+  vPaint = tint*(bounce + lampRGB*max(night, roofed ? .88 : .0))*edge;
+  #ifdef CAST_SUN
     vDirect=tint*sun*sunlight*edge;
     vec4 worldPosition = vec4(position, 1.);
     vec3 transformedNormal = normalMatrix * normal;
@@ -138,7 +182,7 @@ void main(){
   gl_Position = projectionMatrix * p;
 }`;
 const fragment = `
-#ifdef CINEMA
+#ifdef CAST_SUN
 #include <common>
 #include <packing>
 #include <shadowmap_pars_fragment>
@@ -149,6 +193,8 @@ varying vec3 vDirect;
 uniform highp sampler2DArray prints;
 #ifndef ECO
 uniform highp sampler2DArray reliefs;
+uniform sampler2D detailGrain, groundContact;
+uniform vec4 groundSpan;
 varying vec2 vRelief;
 #endif
 uniform vec3 roofSky, horizon, fogColor, sunlight, sunVector;
@@ -160,8 +206,11 @@ void main(){
   vec2 coord = vSurface.y>.5 ? vPrint : clamp(vPrint, .002, .998);
   vec4 pigment=texture(prints, vec3(coord,vSurface.x));
   vec3 lit=vPaint;
-  #ifdef CINEMA
-    lit+=vDirect*mix(.26,1.,getShadowMask());
+  #ifdef CAST_SUN
+    float sunMask = 1.;
+    if (sunVector.y > .05 && dot(vDirect,vec3(1.)) > .0003)
+      sunMask = mix(.26,1.,getShadowMask());
+    lit+=vDirect*sunMask;
   #endif
   float dist2 = dot(vView,vView);
   vec3 n = normalize(vNormal);
@@ -182,16 +231,39 @@ void main(){
       }
     }
   #endif
-  vec3 col = lit * pigment.rgb * microLight + vEmit * pigment.a * (.51 + pigment.rgb * 1.04);
   vec3 eye = vView * inversesqrt(max(dist2, .001));
   float grazing = 1. - clamp(abs(dot(eye,n)), 0., 1.);
-  float spec=grazing*grazing*grazing*vSurface.z;
-  vec3 reflected=mix(roofSky,horizon,.19+grazing*.65);
-  // Satin masonry / painted signs are matte. Asphalt accumulates a sky sheen at a shallow angle.
-  float puddle=wet*(.29+clamp(pigment.r*4.,.04,.49));
-  col += reflected*spec*(.068+max(n.y,0.)*puddle*.83);
+  float up = max(n.y, 0.);
+  float outside = step(0.,vSurface.w);
+  float moisture = wet * outside * smoothstep(.44,.89,up) * (1.-.43*pigment.r);
   #ifndef ECO
-    col += sunlight*spec*evening*.085;
+    vec3 world = cameraPosition-vView;
+    if (world.y < 2.6 && outside > .5 && dist2 < 11025.) {
+      vec2 onLand = (world.xz-groundSpan.xy)/groundSpan.zw;
+      float occlusion = all(greaterThanEqual(onLand,vec2(0.))) && all(lessThanEqual(onLand,vec2(1.))) ? texture2D(groundContact,onLand).r : 0.;
+      microLight *= 1.-occlusion*(1.-smoothstep(.29,2.6,world.y))*(1.-smoothstep(4900.,11025.,dist2));
+    }
+    // World-space wear breaks identical repetitions. Reuse the sky's packed noise.
+    if (vSurface.y > .5 && dist2 < 14400.) {
+      vec2 uv = world.xz + abs(n.xz)*world.y*.74;
+      vec2 grit = texture2D(detailGrain,uv*.137).rg;
+      float presence = 1.-smoothstep(4096.,14400.,dist2);
+      pigment.rgb *= 1. + (grit.r-.48)*presence*.39;
+      microLight *= 1. + (grit.g-.5)*presence*.15;
+      moisture *= .69+.57*smoothstep(.23,.79,grit.g);
+    }
+  #endif
+  vec3 col = lit * pigment.rgb * microLight * (1.-.24*moisture)
+    + vEmit * pigment.a * (.49 + pigment.rgb * 1.12);
+  vec3 rdir = reflect(-eye,n);
+  float skyMix = smoothstep(0.,.84,rdir.y);
+  vec3 reflected = mix(horizon,roofSky,skyMix);
+  float fresnel = grazing*grazing*grazing;
+  col += reflected * (vSurface.z*(.024 + fresnel*.40) + moisture*(.12 + fresnel*.73)) * mix(.27,1.,outside);
+  #ifndef ECO
+    float sunShine = max(dot(rdir,sunVector),0.);
+    float edgeHot = pow(sunShine, mix(7.,35.,moisture));
+    col += sunlight * edgeHot * (vSurface.z*.067 + moisture*.24) * (.19+.81*evening) * outside;
   #endif
   float clarity=exp2(-dist2*veil);
   gl_FragColor=vec4(mix(fogColor,col,clarity),1.);
@@ -199,7 +271,7 @@ void main(){
   #include <colorspace_fragment>
 }`;
 
-function coat({ prints, reliefs }) {
+function coat({ prints, reliefs }, contact) {
   return new T.ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
@@ -208,6 +280,9 @@ function coat({ prints, reliefs }) {
       ...T.UniformsUtils.clone(T.UniformsLib.lights),
       prints: { value: prints },
       reliefs: { value: reliefs },
+      detailGrain: { value: null },
+      groundContact: { value: contact },
+      groundSpan: { value: new T.Vector4(...groundSpan) },
       fill: { value: new T.Color() },
       penumbra: { value: new T.Color() },
       roofSky: { value: new T.Color() },
@@ -272,7 +347,7 @@ export class DistrictBatches {
       cell.objects.push(object);
     });
   }
-  build(lamps) {
+  build(lamps, occluders) {
     const root = new T.Group();
     root.name = "Port-Lumière · atlas et secteurs";
     const groups = [];
@@ -298,7 +373,7 @@ export class DistrictBatches {
       geom.computeBoundingSphere();
       groups.push({ geom, detail, box, far, localRange });
     }
-    this.material = coat(this.prints.finish());
+    this.material = coat(this.prints.finish(), contactMap(occluders));
     for (const { geom, detail, box, far, localRange } of groups) {
       const mesh = new T.Mesh(geom, this.material);
       mesh.castShadow = !detail && !far;
@@ -330,7 +405,11 @@ export class DistrictBatches {
     const color = m.color,
       emit = m.emissive;
     const normal = g.attributes.normal,
-      isPaint = m.roughness < 0.76;
+      isPaint = m.roughness < 0.76,
+      roofed = Boolean(
+        object.parent?.userData.shelter ||
+        object.parent?.parent?.userData.shelter,
+      );
     const reflective = isPaint
       ? 0.28 + m.metalness * 0.49 + (0.76 - m.roughness) * 0.44
       : 0.047;
@@ -353,7 +432,9 @@ export class DistrictBatches {
       surf[q] = layer;
       surf[q + 1] = repeat;
       surf[q + 2] = reflective;
-      surf[q + 3] = 0.76 + 0.24 * Math.max(0, Math.min(1, y / 2.2));
+      // Sign encodes a light volume without increasing the vertex stride.
+      surf[q + 3] =
+        (roofed ? -1 : 1) * (0.73 + 0.27 * Math.max(0, Math.min(1, y / 2.62)));
       if (y > 12) continue;
       for (const l of lamps) {
         const dx = l.x - x,
@@ -361,12 +442,14 @@ export class DistrictBatches {
         if (Math.abs(dx) > 13 || Math.abs(dz) > 13) continue;
         const dy = l.y - y,
           d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > 171) continue;
+        const bound = l.sheltered ? l.span ** 2 : 171;
+        if (d2 > bound) continue;
+        const transmission = l.sheltered && !roofed ? 0.15 : 1;
         const cosine =
           (dx * normal.getX(i) + dy * normal.getY(i) + dz * normal.getZ(i)) /
           Math.sqrt(d2 + 0.01);
         const energy =
-          ((l.power * 0.38 * (1 - d2 / 171)) / (9 + d2)) *
+          ((l.power * transmission * 0.38 * (1 - d2 / bound)) / (9 + d2)) *
           (0.1 + Math.max(0, cosine));
         // The lantern colors are already from the shared style palette.
         lit[j] += (((l.rgb >> 16) & 255) / 255) * energy;
@@ -381,21 +464,25 @@ export class DistrictBatches {
     g.setAttribute("relief", new T.BufferAttribute(relief, 2));
     return g;
   }
-  setQuality(mode) {
+  setQuality(mode, shadows) {
     this.mode = mode;
     this.material.defines =
-      mode === "low" ? { ECO: 1 } : mode === "high" ? { CINEMA: 1 } : {};
-    this.material.lights = mode === "high";
+      mode === "low" ? { ECO: 1 } : shadows ? { CAST_SUN: 1 } : {};
+    this.material.lights = shadows;
     this.material.needsUpdate = true;
   }
   lighting(climate, eye, { day, twilight, power }) {
     const u = this.material.uniforms,
       sky = climate.skyUniform;
-    u.fill.value.setHex(0xb3c9d8).multiplyScalar(0.75 + day * 0.66);
-    u.penumbra.value.setHex(0x73838b).multiplyScalar(0.64 + day * 0.38);
+    u.detailGrain.value = sky.grain.value;
+    u.fill.value
+      .setHex(0xadc8df)
+      .lerp(sky.horizon.value, 0.16 + twilight * 0.18)
+      .multiplyScalar(0.52 + day * 0.9 + twilight * 0.17);
+    u.penumbra.value.setHex(0x788790).multiplyScalar(0.46 + day * 0.47);
     u.sunlight.value
       .copy(sky.sunTint.value)
-      .multiplyScalar(climate.sun.intensity * 0.57 + 0.11);
+      .multiplyScalar(climate.sun.intensity * 0.63);
     u.sunVector.value.copy(sky.sunDir.value);
     u.fogColor.value.copy(climate.fog.color);
     u.roofSky.value.copy(sky.top.value);

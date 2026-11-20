@@ -1,9 +1,16 @@
-export const BOUNDS = Object.freeze({
-  minX: -187,
-  maxX: 182,
-  minZ: -171,
-  maxZ: 160,
-});
+import { COMPTOIR, PORT_BAY } from "./port-layout.mjs";
+import {
+  GREVES_BAY,
+  GREVES_BRIDGE,
+  GREVES_WORKSHOP,
+  MINA_BOARD,
+  RIVE,
+} from "./rive-layout.mjs";
+import { WORLD } from "./sectors.mjs";
+import { DOCKS } from "./sondes.mjs";
+
+// The old grid uses the original bank extent; the world includes the other lands.
+export { PORT_BOUNDS as BOUNDS } from "./sectors.mjs";
 export const X = [-154, -86, -12, 64, 136];
 export const Z = [-142, -78, -10, 58, 126];
 export const WX = [16, 15, 21, 15, 15];
@@ -61,7 +68,106 @@ export const SEMAPHORE = {
   scale: 1.08,
   approach: { x: -143.12, z: 107.64 },
 };
+// The same sites drive the meshes, walkable doors, camera and both maps.
+export const ONDES = Object.freeze({
+  x: 44.4,
+  z: 17.4,
+  w: 16,
+  d: 15,
+  h: 4.72,
+  door: { x: 44.4, z: 25.63, height: 2.86, sign: "ENTRÉE · ATELIER DES ONDES" },
+  witness: { x: 42.3, z: 19.25, heading: 2.34 },
+  badge: { x: 39.55, z: 17.3 },
+  receiver: { x: 48.25, z: 16.25 },
+});
+export const WATCH = Object.freeze({ x: -176.8, z: 108.3, w: 6.8, d: 4.75 });
+export const PASSAGE = Object.freeze({ x: 17.55, z: 18.8, w: 3.64, d: 38 });
+export const LOCAL_ROLES = {
+  5: {
+    style: "messenger",
+    name: "La coursière des Tisserands",
+    hours: [6, 19],
+    advice:
+      "Traversez le passage entre les deux immeubles. C’est plus tranquille que le boulevard.",
+    path: [
+      [17.55, 3.5],
+      [17.55, 33],
+      [22.8, 34.8],
+      [33.7, 34.62],
+      [43.9, 34.8, 3.8],
+      [41.5, 37.4],
+      [22.0, 38.42],
+      [17.55, 35.4],
+    ],
+  },
+  14: {
+    style: "dock",
+    name: "L’électricien de la Darse",
+    hours: [16, 3],
+    advice:
+      "Le poste de veille ? Entre la promenade du quai et l’ancienne voie ferrée, côté estuaire.",
+    path: [
+      [55.05, 12.62],
+      [55.04, 28.3],
+      [54.77, 32.7],
+      [45.71, 31.8, 5.5],
+      [44.4, 27.9],
+      [49.3, 27.75],
+      [55.05, 28.3],
+    ],
+  },
+};
+// Static parking outside the lane routes. These two cars collide, but aren't
+// traffic IDs and aren't serialized as vehicles owned by Noa.
+export const LOCAL_PARKING = [
+  {
+    id: "estuaire",
+    x: 33.42,
+    z: 13.41,
+    heading: 0,
+    accent: "#50726a",
+    name: "Utilitaire de l’Atelier",
+  },
+  {
+    id: "mistral",
+    x: 55.09,
+    z: 5.52,
+    heading: 0,
+    accent: "#ac9b75",
+    name: "Compacte des Tisserands",
+  },
+];
+export const PROMENADE = [
+  PASSAGE,
+  { x: 44.4, z: 30.3, w: 21.7, d: 10.5 },
+  { x: 53.9, z: 17.8, w: 2.7, d: 24.5 },
+  { x: 7.5, z: 37.8, w: 15.4, d: 11.0 },
+  { x: WATCH.x, z: WATCH.z, w: 10.7, d: 8.4 },
+];
 export const PLACES = {
+  greves: GREVES_WORKSHOP.door,
+  grevesDesk: GREVES_WORKSHOP.desk,
+  grevesLog: MINA_BOARD,
+  sondesPort: DOCKS.port,
+  sondesGreves: DOCKS.greves,
+  bridge: {
+    ...GREVES_BRIDGE.walk[0],
+    label: GREVES_BRIDGE.name,
+    sign: "PONT DES GRÈVES",
+    kind: "place",
+    height: 2.15,
+  },
+  comptoir: {
+    ...COMPTOIR.door,
+    label: "Comptoir 12",
+    sign: "COMPTOIR 12 · QUAI DES MARÉES",
+    kind: "shop",
+  },
+  comptoirDesk: {
+    ...COMPTOIR.desk,
+    label: "Bureau du Comptoir 12",
+    sign: "COMPTOIR 12 · CAISSE",
+  },
   cafe: {
     x: -130,
     z: 87.7,
@@ -117,6 +223,33 @@ export const PLACES = {
     kind: "side",
     height: 2.5,
   },
+  ondes: {
+    ...ONDES.witness,
+    label: "Atelier des Ondes",
+    sign: "ATELIER DES ONDES",
+    kind: "shop",
+    height: 2.25,
+  },
+  watch: {
+    x: WATCH.x + 0.51,
+    z: WATCH.z + 1.19,
+    label: "Poste de veille des Marées",
+    sign: "POSTE DE VEILLE · REGISTRE",
+    kind: "place",
+    height: 1.75,
+  },
+  badge: {
+    ...ONDES.badge,
+    label: "Plaque de commutation",
+    sign: "COMMUTATEUR · SALOMÉ",
+    height: 1.6,
+  },
+  receiver: {
+    ...ONDES.receiver,
+    label: "Récepteur de l’Atelier",
+    sign: "RÉCEPTEUR À BANDE",
+    height: 1.56,
+  },
   depot: {
     x: -172,
     z: -108,
@@ -152,6 +285,8 @@ export const PLACES = {
 // Roadside hand-offs for players who stay in the vehicle. The indoor/walking
 // interaction points stay usable, including for saves from prior versions.
 export const DELIVERY_BAYS = {
+  garageFreight: PORT_BAY,
+  grevesFreight: GREVES_BAY,
   relay: {
     x: 94,
     z: 52.72,
@@ -172,6 +307,8 @@ export const DELIVERY_BAYS = {
 export const MAP_PLACES = [
   "cafe",
   "semaphore",
+  "watch",
+  "comptoir",
   "hangar",
   "station",
   "belvedere",
@@ -179,7 +316,12 @@ export const MAP_PLACES = [
   "garage",
   "repair",
   "relay",
+  "ondes",
   "depot",
+  "bridge",
+  "greves",
+  "sondesPort",
+  "sondesGreves",
 ];
 export const LOCKED_YARD = { x1: -136.6, x2: -99.5, z1: -123.6, z2: -101.2 };
 export const VEHICLES = {
@@ -318,7 +460,7 @@ export const STORY = {
   },
   done: {
     title: "Port-Lumière vous attend",
-    text: "Chapitre terminé. Explorez la ville ou acceptez une livraison sur le quai.",
+    text: "Chapitre terminé. Consultez les nouvelles pistes du téléphone, explorez ou prenez une livraison.",
     target: null,
   },
 };
@@ -451,9 +593,15 @@ export const DISTRICTS = [
   { name: "LA DARSE", x: -112, z: -57 },
   { name: "LE SILLAGE", x: -104, z: 77 },
   { name: "LES VERRIÈRES", x: 97, z: -44 },
+  { name: "LES TISSERANDS", x: 22, z: 22 },
   { name: "LES ATELIERS", x: 98, z: 75 },
+  { name: "RIVE DES GRÈVES", x: -294, z: 92.5 },
 ];
 export function districtName(x, z) {
+  const area = WORLD.at(x, z);
+  if (area === RIVE) return [RIVE.name, "Quai des Calfats"];
+  if (area === GREVES_BRIDGE)
+    return [GREVES_BRIDGE.name, "Traversée de l’estuaire"];
   if (
     Math.abs(x - STATION.x) < STATION.w / 2 &&
     Math.abs(z - STATION.z) < STATION.d / 2
@@ -467,6 +615,8 @@ export function districtName(x, z) {
     return z < -43
       ? ["La Darse", "Rue des Chantiers"]
       : ["Le Sillage", "Rue du Sillage"];
+  if (x > -2 && x < 56.5 && z > 0 && z < 50)
+    return ["Les Tisserands", "Passage des Verrières"];
   return z < 49
     ? ["Les Verrières", "Boulevard des Verrières"]
     : ["Les Ateliers", "Avenue de l’Estuaire"];

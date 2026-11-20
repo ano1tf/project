@@ -64,6 +64,8 @@ Champs racine : `format: "kreo.asset"`, `version: 1`, `name`, `objects` et `desc
 ## Fichiers utiles
 
 - [`exemples/semaphore.kreo-asset.json`](exemples/semaphore.kreo-asset.json) — même fichier dans l’aperçu, l’éditeur et le quartier du Sillage de Méridien.
+- [`exemples/comptoir-12.kreo-asset.json`](exemples/comptoir-12.kreo-asset.json) — bâtiment de fret, en quatre groupes éditables. [Ouvrir dans Kreo](../?atelier=comptoir). Pour inspecter l’intérieur après insertion, masquez le groupe **Fermeture · rideau de quai** ; la réserve est séparée sous **Bureau des manutentions**. Dans Méridien, ces états suivent la concession et l’aménagement enregistrés dans le carnet.
+- [`exemples/atelier-des-greves.kreo-asset.json`](exemples/atelier-des-greves.kreo-asset.json) — banc, réserve et armoire éditables séparément. [Ouvrir dans Kreo](../?atelier=greves). Méridien utilise ce lot de détail à proximité, sans en tirer les collisions ni les actions de l’atelier.
 - `asset-format.mjs` — validation pure, commune au terminal et au navigateur.
 - `animation.mjs` — lecture et assemblage hiérarchique, embarqués par l’export autonome.
 - `assembly.js` — montage et lecture depuis les données dans un hôte Three.js, utilisé par l’aperçu et Méridien.

@@ -13,6 +13,15 @@ export class ViewLook {
 
     view.addEventListener("pointerdown", (e) => this.down(e));
     view.addEventListener("pointermove", (e) => this.move(e));
+    // The game owns a touch look drag. Don't let Chromium classify it as a
+    // fling and suppress an independent tap on the HUD just after release.
+    view.addEventListener(
+      "touchmove",
+      (e) => {
+        if (this.drag?.touch && e.cancelable) e.preventDefault();
+      },
+      { passive: false },
+    );
     view.addEventListener("mousemove", (e) => {
       if (this.aim && this.locked && this.available())
         this.turn(e.movementX, e.movementY);
@@ -86,7 +95,12 @@ export class ViewLook {
       }
     }
     this.reset();
-    this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    this.drag = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      touch: e.pointerType === "touch",
+    };
     try {
       this.view.setPointerCapture(e.pointerId);
     } catch {}

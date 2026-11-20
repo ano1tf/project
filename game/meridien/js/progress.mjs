@@ -1,5 +1,4 @@
 import {
-  BOUNDS,
   START,
   STATION,
   VEHICLES,
@@ -13,10 +12,29 @@ import {
   RAIN_PRICE,
 } from "./data.mjs";
 import { clamp } from "./core.mjs";
+import { WORLD } from "./sectors.mjs";
+import { echoPhase, freshEcho, restoreEcho } from "./echo.mjs";
+import { freshPort, restorePort } from "./port.mjs";
+import { freshWorkshop, restoreWorkshop } from "./littoral.mjs";
+import { freshPassage, passagePhase, restorePassage } from "./passage.mjs";
+import { DOCKS, freshTransit, restoreTransit } from "./sondes.mjs";
+import {
+  CASH_LIMIT,
+  gameMinute,
+  postCash,
+  restoreLedger,
+} from "./accounts.mjs";
 
-export const SAVE_KEY = "meridien:progress:v1";
+export const LEGACY_SAVE_KEY = "meridien:progress:v1";
+export const SAVE_KEY = "meridien:progress:v2";
 export const PREF_KEY = "meridien:settings:v1";
-export const VERSION = 1;
+export const VERSION = 2;
+export const SAVE_SLOTS = Object.freeze([0, 1, 2]);
+const ACTIVE_SLOT = "meridien:active-slot:v1";
+const SAVE_BYTES = 256 * 1024;
+export const slotName = (slot) => `Carnet ${slot + 1}`;
+const slotKey = (slot, base = SAVE_KEY) =>
+  slot === 0 ? base : `${base}:carnet-${slot + 1}`;
 const finite = (n, fallback) =>
   typeof n === "number" && Number.isFinite(n) ? n : fallback;
 const cars = ["mistral", ...GARAGE_STOCK];
@@ -44,27 +62,32 @@ export function freshProgress() {
     alert: createAlert(),
     custody: null,
     courier: { stage: "idle", time: 0, runs: 0, best: null },
+    echo: freshEcho(),
+    port: freshPort(),
+    workshop: freshWorkshop(),
+    passage: freshPassage(),
+    transit: freshTransit(),
+    ledger: [],
     tracking: "story",
     waypoint: null,
   };
 }
-const capX = (n, f) =>
-  clamp(finite(n, f), BOUNDS.minX + 0.65, BOUNDS.maxX - 0.65);
-const capZ = (n, f) =>
-  clamp(finite(n, f), BOUNDS.minZ + 0.65, BOUNDS.maxZ - 0.65);
 const stages = ["contact", "hangar", "archive", "belvedere", "done"];
-const directions = ["story", "courier", "custom"];
+const directions = ["story", "courier", "echo", "passage", "freight", "custom"];
 export function validateProgress(p) {
-  if (!p || p.version !== VERSION) return null;
+  if (!p || (p.version !== 1 && p.version !== VERSION)) return null;
   const clean = freshProgress();
   clean.position = {
-    x: capX(p.position?.x, START.x),
-    z: capZ(p.position?.z, START.z),
+    ...WORLD.restore(p.position, START),
     heading: clamp(finite(p.position?.heading, START.heading), -1000, 1000),
   };
-  clean.cash = Math.floor(clamp(finite(p.cash, INITIAL_CASH), 0, 999999));
+  clean.cash = Math.floor(clamp(finite(p.cash, INITIAL_CASH), 0, CASH_LIMIT));
   if (stages.includes(p.stage)) clean.stage = p.stage;
-  if (clean.stage === "done" && Object.hasOwn(ENDINGS, p.ending))
+  if (
+    clean.stage === "done" &&
+    typeof p.ending === "string" &&
+    Object.hasOwn(ENDINGS, p.ending)
+  )
     clean.ending = p.ending;
   else if (clean.stage === "done") clean.stage = "belvedere";
   clean.hasRaincoat = p.hasRaincoat === true;
@@ -82,8 +105,7 @@ export function validateProgress(p) {
     if (c && typeof c === "object" && !Array.isArray(c)) {
       const d = defaultVehicle(id);
       clean.vehicles[id] = {
-        x: capX(c.x, d.x),
-        z: capZ(c.z, d.z),
+        ...WORLD.restore(c, d),
         heading: clamp(finite(c.heading, d.heading), -1000, 1000),
         damage: clamp(finite(c.damage, 0), 0, 0.94),
       };
@@ -99,8 +121,7 @@ export function validateProgress(p) {
     const c = p.street?.seized?.[id];
     if (!Number.isFinite(c?.x) || !Number.isFinite(c?.z)) continue;
     clean.street.seized[id] = {
-      x: capX(c.x, START.x),
-      z: capZ(c.z, START.z),
+      ...WORLD.restore(c, START),
       heading: clamp(finite(c.heading, 0), -1000, 1000),
       damage: clamp(finite(c.damage, 0), 0, 0.94),
     };
@@ -120,8 +141,7 @@ export function validateProgress(p) {
       visible: clamp(finite(a.visible, 0), 0, 19),
       stop: clamp(finite(a.stop, 0), 0, CONTROL_SECONDS),
       last: {
-        x: capX(a.last?.x, clean.position.x),
-        z: capZ(a.last?.z, clean.position.z),
+        ...WORLD.restore(a.last, clean.position),
       },
     };
   if ([2, 3].includes(p.custody?.level)) {
@@ -136,33 +156,99 @@ export function validateProgress(p) {
   const time = clamp(finite(p.courier?.time, 0), 0, 155);
   if (time > 0 && ["relay", "depot"].includes(p.courier?.stage))
     Object.assign(clean.courier, { stage: p.courier.stage, time });
+  clean.echo = restoreEcho(p.echo, clean.stage);
+  clean.port = restorePort(p.port, clean.time, clean.vehicles);
+  clean.ledger = restoreLedger(p.ledger, gameMinute(clean));
+  clean.workshop = restoreWorkshop(p.workshop, gameMinute(clean));
+  clean.passage = restorePassage(p.passage, clean.echo, gameMinute(clean));
+  clean.transit = restoreTransit(
+    p.transit,
+    gameMinute(clean),
+    clean.custody || clean.alert.level,
+  );
+  if (clean.transit.ride) {
+    const { x, z } = DOCKS[clean.transit.ride.from];
+    clean.position = { x, z, heading: clean.position.heading };
+    clean.activeVehicle = null;
+  }
   if (directions.includes(p.tracking)) clean.tracking = p.tracking;
+  if (
+    clean.tracking === "echo" &&
+    ["locked", "closed"].includes(echoPhase(clean))
+  )
+    clean.tracking = "story";
   if (
     p.waypoint &&
     Number.isFinite(p.waypoint.x) &&
     Number.isFinite(p.waypoint.z)
   )
     clean.waypoint = {
-      x: capX(p.waypoint.x, START.x),
-      z: capZ(p.waypoint.z, START.z),
+      ...WORLD.restore(p.waypoint, START),
       label:
         typeof p.waypoint.label === "string"
           ? p.waypoint.label.slice(0, 55)
           : "Repère personnel",
     };
   if (clean.tracking === "custom" && !clean.waypoint) clean.tracking = "story";
+  if (clean.tracking === "freight" && !clean.port.job) clean.tracking = "story";
+  if (
+    clean.tracking === "passage" &&
+    ["locked", "closed"].includes(passagePhase(clean))
+  )
+    clean.tracking = "story";
   return clean;
 }
-export function readSave(storage) {
+export function readSelectedSlot(storage) {
   try {
-    return validateProgress(JSON.parse(storage.getItem(SAVE_KEY)));
+    const slot = Number(storage.getItem(ACTIVE_SLOT));
+    if (SAVE_SLOTS.includes(slot)) return slot;
+  } catch {}
+  return 0;
+}
+export function writeSelectedSlot(storage, slot) {
+  if (!SAVE_SLOTS.includes(slot)) return false;
+  try {
+    storage.setItem(ACTIVE_SLOT, String(slot));
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
-export function writeSave(storage, p) {
+function inspectSave(text) {
+  if (text == null) return { status: "empty", progress: null };
   try {
-    storage.setItem(SAVE_KEY, JSON.stringify(p));
+    const progress =
+      text.length <= SAVE_BYTES && validateProgress(JSON.parse(text));
+    if (progress) return { status: "ready", progress };
+  } catch {}
+  return { status: "invalid", progress: null };
+}
+export function readSlot(storage, slot = 0) {
+  if (!SAVE_SLOTS.includes(slot)) return { status: "invalid", progress: null };
+  try {
+    // Never merge or write back to a legacy slot. Old builds cannot see extended carnets.
+    const raw =
+      storage.getItem(slotKey(slot)) ??
+      storage.getItem(slotKey(slot, LEGACY_SAVE_KEY));
+    return inspectSave(raw);
+  } catch {
+    return { status: "unavailable", progress: null };
+  }
+}
+export function readSave(storage, slot = 0) {
+  return readSlot(storage, slot).progress;
+}
+export function writeSave(storage, p, slot = 0, replaceDamaged = false) {
+  if (!SAVE_SLOTS.includes(slot)) return false;
+  try {
+    const key = slotKey(slot);
+    if (!replaceDamaged && readSlot(storage, slot).status === "invalid")
+      return false;
+    const clean = validateProgress(p);
+    if (!clean) return false;
+    const text = JSON.stringify(clean);
+    if (text.length > SAVE_BYTES) return false;
+    storage.setItem(key, text);
     return true;
   } catch {
     return false;
@@ -220,11 +306,12 @@ export function storyEvent(p, event, ending) {
   if (
     event === "finish" &&
     p.stage === "belvedere" &&
+    typeof ending === "string" &&
     Object.hasOwn(ENDINGS, ending)
   ) {
     p.stage = "done";
     p.ending = ending;
-    p.cash += ENDINGS[ending].reward;
+    postCash(p, ENDINGS[ending].reward, "chapter");
     return true;
   }
   return false;
@@ -247,7 +334,7 @@ export function courierEvent(p, event) {
     c.stage = "idle";
     c.time = 0;
     c.runs++;
-    p.cash += 145;
+    postCash(p, 145, "courier");
     p.tracking = "story";
     return "paid";
   }
@@ -288,8 +375,7 @@ export function transactions(p, kind, key) {
     default:
       return false;
   }
-  if (p.cash < amount) return false;
-  p.cash -= amount;
+  if (!postCash(p, -amount, kind)) return false;
   if (kind === "car") p.vehicles[key] = defaultVehicle(key);
   if (kind === "outfit") {
     p.hasRaincoat = true;
@@ -369,7 +455,7 @@ export function beginCustody(progress, level) {
 export function endCustody(progress) {
   if (!progress.custody) return null;
   const fine = Math.min(progress.cash, progress.custody.level * 35);
-  progress.cash -= fine;
+  postCash(progress, -fine, "fine");
   progress.custody = null;
   return fine;
 }

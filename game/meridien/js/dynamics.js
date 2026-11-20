@@ -12,6 +12,9 @@ import {
   SILLAGE_ZEBRA,
   junctionZebra,
   STATION,
+  ONDES,
+  LOCAL_ROLES,
+  LOCAL_PARKING,
 } from "./data.mjs";
 import {
   rng,
@@ -140,6 +143,8 @@ export class CityLife {
       circuit(2, 0, 3, 4, true),
     ].map((n) => trafficRoute(n));
     this.traffic = [];
+    this.parked = [];
+    this.minutes = progress.time;
     this.owned = new Map();
     this.seized = new Map();
     this.people = [];
@@ -149,6 +154,19 @@ export class CityLife {
     TRAFFIC_IDS.forEach((id, i) =>
       this.spawnTraffic(i, progress.street.seized[id]),
     );
+    for (const { id, accent, name, ...at } of LOCAL_PARKING) {
+      const spec = { ...VEHICLES[id], accent, name };
+      if (carBlocked(world.solids, at.x, at.z, at.heading, spec)) continue;
+      const car = carState(spec, forge.vehicle(spec, { detail: false }), {
+        ...at,
+        parked: true,
+        y: 0.078,
+      });
+      scene.add(car.model.root);
+      world.solids.add(at.x, at.z, spec.width, spec.length, spec.height);
+      poseVehicle(car, 0, 0);
+      this.parked.push(car);
+    }
     this.eventClock = 60 + this.rng() * 42;
     this.hazards = new T.Group();
     this.hazards.visible = false;
@@ -238,6 +256,15 @@ export class CityLife {
       p.hue = i + 1;
       p.talker = i;
     });
+    const { witness } = ONDES;
+    this.salome = this.fixedPerson(
+      "salome",
+      witness.x,
+      witness.z,
+      witness.heading,
+      4,
+      "Salomé Renaud",
+    );
     const desk = STATION.officer;
     this.deskOfficer = this.fixedPerson(
       "guard",
@@ -255,24 +282,29 @@ export class CityLife {
       this.courier,
       this.garage,
       this.market,
+      this.salome,
       ...this.talkers,
     ];
     for (let i = 0; i < CIVILIAN_COUNT - this.talkers.length; i++) {
       const index = (i + 5) % 16,
         isCross = i < 4,
         road = [0, 1, 2, 4][i % 4];
-      const nodes = isCross
-        ? crossingLoop(road, (i + 1) % 4)
-        : i === CIVILIAN_COUNT - this.talkers.length - 1
-          ? sillageWalk()
-          : pedestrianLoop(index % 4, Math.floor(index / 4));
-      const model = forge.person(walkPal[i % 5], {
+      const role = LOCAL_ROLES[i];
+      const nodes = role
+        ? role.path.map(([x, z, linger]) => ({ x, z, linger }))
+        : isCross
+          ? crossingLoop(road, (i + 1) % 4)
+          : i === CIVILIAN_COUNT - this.talkers.length - 1
+            ? sillageWalk()
+            : pedestrianLoop(index % 4, Math.floor(index / 4));
+      const model = forge.person(role?.style || walkPal[i % 5], {
         hue: i % 5,
         scale: 0.89 + this.rng() * 0.17,
       });
       const sample = sampleWalker(nodes, (this.rng() * 0.85 + 0.1) % 1);
       const p = {
         ...sample,
+        role,
         model,
         nodes,
         speed: 1.28 + this.rng() * 0.66,
@@ -421,6 +453,7 @@ export class CityLife {
     return (this.carCache ??= [
       ...this.traffic,
       ...this.units,
+      ...this.parked,
       ...this.owned.values(),
       ...this.seized.values(),
     ]);
@@ -587,6 +620,7 @@ export class CityLife {
       return;
     }
     const node = p.nodes[p.node];
+    p.lingering = false;
     p.crosswalkRequest =
       p.nodes[(p.node + p.nodes.length - 1) % p.nodes.length].zebra;
     let vx = node.x - p.x,
@@ -594,14 +628,31 @@ export class CityLife {
       len = Math.hypot(vx, vz),
       v = p.speed;
     if (len < 0.42) {
+      if (node.linger && p.pauseNode !== p.node) {
+        p.pauseNode = p.node;
+        const hour = this.minutes / 60,
+          [first, last] = p.role.hours;
+        const shift =
+          first < last
+            ? hour >= first && hour < last
+            : hour >= first || hour < last;
+        p.pauseUntil = this.time + (shift ? node.linger : 0.65);
+      }
       const zebra = node.zebra,
         permitted =
           !zebra ||
           zebra.i == null ||
           signalState(this.time, zebra.i, zebra.j, zebra.axis) === "red";
       p.crosswalkRequest = permitted ? zebra : null;
-      if (!permitted || (zebra && this.crossingBlocked(zebra))) v = 0;
+      p.lingering = Boolean(
+        node.linger &&
+        this.time < p.pauseUntil &&
+        distance(p, player) > (player.car ? 2.7 : 0.72),
+      );
+      if (p.lingering || !permitted || (zebra && this.crossingBlocked(zebra)))
+        v = 0;
       else {
+        p.pauseNode = null;
         p.node = (p.node + 1) % p.nodes.length;
         const q = p.nodes[p.node];
         vx = q.x - p.x;
@@ -633,6 +684,10 @@ export class CityLife {
     }
     const xx = p.x,
       zz = p.z;
+    if (p.lingering) {
+      const look = p.role.style === "dock" ? ONDES.door : { x: 42.7, z: 29.9 };
+      p.heading += angleDelta(p.heading, angleTo(p, look)) * expEase(2.4, dt);
+    }
     if (len > 0.05 && v) {
       const yaw = Math.atan2(vx, -vz);
       p.heading += angleDelta(p.heading, yaw) * expEase(4.2, dt);
@@ -909,7 +964,8 @@ export class CityLife {
         c.spec.length * 0.511,
       );
   }
-  tick(dt, player) {
+  tick(dt, player, minutes = this.minutes) {
+    this.minutes = minutes;
     this.time += dt;
     const cars = this.allCars();
     for (const car of this.traffic) this.travelCar(car, dt, cars, player);
@@ -939,7 +995,7 @@ export class CityLife {
       if (c.doorT > 0) c.doorT = c.doorT + dt < 0.9 ? c.doorT + dt : 0;
     return this.enforce(dt, player);
   }
-  present(dt, player, quality) {
+  present(dt, player, quality, reduced = false) {
     this.world.tickSignals(this.time);
     const eco = quality === "low",
       limit = eco ? 82 : 152;
@@ -955,6 +1011,7 @@ export class CityLife {
           dt,
           this.time,
           c.unit < this.alert.level ? this.alert.level : 0,
+          reduced,
         );
     }
     this.presentIncident(player);
@@ -977,8 +1034,11 @@ export class CityLife {
       this.setDetail(p, d < (eco ? 18 : 32));
       this.placePerson(p, dt, p.poseSpeed || 0, {
         headTurn: p.poseHead,
-        gesture:
-          !p.officer && (p.poseSpeed || 0) < 0.1
+        cue: p.lingering && p.role.style === "messenger" ? "paper" : "look",
+        tilt: p.lingering && p.role.style === "messenger" ? 0.21 : 0,
+        gesture: p.lingering
+          ? 0.59 + 0.11 * Math.sin(this.time * 1.9)
+          : !p.officer && (p.poseSpeed || 0) < 0.1
             ? Math.max(0, Math.sin(this.time * 1.2 + p.hue)) * 0.33
             : 0,
       });

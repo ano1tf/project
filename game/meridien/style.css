@@ -447,6 +447,7 @@ kbd {
 .viewport {
   outline: none;
   cursor: grab;
+  touch-action: none;
 }
 .viewport:active {
   cursor: grabbing;
@@ -1007,7 +1008,7 @@ kbd {
   accent-color: var(--accent);
   width: min(135px, 36vw);
 }
-.panel-note {
+.overlay:not(.phone-panel) .panel-note {
   font: 10px/1.5 var(--mono) !important;
   color: #9aabb3 !important;
 }
@@ -1124,74 +1125,6 @@ kbd {
   color: #fff0d9;
   background: #6c4c39;
   border-color: #e6b1808a;
-}
-.overlay.phone-panel {
-  margin: auto clamp(15px, 4vw, 65px) auto auto;
-  width: min(355px, calc(100% - 30px));
-  border-radius: 20px;
-  background: linear-gradient(155deg, #122734, #09131c 65%);
-  border: 1px solid #7f9199;
-}
-.phone-panel .panel-inner {
-  padding: 21px;
-  min-height: min(525px, 85svh);
-}
-.phone-panel .panel-head {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 15px;
-  margin-bottom: 11px;
-}
-.phone-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-}
-.phone-tabs button {
-  display: grid;
-  gap: 3px;
-  justify-items: center;
-  text-align: center;
-  font: 9px var(--mono);
-  border: 1px solid var(--line);
-  background: #10212d;
-  padding: 7px 3px;
-  border-radius: 4px;
-  color: #cbd6d8;
-}
-.phone-tabs button svg {
-  width: 14px;
-  height: 14px;
-}
-.phone-tabs button.active,
-.phone-tabs button:hover {
-  color: #ffd4bc;
-  border-color: #ff946981;
-  background: #2c211d;
-}
-.phone-content {
-  min-height: 210px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-.phone-content h3 {
-  font: 700 24px var(--display);
-  margin: 0;
-}
-.message {
-  background: #09141c;
-  border: 1px solid #54707c65;
-  padding: 10px;
-  border-radius: 5px;
-}
-.message strong {
-  display: block;
-  color: var(--accent-hot);
-  font: 10px var(--mono);
-  margin-bottom: 4px;
-}
-.message p {
-  font-size: 12px;
 }
 .touch-controls {
   display: none;
@@ -2058,56 +1991,6 @@ body:has(.eco-mode:not([hidden]), .plan-mode:not([hidden])) .overlay::backdrop {
   grid-column: 2;
   color: var(--brass);
 }
-.overlay.phone-panel {
-  background: #10242a;
-  border-color: #83998a;
-  box-shadow:
-    inset 0 0 0 4px #1b3131,
-    0 12px 40px #040911bd;
-  border-radius: 10px;
-}
-.phone-panel .panel-head {
-  background: #1a3436;
-}
-.phone-network {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 30px;
-  border-block: 1px solid #76988c64;
-  padding-inline: 8px;
-  color: #b8d8c6;
-  background: #284344;
-  font: 10px var(--mono);
-  letter-spacing: 0.1em;
-}
-.phone-network svg {
-  color: #addac1;
-  width: 15px;
-  height: 15px;
-}
-.phone-network b {
-  margin-right: auto;
-  color: #efe0bd;
-}
-.phone-tabs button.active {
-  border-color: #a2c5aa;
-  color: #e9f6e0;
-  background: #305048;
-}
-.phone-content .message {
-  background: #183036;
-  border: 1px solid #76988b52;
-  border-left: 2px solid #c6ad81;
-}
-.phone-content .message strong {
-  color: #e8cda0;
-}
-.phone-content .journal-heading {
-  color: #d6dbc8;
-  margin-top: 11px;
-}
 .map-panel .map-surface {
   border: 1px solid #ac9d777d;
   background: #182b30;
@@ -2402,5 +2285,155 @@ body:has(.eco-mode:not([hidden]), .plan-mode:not([hidden])) .overlay::backdrop {
 @media (pointer: fine) and (min-width: 740px) {
   .cockpit-mode .interact {
     bottom: 0;
+  }
+}
+
+/* Controls for a physical receiver; the same form is used in 3D and Plan. */
+.receiver-form {
+  display: grid;
+  gap: 12px;
+}
+.receiver-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--soft);
+}
+.receiver-form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid #647d73;
+  border-radius: 3px;
+  background: #142824;
+  color: #f1e0c3;
+  font: inherit;
+}
+.receiver-readout {
+  display: block;
+  padding: 12px 14px;
+  border: 1px solid #46725b;
+  background: #172e26;
+  color: #c5e9c9;
+  font: 600 0.8rem/1.5 var(--mono);
+  letter-spacing: 0.12em;
+}
+.receiver-result,
+.evidence-note {
+  padding-left: 12px;
+  border-left: 2px solid #aa8860;
+}
+
+/* La Relève du Port · saved journals, inbox badge and counters at the desk */
+.carnet-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0 11px;
+  border: 1px solid #b9c2ab66;
+  border-radius: 4px;
+  background: #142427c9;
+  color: #f4e8cf;
+  font: 11px var(--mono);
+}
+.carnet-switch svg {
+  width: 15px;
+  height: 15px;
+  color: #e9c494;
+}
+.carnet-switch small {
+  padding-left: 9px;
+  border-left: 1px solid #bac5a344;
+  color: #afc9be;
+}
+.carnet-switch[data-status="invalid"] small {
+  color: #ffbe96;
+}
+.carnet-switch:hover,
+.slot-card:hover {
+  border-color: #e3c592;
+}
+.slot-list {
+  display: grid;
+  gap: 8px;
+}
+.slot-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 7px 10px;
+  border: 1px solid #91a29b5c;
+  border-radius: 4px;
+  padding: 12px;
+  background: #162c31;
+  color: #eee5d2;
+  text-align: left;
+}
+.slot-card[aria-pressed="true"] {
+  background: #233c38;
+  border-color: #a8bd9b;
+}
+.slot-card > b {
+  font: 11px var(--mono);
+  color: #bdccb8;
+}
+.slot-card[data-status="invalid"] > b {
+  color: #ffc4a1;
+}
+.slot-card > small {
+  grid-column: 2 / -1;
+  color: #b8c8c5;
+  line-height: 1.5;
+}
+#open-phone {
+  position: relative;
+}
+#open-phone[data-unread]:not([data-unread=""])::after {
+  content: attr(data-unread);
+  position: absolute;
+  right: -3px;
+  top: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0 2px;
+  color: #182b28;
+  background: #e9cd9c;
+  border-radius: 9px;
+  border: 1px solid #151f24;
+  font: 9px var(--mono);
+  pointer-events: none;
+}
+.port-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.port-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: start;
+  gap: 4px;
+  padding: 7px;
+  border-block: 1px solid #9ebca469;
+  background: #233a36;
+}
+.port-stats b {
+  font: 700 clamp(17px, 4.5vw, 22px)/1 var(--display);
+  color: #f7e6bc;
+}
+.port-stats small {
+  color: #bbd1c6;
+  font: 10px/1.4 var(--mono);
+}
+.operations-panel .panel-body > .journal-heading {
+  margin-top: 4px;
+}
+@media (max-width: 400px) {
+  .slot-card {
+    padding-inline: 8px;
   }
 }
