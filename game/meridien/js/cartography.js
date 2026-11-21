@@ -1,3 +1,6 @@
+import { localRegion, regionalChart } from "./region-paper.js";
+import { EAST } from "./faubourgs.mjs";
+import { paintEast, squares } from "./faubourgs.mjs";
 import { CLIENTS } from "./port.mjs";
 import {
   BOUNDS,
@@ -46,7 +49,12 @@ export const CHART_COLORS = {
 };
 const ink = CHART_COLORS,
   left = WORLD.extent.minX - 19,
-  extent = { x: left, z: -179, w: 189 - left, d: 352 },
+  extent = {
+    x: left,
+    z: EAST.bounds.minZ - 12,
+    w: EAST.bounds.maxX + 12 - left,
+    d: EAST.bounds.maxZ - EAST.bounds.minZ + 24,
+  },
   north = BOUNDS.minZ,
   south = BOUNDS.maxZ,
   west = BOUNDS.minX,
@@ -164,6 +172,7 @@ function sheet(world) {
       if (!X.some((n, i) => Math.abs(x - n) < WX[i] * 0.5 + 2.6))
         c.fillRect(x, z - 0.14, 2.35, 0.28);
   });
+  paintEast(c);
   paintRive(c);
   paintSondes(c);
   for (const f of world.buildings) {
@@ -260,19 +269,20 @@ function plate(c, w, h, s) {
   c.fillText("N", w - 21, 19);
   arrow(c, w - 21, 30, 0, 6);
   const y = h - 15,
-    x = w - 17;
+    x = w - 17,
+    metres=[1,2,5,10,25,50,100,250].filter(n=>n*s<90).at(-1)??1;
   c.strokeStyle = "#e7d1a8";
   c.beginPath();
-  c.moveTo(x - 50 * s, y - 4);
-  c.lineTo(x - 50 * s, y);
+  c.moveTo(x - metres * s, y - 4);
+  c.lineTo(x - metres * s, y);
   c.lineTo(x, y);
   c.lineTo(x, y - 4);
   c.stroke();
-  c.fillText("50 m", x - 25 * s, y - 6);
+  c.fillText(`${metres} m`, x - metres * s / 2, y - 6);
 }
 
 // Canvas coordinates, symbol positions and hit testing share one projection.
-export function drawChart(canvas, g, full = false) {
+export function drawChart(canvas, g, full = false, regional = false, view) {
   const c = canvas.getContext("2d"),
     w = full ? canvas.clientWidth : canvas.width,
     h = full ? canvas.clientHeight : canvas.height;
@@ -286,15 +296,22 @@ export function drawChart(canvas, g, full = false) {
       canvas.height = py;
     }
   }
+  if (full && regional)
+    return regionalChart(canvas, g, view, (ctx) =>
+      ctx.drawImage(sheet(g.world), extent.x, extent.z, extent.w, extent.d),
+    );
   const hero = g.hero,
     target = g.target(),
     pos = target.point,
     compact = w < 410,
     ref = full
-      ? { x: extent.x + extent.w * 0.5, z: (north + south) * 0.5 }
+      ? (view?.center ?? {
+          x: extent.x + extent.w * 0.5,
+          z: extent.z + extent.d * 0.5,
+        })
       : hero,
     s = full
-      ? Math.min((w - 22) / extent.w, (h - 54) / (south - north))
+      ? Math.min((w - 22) / extent.w, (h - 54) / extent.d) * (view?.zoom ?? 1)
       : Math.min(w / 114, h / 94),
     mx = (x) => (x - ref.x) * s + w / 2,
     mz = (z) => (z - ref.z) * s + h / 2;
@@ -308,6 +325,13 @@ export function drawChart(canvas, g, full = false) {
     extent.w * s,
     extent.d * s,
   );
+  if (!full) {
+    c.save();
+    c.translate(mx(0), mz(0));
+    c.scale(s, s);
+    localRegion(c, hero.x, hero.z, w / s, h / s);
+    c.restore();
+  }
   const launch = launchAt(g.progress.time);
   if (full || distance(hero, launch) < 52)
     marker(
@@ -324,7 +348,15 @@ export function drawChart(canvas, g, full = false) {
     c.lineWidth = 2.8;
     c.fillStyle = "#c5d2bbaa";
     c.font = `500 ${compact ? 8 : 10}px "IBM Plex Mono",monospace`;
-    for (const l of DISTRICTS) {
+    for (const l of [
+      ...DISTRICTS,
+      ...[
+        [302, -63, "LES FORGES"],
+        [530, 62, "CITÉ DES BRAISES"],
+        [768, -149, "LES TERRASSES"],
+        [996, 116, "LES VERRIÈRES"],
+      ].map(([x, z, name]) => ({ x, z, name })),
+    ]) {
       c.strokeText(l.name, mx(l.x), mz(l.z));
       c.fillText(l.name, mx(l.x), mz(l.z));
     }
@@ -394,6 +426,14 @@ export function drawChart(canvas, g, full = false) {
       p.kind === "shop" ? "square" : p.kind === "side" ? "circle" : "diamond",
       full ? 4.9 : 3.4,
     );
+  }
+  for (const site of squares) {
+    if (
+      (!full && distance(hero, site) > 60) ||
+      (pos && distance(site, pos) < 1.8)
+    )
+      continue;
+    add(site, "side", site.label, "circle", full ? 3.8 : 3);
   }
   const job = g.progress.port.job;
   const freightBay = job?.stage === "loaded" ? CLIENTS[job.id].bay : "depot";

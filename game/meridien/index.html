@@ -23,14 +23,6 @@
     />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="phone.css" />
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "../../assets/vendor/three/three.module.js",
-          "three/addons/": "../../assets/vendor/three/addons/"
-        }
-      }
-    </script>
   </head>
   <body>
     <svg
@@ -241,6 +233,10 @@
             <span id="carnet-name">Carnet 1</span
             ><small id="carnet-state">Libre</small>
           </button>
+          <button id="start-plan" class="text-button" type="button" hidden>
+            Reprendre en vue Plan (sans WebGL)
+          </button>
+          <a class="text-button" href="atlas.html">Ouvrir la carte interactive ↗</a>
           <p id="start-status" class="start-status" role="status" hidden></p>
           <button id="new-game" class="text-button" type="button" hidden>
             Commencer une nouvelle partie

@@ -1,4 +1,4 @@
-import * as T from "three";
+import * as T from "../../../assets/vendor/three/three.module.js";
 import { ONDES, PASSAGE, PROMENADE, WATCH } from "./data.mjs";
 import { labelMaterial, standard } from "./materials.js";
 

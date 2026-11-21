@@ -1,5 +1,7 @@
+import { regionBands } from "./region.mjs";
 // The playable surface is a union of lands and crossings, not its map extent.
 // All positions stay in world metres (Y up); sector IDs never encode a save offset.
+import { EAST } from "./faubourgs.mjs";
 import { RIVE, GREVES_BRIDGE } from "./rive-layout.mjs";
 
 export const PORT_ID = "port-lumiere";
@@ -101,6 +103,6 @@ export const PORT_SECTOR = Object.freeze({
   bounds: PORT_BOUNDS,
 });
 export const WORLD = createTopology(
-  Object.freeze([PORT_SECTOR, RIVE]),
+  Object.freeze([PORT_SECTOR, RIVE, EAST, ...regionBands]),
   Object.freeze([GREVES_BRIDGE]),
 );

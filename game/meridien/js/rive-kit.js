@@ -1,4 +1,4 @@
-import * as T from "three";
+import * as T from "../../../assets/vendor/three/three.module.js";
 import { parseKreoAsset } from "../../../editor/atelier/asset-format.mjs";
 import { buildKreoAssembly } from "../../../editor/atelier/assembly.js";
 import { coalesce } from "./port-kit.js";

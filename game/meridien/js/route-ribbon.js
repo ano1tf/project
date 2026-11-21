@@ -1,4 +1,4 @@
-import * as T from "three";
+import * as T from "../../../assets/vendor/three/three.module.js";
 import { distance, onRoad } from "./core.mjs";
 
 const count = 12;

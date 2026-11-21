@@ -1,3 +1,5 @@
+import { regionalRoute, gate } from "./region.mjs";
+import { EAST, avenues } from "./faubourgs.mjs";
 import { BOUNDS, X, Z } from "./data.mjs";
 import {
   clamp,
@@ -202,7 +204,7 @@ export class WalkRoutes {
     )
       path.push(b);
     const simplified = [a];
-    for (let i = 0; i < path.length - 1;) {
+    for (let i = 0; i < path.length - 1; ) {
       let k = i + 1;
       // Stop at an actual obstruction: no diagonal guides through pillars or a closed wall.
       while (
@@ -243,6 +245,18 @@ export class WorldRoutes extends WalkRoutes {
       t = WORLD.at(b.x, b.z);
     if (!f || !t) return [];
     if (f.id === PORT_ID && t.id === PORT_ID) return super.route(a, b);
+    if (f.regional && t.regional) return regionalRoute(a, b);
+    if (f.regional) return [...regionalRoute(a, gate), ...this.route(gate, b)];
+    if (t.regional) return this.route(b, a).reverse();
+    if (f === EAST || t === EAST) {
+      this.east ??= new WalkRoutes(this.solids, this.cell, EAST.bounds);
+      if (f === EAST && t === EAST) return this.east.route(a, b);
+      if (t === EAST) return this.route(b, a).reverse();
+      const gate = { x: 179, z: avenues[closestIndex(avenues, a.z)] };
+      const first = this.east.route(a, gate),
+        next = this.route(gate, b);
+      return first.length && next.length ? [...first, ...next] : [];
+    }
     this.rive ??= new WalkRoutes(this.solids, this.cell, RIVE.bounds);
     if (f === RIVE && t === RIVE) return this.rive.route(a, b);
     const port = GREVES_BRIDGE.walk[0],
@@ -280,7 +294,12 @@ export class WorldRoutes extends WalkRoutes {
         Math.abs(x - b.x) < Math.abs(z - b.z) ? { x, z: b.z } : { x: b.x, z };
       return navRoute(a, p);
     }
-    return navRoute(a, exact || t?.id === PORT_ID ? b : nearestRiveRoad(b));
+    return navRoute(
+      a,
+      exact || t?.regional || t === EAST || t?.id === PORT_ID
+        ? b
+        : nearestRiveRoad(b),
+    );
   }
 }
 

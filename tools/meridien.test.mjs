@@ -270,7 +270,7 @@ test("franchissement : murs, porte, saut au-dessus dâ€™un petit obstacle et camÃ
   assert.equal(w.blocked(6, 25, 0.4, 0.2, 1.58), true);
   assert.ok(w.trace(2, 1.5, 16, 2, 1.5, 24, 0.12) < 0.5);
   assert.equal(w.trace(5, 1.5, 16, 5, 1.5, 24, 0.12), 1);
-  assert.equal(w.blocked(BOUNDS.maxX + 0.2, 5, 0.33), true);
+  assert.equal(w.blocked(BOUNDS.maxX + 0.2, BOUNDS.minZ + 5, 0.33), true);
   assert.equal(carBlocked(w, 3, 20, 0, VEHICLES.mistral), true);
 });
 

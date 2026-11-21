@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Atlas interactif · Méridien</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #12262d;
+        color: #f3e6cb;
+        font:
+          15px system-ui,
+          sans-serif;
+      }
+      main {
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        max-width: 1600px;
+        margin: auto;
+        padding: 12px;
+        gap: 8px;
+      }
+      header,
+      nav {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      h1 {
+        font-size: 19px;
+        margin: 0 auto 0 0;
+      }
+      a {
+        color: #ffd09b;
+      }
+      button,
+      select {
+        border: 1px solid #748781;
+        background: #223b41;
+        color: #fff4d9;
+        border-radius: 5px;
+        padding: 8px 12px;
+        font: inherit;
+        cursor: pointer;
+      }
+      output {
+        min-width: 3em;
+        text-align: center;
+      }
+      canvas {
+        width: 100%;
+        height: 0;
+        min-height: 140px;
+        flex: 1 1 0;
+        border: 1px solid #758883;
+        touch-action: none;
+        cursor: grab;
+      }
+      canvas:active {
+        cursor: grabbing;
+      }
+      p {
+        margin: 0;
+        font-size: 13px;
+      }
+
+      body {
+        background: linear-gradient(145deg, #101e23, #21373b);
+      }
+      main {
+        padding: clamp(8px, 2vw, 26px);
+      }
+      header {
+        border-bottom: 1px solid #52635e;
+        padding-bottom: 10px;
+      }
+      h1 {
+        letter-spacing: -0.04em;
+        font-size: clamp(20px, 3vw, 36px);
+      }
+      header small {
+        font: 11px monospace;
+        letter-spacing: 0.16em;
+        color: #cab58e;
+      }
+      button:hover,
+      select:hover {
+        background: #345259;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button:focus-visible,
+      select:focus-visible,
+      canvas:focus-visible {
+        outline: 2px solid #ffb679;
+      }
+      canvas {
+        border-radius: 8px;
+      }
+      details {
+        background: #1b3036;
+        border: 1px solid #4e6464;
+        border-radius: 6px;
+        padding: 8px 12px;
+      }
+      summary {
+        cursor: pointer;
+        color: #ffce9e;
+        font-weight: 650;
+      }
+      #stages {
+        max-height: 16vh;
+        overflow: auto;
+        font: 13px/1.7 system-ui;
+      }
+      #total {
+        float: right;
+      }
+      #info {
+        color: #c4d1cc;
+      }
+      #add {
+        color: #ffc288;
+      }
+      @media (max-width: 550px) {
+        nav {
+          gap: 4px;
+        }
+        button,
+        select {
+          padding: 6px 8px;
+          font-size: 13px;
+        }
+        header small {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <small>PL / 01</small>
+        <h1>Méridien · Atlas routier</h1>
+        <a href="./index.html">Entrer dans le jeu →</a>
+      </header>
+      <nav aria-label="Navigation cartographique">
+        <button id="minus" aria-label="Dézoomer">−</button
+        ><output id="level">×1</output
+        ><button id="plus" aria-label="Zoomer">+</button
+        ><button id="reset">Vue entière</button
+        ><select id="places" aria-label="Explorer une zone">
+          <option value="">Explorer une zone…</option></select
+        ><button id="add" disabled>Ajouter une étape</button>
+      </nav>
+      <canvas
+        tabindex="0"
+        aria-label="Atlas : glissez pour déplacer, utilisez la molette ou pincez pour zoomer. Les flèches déplacent aussi la carte."
+      ></canvas>
+      <details>
+        <summary>
+          Carnet de route · départ Port-Lumière <span id="total">0 m</span>
+        </summary>
+        <ol id="stages"></ol>
+        <button id="undo" disabled>Retirer la dernière étape</button>
+      </details>
+      <p id="info" role="status">
+        Glissez pour explorer · Molette ou pincement pour zoomer · Cliquez pour
+        ajouter une étape au parcours.
+      </p>
+    </main>
+    <script type="module" src="js/atlas-page.js"></script>
+  </body>
+</html>

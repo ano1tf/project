@@ -2437,3 +2437,4 @@ body:has(.eco-mode:not([hidden]), .plan-mode:not([hidden])) .overlay::backdrop {
     padding-inline: 8px;
   }
 }
+.atlas-frame{min-width:0}.atlas-frame .map-surface{touch-action:none;cursor:grab}.atlas-frame .map-surface:active{cursor:grabbing}.atlas-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:8px 0}.atlas-controls output{min-width:3em;text-align:center;color:#efd6ab}.atlas-frame small{color:#c5d1cd}

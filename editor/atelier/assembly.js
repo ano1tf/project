@@ -1,4 +1,4 @@
-import * as T from 'three';
+import * as T from '../../assets/vendor/three/three.module.js';
 import { MESH_PRIMS, cloneMesh, meshToGeometry } from '../mesh.js';
 import { createKreoMotion, linkKreoScene } from './animation.mjs';
 
