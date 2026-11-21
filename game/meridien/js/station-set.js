@@ -1,5 +1,5 @@
-import { Mesh } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { Mesh } from "../../../assets/vendor/three/three.module.js";
+import { mergeGeometries } from "../../../assets/vendor/three/addons/utils/BufferGeometryUtils.js";
 import { labelMaterial, standard } from "./materials.js";
 
 // Static masonry, prints and furniture share the district batches. Only the

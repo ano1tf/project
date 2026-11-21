@@ -1,4 +1,5 @@
-import * as T from "three";
+import { altitude } from "./region.mjs";
+import * as T from "../../../assets/vendor/three/three.module.js";
 import {
   START,
   STATION,
@@ -101,7 +102,16 @@ const navNames = {
   custom: "NAVIGATION · POINT LIBRE",
 };
 export class Meridien {
-  constructor(view, progress, prefs, storage, audio, hooks, slot = 0) {
+  constructor(
+    view,
+    progress,
+    prefs,
+    storage,
+    audio,
+    hooks,
+    slot = 0,
+    launchQuality = prefs.quality,
+  ) {
     this.view = view;
     this.progress = progress;
     this.prefs = prefs;
@@ -119,7 +129,6 @@ export class Meridien {
       matchMedia("(pointer: coarse)").matches;
     this.budget = new RenderBudget();
     this.stats = { fps: 0, scale: 1 };
-    if (prefs.quality !== "plan") this.openGraphics();
     this.scene = new T.Scene();
     this.camera = new T.PerspectiveCamera(57, 1, 0.1, 1280);
     this.camDes = v3();
@@ -202,7 +211,12 @@ export class Meridien {
     this.nextPaint = 0;
     this.lastPaint = 0;
     this.previousYaw = this.yaw;
-    this.quality(prefs.quality);
+    try {
+      this.quality(launchQuality);
+    } catch (error) {
+      if (launchQuality === "plan" || this.mode === "plan") throw error;
+      this.startInPlan(error);
+    }
     this.windowResize = () => this.rescale();
     window.addEventListener("resize", this.windowResize);
     this.syncHero(0);
@@ -235,9 +249,9 @@ export class Meridien {
     const info = gl.getExtension("WEBGL_debug_renderer_info");
     this.software = Boolean(
       info &&
-      /swiftshader|llvmpipe|software rasterizer|softpipe/i.test(
-        gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || "",
-      ),
+        /swiftshader|llvmpipe|software rasterizer|softpipe/i.test(
+          gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || "",
+        ),
     );
     canvas.setAttribute("aria-hidden", "true");
     canvas.addEventListener("webglcontextlost", (e) => {
@@ -257,8 +271,23 @@ export class Meridien {
     });
     return true;
   }
+  startInPlan(error) {
+    console.warn(
+      "Méridien : initialisation 3D interrompue, reprise en Plan",
+      error,
+    );
+    // Keep the loaded world and slot. Do not change the user's graphics preference.
+    this.quality("plan");
+    this.fallback = true;
+  }
   prepare() {
-    this.presentFrame(0, 0);
+    try {
+      this.presentFrame(0, 0);
+    } catch (error) {
+      if (this.mode === "plan") throw error;
+      this.startInPlan(error);
+      this.presentFrame(0, 0);
+    }
     this.loadReflections();
   }
   loadReflections() {
@@ -276,7 +305,9 @@ export class Meridien {
         return;
       }
       try {
-        const { HDRLoader } = await import("three/addons/loaders/HDRLoader.js");
+        const { HDRLoader } = await import(
+          "../../../assets/vendor/three/addons/loaders/HDRLoader.js"
+        );
         const map = await new HDRLoader().loadAsync(
           new URL("../../../assets/env/venice_sunset_1k.hdr", import.meta.url)
             .href,
@@ -1248,7 +1279,11 @@ export class Meridien {
       c.x = x;
       c.z = z;
     }
-    c.y = lerp(c.y || 0, onRoad(c.x, c.z) ? 0 : 0.044, expEase(9, dt));
+    c.y = lerp(
+      c.y || 0,
+      altitude(c.x, c.z) + (onRoad(c.x, c.z) ? 0 : 0.044),
+      expEase(9, dt),
+    );
     h.x = c.x;
     h.z = c.z;
     h.heading = c.heading;

@@ -1,4 +1,17 @@
-import * as T from "three";
+import { CORNICHE, cornicheFloor } from "./corniche.mjs";
+import { buildCorniche, shoreBirds } from "./corniche-site.js";
+import { furnishEast } from "./faubourgs-interiors.js";
+import { bandAt, altitude } from "./region.mjs";
+import { RegionSite } from "./region-site.js";
+import {
+  lots,
+  wards,
+  streets,
+  trees,
+  soundings,
+  squares,
+} from "./faubourgs.mjs";
+import * as T from "../../../assets/vendor/three/three.module.js";
 import { DistrictBatches } from "./district-render.js";
 import {
   X,
@@ -139,6 +152,7 @@ const corner = (x, z, ry = 0) => {
 export class DistrictWorld {
   constructor(scene) {
     this.scene = scene;
+    this.region = new RegionSite(scene);
     this.m = makeMaterials();
     this.solids = new Solids();
     this.batch = new DistrictBatches(scene);
@@ -156,6 +170,14 @@ export class DistrictWorld {
     this.rive = new RiveSite(this);
     this.harbor();
     this.skyline();
+    this.buildFaubourgs();
+    buildCorniche(this, corner(CORNICHE.x, CORNICHE.z), {
+      box,
+      beam,
+      cylinder,
+      sign,
+      labelMaterial,
+    });
   }
   prepareGraphics(onDetail) {
     if (this.staticGroup) return;
@@ -200,6 +222,9 @@ export class DistrictWorld {
     return this.solids.add(g.position.x + x, g.position.z + z, w, d, h, bottom);
   }
   animateHarbor(t, eye, mode, reduced, time) {
+    this.updateShoreBirds ??= shoreBirds(T, this.scene);
+    this.updateShoreBirds(eye, t, reduced);
+    this.region.present(eye);
     this.portSite.present(eye, time, mode, this.portDetail);
     this.rive.present(eye, mode, this.portDetail);
     this.sondes?.present(eye, time);
@@ -233,7 +258,10 @@ export class DistrictWorld {
     );
   }
   floor(p) {
-    return this.portSite.floor(p) ?? this.rive.floor(p);
+    if (bandAt(p.x, p.z)) return altitude(p.x, p.z) + 0.015;
+    return (
+      cornicheFloor(p.x, p.z) ?? this.portSite.floor(p) ?? this.rive.floor(p)
+    );
   }
   groundSound(x, z) {
     if (this.isRoofed({ x, y: 0, z })) return "interior";
@@ -1938,6 +1966,200 @@ export class DistrictWorld {
     box(g, m.yellow, b - arm * 0.68, h * 0.48, 0, 1.4 * s, 0.39 * s, 1.63 * s);
     box(g, m.lamp, b - arm * 0.99, h - 0.22, 0, 0.28, 0.12, 0.21);
     this.batch.add(g);
+  }
+  buildFaubourgs() {
+    const m = this.m;
+    // Triangulated shore follows the same tide line drawn on the plan.
+    for (let i = 1; i < soundings.length; i++) {
+      const [x, n, s] = soundings[i - 1],
+        [xx, nn, ss] = soundings[i],
+        g = corner(x, 0),
+        dx = xx - x;
+      const geo = new T.BufferGeometry();
+      geo.setAttribute(
+        "position",
+        new T.Float32BufferAttribute(
+          [0, 0, n, 0, 0, s, dx, 0, nn, dx, 0, ss],
+          3,
+        ),
+      );
+      geo.setAttribute(
+        "uv",
+        new T.Float32BufferAttribute(
+          [x / 6, n / 6, x / 6, s / 6, xx / 6, nn / 6, xx / 6, ss / 6],
+          2,
+        ),
+      );
+      geo.setIndex([0, 1, 2, 2, 1, 3]);
+      geo.computeVertexNormals();
+      put(g, m.grass, geo, 0, 0, 0);
+      this.batch.add(g);
+    }
+    for (const { p, q, len, width } of streets) {
+      const g = corner(
+        (p.x + q.x) / 2,
+        (p.z + q.z) / 2,
+        Math.atan2(q.x - p.x, q.z - p.z),
+      );
+      surface(g, m.pavers, 0, 0.025, 0, width + 3, len + 1.5, 6);
+      surface(g, m.road, 0, 0.046, 0, width, len + 1.2, 8);
+      if (width >= 10) box(g, m.roadWhite, 0, 0.061, 0, 0.14, 0.008, 3);
+      this.batch.add(g);
+    }
+    // Reuse low-poly crowns throughout the large eastern bank. The original
+    // port's close-up street tree has 40+ pieces per specimen.
+    const crown = new T.IcosahedronGeometry(1, 0);
+    for (const { x, z } of trees) {
+      const g = corner(x, z),
+        ht = 3.1 + (x % 2);
+      cylinder(g, m.trunks, 0, ht / 2, 0, 0.17, ht);
+      for (const side of [-1, 0, 1]) {
+        const leaf = put(
+          g,
+          m.leaves[side + 1],
+          crown,
+          side * 0.76,
+          ht + (side === 0 ? 1.25 : 0.35),
+          side * 0.29,
+          true,
+        );
+        leaf.scale.set(1.22, 1.62, 1.4);
+        leaf.rotation.y = x + side;
+      }
+      this.collision(g, 0, 0, 0.34, 0.34, ht);
+      this.batch.add(g);
+    }
+    for (const { kind, x, z, w, d } of squares) {
+      const g = corner(x, z);
+      surface(g, kind === "court" ? m.paint : m.pavers, 0, 0.055, 0, w, d, 5);
+      if (kind === "court") {
+        for (const side of [-1, 1]) {
+          box(g, m.white, 0, 0.066, side * (d / 2 - 1), w - 2, 0.014, 0.11);
+          box(g, m.white, side * (w / 2 - 1), 0.066, 0, 0.11, 0.014, d - 2);
+          const bx = side * (w / 2 - 0.65);
+          cylinder(g, m.iron, bx, 1.65, 0, 0.11, 3.3);
+          box(g, m.white, bx - side * 0.38, 3.35, 0, 0.14, 1, 1.72);
+          const hoop = put(
+            g,
+            m.orange,
+            new T.TorusGeometry(0.25, 0.035, 6, 16),
+            bx - side * 0.72,
+            3.02,
+            0,
+          );
+          hoop.rotation.x = Math.PI / 2;
+          this.collision(g, bx, 0, 0.27, 0.27, 3.4);
+        }
+        box(g, m.white, 0, 0.066, 0, 0.11, 0.014, d - 2);
+        const circle = put(
+          g,
+          m.white,
+          new T.RingGeometry(1.72, 1.82, 24),
+          0,
+          0.077,
+          0,
+        );
+        circle.rotation.x = -Math.PI / 2;
+      } else
+        for (const side of [-1, 1]) {
+          const dx = side * (w / 2 - 3);
+          if (kind === "market") {
+            box(g, m.wood, dx, 0.53, 0, 2.7, 1.06, d - 3);
+            this.collision(g, dx, 0, 2.7, d - 3, 1.06);
+            for (const end of [-1, 1])
+              for (const edge of [-1, 1])
+                box(
+                  g,
+                  m.iron,
+                  dx + edge * 1.12,
+                  1.49,
+                  end * (d / 2 - 1.72),
+                  0.1,
+                  2.98,
+                  0.1,
+                );
+            for (let i = 0; i < 8; i++)
+              box(
+                g,
+                i % 2 ? m.paint : m.white,
+                dx,
+                3.05,
+                ((i - 3.5) * (d - 2)) / 8,
+                3.6,
+                0.16,
+                (d - 2) / 8,
+              );
+          } else {
+            box(g, m.curb, dx, 0.24, 0, 3.6, 0.48, d - 2);
+            box(g, m.dirt, dx, 0.49, 0, 3.35, 0.06, d - 2.25);
+            this.collision(g, dx, 0, 3.6, d - 2, 0.54);
+            for (let i = -2; i <= 2; i++) {
+              const shrub = put(
+                g,
+                m.leaves[(i + 2) % 4],
+                crown,
+                dx,
+                0.81,
+                i * 1.22,
+              );
+              shrub.scale.set(1.22, 0.73, 0.92);
+            }
+          }
+        }
+      this.batch.add(g);
+    }
+    const works = lots
+      .filter((l) => l.ward === 0)
+      .reduce((best, l) => (l.w * l.d > best.w * best.d ? l : best));
+    const rig = { box, cylinder, surface, sign, labelMaterial, beam };
+    for (const lot of lots) {
+      const { x, z, w, d, h, ward } = lot;
+      const yard = corner(x, z);
+      surface(
+        yard,
+        ward === 2 ? m.grass : m.pavers,
+        0,
+        0.026,
+        0,
+        w + 4,
+        d + 4,
+        5,
+      );
+      this.batch.add(yard);
+      if (lot === works) {
+        const g = corner(x, z);
+        this.shell(g, w, d, h, 6.6, m.warehouse);
+        furnishEast(this, g, "works", rig, w, d, h);
+        this.batch.add(g);
+      } else if (ward === 1 && d === 34) {
+        const g = corner(x, z);
+        this.shell(g, w, d, 3.4, 2.4, m.concrete);
+        facade(g, m.facades.slate, 0, (h + 3.5) / 2, 0, w, h - 3.5, d, 3, 2.9);
+        this.collision(g, 0, 0, w, d, h, 3.5);
+        box(g, m.curb, 0, h + 0.12, 0, w + 0.45, 0.24, d + 0.45);
+        // Collective entrance hall, mailboxes and a service core behind it.
+        for (let i = 0; i < 8; i++)
+          box(
+            g,
+            m.rail,
+            -w / 2 + 0.38,
+            1 + (i % 2) * 0.3,
+            d / 2 - 2 - Math.floor(i / 2) * 0.42,
+            0.24,
+            0.27,
+            0.38,
+          );
+        if ((x === 509 && z === 69) || (x === 552 && z === 57))
+          furnishEast(this, g, x === 509 ? "flat" : "wash", rig, w, d, h);
+        else {
+          box(g, m.concrete, 0, 1.65, -4, w - 0.48, 3.3, 1);
+          this.collision(g, 0, -4, w - 0.48, 1, 3.3);
+        }
+        this.bench(g, w / 2 - 1.8, 8);
+        this.collision(g, w / 2 - 1.8, 8, 2.2, 0.65, 1);
+        this.batch.add(g);
+      } else this.building(x, z, w, d, h, wards[ward][2]);
+    }
   }
   skyline() {
     const rr = this.rnd;

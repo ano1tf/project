@@ -13,7 +13,7 @@
  * triangule en éventail. Pas de demi-arêtes : à cette échelle, un tableau de
  * faces suffit et reste compréhensible quand on ouvre le fichier.
  */
-import * as THREE from 'three';
+import * as THREE from '../assets/vendor/three/three.module.js';
 
 /* ------------------------------------------------------------------ modèle */
 

@@ -1,4 +1,4 @@
-import * as T from "three";
+import * as T from "../../../assets/vendor/three/three.module.js";
 import { BOUNDS } from "./data.mjs";
 import { clamp, expEase, lerp, rng, wrap } from "./core.mjs";
 
@@ -202,7 +202,14 @@ export class Climate {
       -1.87,
       -674.5,
     );
-    for (const water of [west, north]) {
+    const estuary = mesh(
+      new T.PlaneGeometry(972, 850),
+      this.waterMat,
+      668,
+      -2,
+      0,
+    );
+    for (const water of [west, north, estuary]) {
       water.rotation.x = -Math.PI / 2;
       water.renderOrder = 8;
       scene.add(water);

@@ -1,3 +1,5 @@
+import { zones, biome } from "./region.mjs";
+import { EAST, wards, wardAt } from "./faubourgs.mjs";
 import { COMPTOIR, PORT_BAY } from "./port-layout.mjs";
 import {
   GREVES_BAY,
@@ -599,6 +601,8 @@ export const DISTRICTS = [
 ];
 export function districtName(x, z) {
   const area = WORLD.at(x, z);
+  if (area?.regional) return zones[biome(x, z)].slice(0, 2);
+  if (area === EAST) return wards[wardAt(x)].slice(0, 2);
   if (area === RIVE) return [RIVE.name, "Quai des Calfats"];
   if (area === GREVES_BRIDGE)
     return [GREVES_BRIDGE.name, "Traversée de l’estuaire"];

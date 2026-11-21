@@ -1,3 +1,7 @@
+import { CORNICHE_ENTRY } from "./corniche.mjs";
+import { mapGestures } from "./map-gestures.js";
+import { EAST, dry, squares } from "./faubourgs.mjs";
+import { bandAt, waters } from "./region.mjs";
 import {
   MAP_PLACES,
   PLACES,
@@ -196,6 +200,7 @@ function setMenu() {
   $("choose-slot").dataset.status = status;
   $("start-game").querySelector("span").textContent = label;
   $("new-game").hidden = status !== "ready";
+  $("start-plan").hidden = status !== "ready";
   syncSound();
 }
 function chooseSlot() {
@@ -512,24 +517,27 @@ function confirmNew() {
     ),
   );
 }
-async function start(restart = false, slot = selectedSlot) {
+async function start(restart = false, slot = selectedSlot, planOnly = false) {
   if (starting || game) return;
   if (!restart && readSlot(storage, slot).status === "invalid") {
     confirmNew();
     return;
   }
   starting = true;
-  const controls = [$("start-game"), $("new-game"), $("choose-slot")];
+  const controls = [
+    $("start-plan"),
+    $("start-game"),
+    $("new-game"),
+    $("choose-slot"),
+  ];
   controls.forEach((b) => (b.disabled = true));
   const status = $("start-status");
   status.hidden = false;
   status.textContent = "Chargement du quartier…";
-  if (prefs.sound) audio.start();
   try {
-    await Promise.all([
-      document.fonts.ready,
-      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
-    ]);
+    if (prefs.sound) audio.start();
+    // Font downloads must not hold the simulation or saved-game restore hostage.
+    await new Promise((r) => requestAnimationFrame(r));
     const { Meridien } = await import("./game.js");
     const entry = readSlot(storage, slot);
     if (!restart && entry.status === "invalid") {
@@ -553,6 +561,7 @@ async function start(restart = false, slot = selectedSlot) {
         recovered: graphicsBack,
       },
       slot,
+      planOnly ? "plan" : prefs.quality,
     );
     game.prepare();
     title.hidden = true;
@@ -560,10 +569,10 @@ async function start(restart = false, slot = selectedSlot) {
     status.hidden = true;
     game.rescale();
     game.pause(false);
-    game.begin();
-    const saved = game.save(false, restart);
     updateHUD(game);
     game.announce();
+    game.begin();
+    const saved = game.save(false, restart);
     if (!saved)
       notify(
         "Carnet inaccessible en écriture · la partie reste ouverte, mais ne sera pas conservée tant que la sauvegarde échoue.",
@@ -572,10 +581,16 @@ async function start(restart = false, slot = selectedSlot) {
     viewport.focus({ preventScroll: true });
   } catch (e) {
     console.error("Méridien : démarrage impossible", e);
+    if (game?.raf) cancelAnimationFrame(game.raf);
+    if (game?.windowResize)
+      window.removeEventListener("resize", game.windowResize);
+    game?.renderer?.dispose();
     game = null;
     viewport.replaceChildren();
-    status.textContent =
-      "Impossible de lancer Méridien. Essayez Paramètres → Qualité graphique → Plan, puis relancez.";
+    title.hidden = false;
+    play.hidden = true;
+    $("start-plan").hidden = false;
+    status.textContent = `Démarrage interrompu : ${e?.message || String(e)}. Vous pouvez réessayer avec le même carnet.`;
     status.hidden = false;
   } finally {
     starting = false;
@@ -1586,6 +1601,8 @@ function mapScreen(returnTo) {
   if (courier) tracks.append(courier);
   for (const id of MAP_PLACES)
     places.append(btn(PLACES[id].label, () => go(PLACES[id]), { pict: "pin" }));
+  for (const place of [...squares, CORNICHE_ENTRY])
+    places.append(btn(place.label, () => go(place), { pict: "pin" }));
   sidebar.append(
     status,
     tracks,
@@ -1599,9 +1616,25 @@ function mapScreen(returnTo) {
     panel.append(
       flow(btn("Retour aux applications", returnTo, { pict: "left" })),
     );
+  let regional = true;
+  const views = [{ zoom: 1 }, { zoom: 1 }],
+    view = () => views[+regional];
+  const switchScale = btn(
+    "Voir le plan du port",
+    () => {
+      regional = !regional;
+      switchScale.lastChild.textContent = regional
+        ? "Voir le plan du port"
+        : "Voir toute la région";
+      redraw();
+    },
+    { pict: "pin" },
+  );
+  sidebar.prepend(switchScale);
   let projection;
   const redraw = () => {
-    projection = drawChart(canvas, game, true);
+    projection = drawChart(canvas, game, true, regional, view());
+    level.textContent = `×${Number(view().zoom.toFixed(1))}`;
   };
   const refresh = () => {
     redraw();
@@ -1630,20 +1663,69 @@ function mapScreen(returnTo) {
       ),
     );
   };
-  canvas.addEventListener("click", (e) => {
+  const select = (x, y, reach) => {
     if (!projection) return;
-    const r = canvas.getBoundingClientRect(),
-      x = e.clientX - r.left - canvas.clientLeft,
-      y = e.clientY - r.top - canvas.clientTop;
-    const point =
-      projection.pick(x, y, e.pointerType === "touch" ? 15 : 12) ||
-      projection.world(x, y);
-    if (!WORLD.allows(point.x, point.z, 0.43)) {
+    const point = projection.pick(x, y, reach) || projection.world(x, y);
+    if (
+      !WORLD.allows(point.x, point.z, 0.43) ||
+      (WORLD.at(point.x, point.z) === EAST && !dry(point.x, point.z, 0.43)) ||
+      (bandAt(point.x, point.z) && waters(point.x, point.z))
+    ) {
       status.textContent = "Placez le repère à terre ou sur le pont.";
       return;
     }
     go(point);
-  });
+  };
+  const level = tag("output", "×1");
+  canvas.tabIndex = 0;
+  const zoom = mapGestures(
+    canvas,
+    () => projection,
+    view,
+    () =>
+      regional
+        ? { ...WORLD.extent, maxZoom: 64 }
+        : {
+            minX: WORLD.extent.minX,
+            maxX: EAST.bounds.maxX,
+            minZ: EAST.bounds.minZ,
+            maxZ: EAST.bounds.maxZ,
+            maxZoom: 16,
+          },
+    redraw,
+    select,
+  );
+  const toolbar = tag("div", "", "atlas-controls");
+  toolbar.append(
+    btn("−", () => zoom(0.5)),
+    level,
+    btn("+", () => zoom(2)),
+    btn("Ma position", () => {
+      if (!regional && game.hero.x > EAST.bounds.maxX) {
+        switchScale.click();
+      }
+      view().center = { x: game.hero.x, z: game.hero.z };
+      view().zoom = regional ? 32 : 4;
+      redraw();
+    }),
+    btn("Vue entière", () => {
+      view().center = null;
+      view().zoom = 1;
+      redraw();
+    }),
+  );
+  toolbar.firstChild.setAttribute("aria-label", "Dézoomer");
+  toolbar.children[2].setAttribute("aria-label", "Zoomer");
+  const frame = tag("div", "", "atlas-frame");
+  canvas.replaceWith(frame);
+  frame.append(
+    canvas,
+    toolbar,
+    tag(
+      "small",
+      "Glissez pour explorer · Molette ou pincement pour zoomer · Touchez pour placer un repère.",
+    ),
+  );
   refresh();
   if (typeof ResizeObserver !== "undefined") {
     mapObserver = new ResizeObserver(redraw);
@@ -2150,6 +2232,9 @@ for (const b of document.querySelectorAll("[data-hold],[data-act]")) {
   for (const e of ["pointerup", "pointercancel", "lostpointercapture"])
     b.addEventListener(e, up);
 }
+$("start-plan").addEventListener("click", () =>
+  start(false, selectedSlot, true),
+);
 $("start-game").addEventListener("click", () => start());
 $("new-game").addEventListener("click", confirmNew);
 $("choose-slot").addEventListener("click", chooseSlot);

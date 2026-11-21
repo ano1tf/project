@@ -1,4 +1,4 @@
-import * as T from "three";
+import * as T from "../../../assets/vendor/three/three.module.js";
 import { rng } from "./core.mjs";
 
 export const standard = (color, extra = {}) =>

@@ -1,4 +1,4 @@
-import * as T from "three";
+import * as T from "../../../assets/vendor/three/three.module.js";
 
 export const DIAL_START = Math.PI * 0.75;
 export const DIAL_SWEEP = Math.PI * 1.5;

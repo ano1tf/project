@@ -1,3 +1,7 @@
+import { CORNICHE } from "./corniche.mjs";
+import { localRegion } from "./region-paper.js";
+import { EAST } from "./faubourgs.mjs";
+import { paintEast } from "./faubourgs.mjs";
 import {
   BOUNDS,
   X,
@@ -24,9 +28,9 @@ import { launchAt } from "./sondes.mjs";
 import { LOG_TABLE } from "./rive-layout.mjs";
 
 const left = WORLD.extent.minX - 22,
-  top = -198,
-  width = 205 - left,
-  height = 383;
+  top = EAST.bounds.minZ - 20,
+  width = EAST.bounds.maxX + 22 - left,
+  height = EAST.bounds.maxZ + 20 - top;
 const signalColors = { red: "#ffa38e", amber: "#f6d479", green: "#89d5b7" };
 const land = "#293e43",
   line = "#668082",
@@ -41,7 +45,7 @@ const buildings = {
 
 function backdrop(world) {
   const canvas = document.createElement("canvas"),
-    p = 4;
+    p = 2;
   canvas.width = width * p;
   canvas.height = height * p;
   const c = canvas.getContext("2d");
@@ -200,6 +204,25 @@ function backdrop(world) {
       }
     }),
   );
+  paintEast(c);
+  // The playable Plan view needs the same ramp mouth and deck edges as 3D.
+  c.save();
+  c.translate(CORNICHE.x, CORNICHE.z);
+  const { rampWidth, deckWidth, entry, landing, back } = CORNICHE;
+  c.fillStyle = "#9c8370";
+  c.fillRect(-rampWidth / 2, landing, rampWidth, entry - landing);
+  c.fillRect(-deckWidth / 2, back, deckWidth, landing - back);
+  c.fillStyle = "#55625b";
+  c.fillRect(-deckWidth / 2, back, deckWidth, 0.22);
+  for (const side of [-1, 1]) {
+    c.fillRect((side * deckWidth) / 2 - 0.08, back, 0.16, landing - back);
+    c.fillRect((side * rampWidth) / 2 - 0.08, landing, 0.16, entry - landing);
+  }
+  c.fillStyle = "#6c5945";
+  for (const z of [-15, -11.7]) c.fillRect(-5.7, z - 0.24, 1.8, 0.48);
+  c.fillStyle = "#bcb59a";
+  c.fillRect(2.4, -15.5, 0.5, 1);
+  c.restore();
   paintRive(c, true);
   paintSondes(c, true);
   for (const bay of Object.values(DELIVERY_BAYS)) {
@@ -408,6 +431,7 @@ export class PlanView {
     c.scale(s, s);
     c.translate(-this.x, -this.z);
     c.drawImage(this.tiles, left, top, width, height);
+    localRegion(c, this.x, this.z, w / s, h / s);
     const shutter = g.world.portSite.door;
     if (shutter.enabled) {
       c.fillStyle = "#eaad6d";

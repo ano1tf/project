@@ -1,4 +1,11 @@
 import {
+  bandAt,
+  roadDistance,
+  regionBlocked,
+  regionalRoute,
+  gate,
+} from "./region.mjs";
+import {
   X,
   Z,
   WX,
@@ -40,13 +47,18 @@ export const nearestJunction = (p) => [
   closestIndex(Z, p.z),
 ];
 export const junction = (i, j) => ({ x: X[i], z: Z[j] });
+import { EAST, eastRoad, eastRoute, dry } from "./faubourgs.mjs";
 export function onRoad(x, z) {
   if (inRect(PORT_BOUNDS, x, z))
     return (
       X.some((n, i) => Math.abs(n - x) < WX[i] * 0.5) ||
       Z.some((n, i) => Math.abs(n - z) < WZ[i] * 0.5)
     );
-  return RIVE_ROADS.some((r) => inRect(r, x, z));
+  return (
+    (bandAt(x, z) && roadDistance(x, z) < 5.5) ||
+    eastRoad(x, z) ||
+    RIVE_ROADS.some((r) => inRect(r, x, z))
+  );
 }
 const RIVE_ROADS = [RIVE.road, RIVE.apron, RIVE.turn, GREVES_BRIDGE.road];
 export function nearestRiveRoad(p) {
@@ -95,6 +107,8 @@ export class Solids {
     return b;
   }
   blocked(x, z, radius = 0.35, y = 0, height = 1.5) {
+    if (x > 182 && x < 1150 && !dry(x, z, radius)) return true;
+    if (bandAt(x, z) && regionBlocked(x, z, radius)) return true;
     if (!this.domain.allows(x, z, radius)) return true;
     const s = this.size,
       r = radius;
@@ -479,6 +493,17 @@ export function navRoute(a, b) {
   const from = WORLD.at(a.x, a.z),
     to = WORLD.at(b.x, b.z);
   if (!from || !to) return [];
+  if (from.regional && to.regional) return regionalRoute(a, b);
+  if (from.regional) return [...regionalRoute(a, gate), ...navRoute(gate, b)];
+  if (to.regional) return navRoute(b, a).reverse();
+  if (from === EAST || to === EAST) {
+    if (from === EAST && to === EAST) return eastRoute(a, b);
+    if (to === EAST) return navRoute(b, a).reverse();
+    const entry = { x: 179, z: -10 };
+    const tail = navRoute(entry, b);
+    if (tail.length) tail[tail.length - 1] = b;
+    return [...eastRoute(a, entry), ...tail];
+  }
   if (from.id === PORT_ID && to.id === PORT_ID) return roadRoute(a, b);
   const [port, bank] = GREVES_BRIDGE.drive;
   // Don't point back to the anchor once the car has committed to the ramp.

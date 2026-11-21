@@ -1,5 +1,5 @@
-import * as T from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import * as T from "../../../assets/vendor/three/three.module.js";
+import { mergeGeometries } from "../../../assets/vendor/three/addons/utils/BufferGeometryUtils.js";
 import { labelMaterial, standard } from "./materials.js";
 import { TAU, rng } from "./core.mjs";
 
