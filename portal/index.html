@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a1118" />
+    <meta
+      name="description"
+      content="Portail Méridien — fenêtre sur la machine : mission 3D, boîte à commandes, galerie et état du dépôt."
+    />
+    <title>Portail Méridien · Machine 3D</title>
+    <link rel="icon" href="../game/meridien/art/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="portal.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../assets/vendor/three/three.module.js",
+          "three/addons/": "../assets/vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-mark" src="../game/meridien/art/mark.svg" alt="" width="34" height="34" />
+        <div>
+          <p class="brand-title">Méridien · Portail machine</p>
+          <p class="brand-sub">Mission 3D — Port-Lumière</p>
+        </div>
+      </div>
+      <div class="chips" id="status-chips" aria-live="polite">
+        <span class="chip chip-wait">liaison…</span>
+      </div>
+      <a class="btn btn-primary" href="../game/meridien/" target="_blank" rel="noopener">Ouvrir le jeu</a>
+    </header>
+
+    <nav class="tabs" aria-label="Sections du portail">
+      <button class="tab is-active" data-tab="mission">Mission 3D</button>
+      <button class="tab" data-tab="commandes">Commandes</button>
+      <button class="tab" data-tab="galerie">Galerie</button>
+      <button class="tab" data-tab="machine">Machine</button>
+    </nav>
+
+    <main>
+      <!-- ============ MISSION 3D ============ -->
+      <section class="panel is-active" id="tab-mission">
+        <div class="hero">
+          <div class="hero-text">
+            <p class="kicker">Le projet</p>
+            <h1>Méridien — un GTA-like à la française,<br />et la 3D est notre affaire.</h1>
+            <p class="lede">
+              Port-Lumière est une ville d’estuaire jouable en monde ouvert : à pied, en voiture,
+              enquête, fret, sûreté. Le rendu est une <strong>3D stylisée temps réel</strong>
+              (Three.js / WebGL 2) avec repli Plan sans WebGL. Ce portail est la fenêtre sur la
+              machine qui fabrique cette 3D : déposez vos commandes de visuels et de modèles,
+              suivez la production, inspectez les résultats.
+            </p>
+          </div>
+          <div class="hero-card" id="triple-card">
+            <p class="kicker">Service de génération</p>
+            <h2>Triple 3D</h2>
+            <p class="triple-state"><span class="dot dot-wait"></span> En attente de connexion</p>
+            <p class="muted">
+              Dès que le service est relié à cette machine, les commandes « photo » produisent les
+              visuels de référence et les commandes « modèle » sortent des maillages 3D exploitables
+              dans le jeu. Rien à installer de votre côté : la boîte à commandes suffit.
+            </p>
+          </div>
+        </div>
+
+        <h2 class="section-title">Chaîne de production 3D</h2>
+        <ol class="pipeline">
+          <li class="pipe-step">
+            <span class="pipe-num">1</span>
+            <h3>Brief</h3>
+            <p>Une commande déposée ici décrit l’objet, son usage dans Port-Lumière et sa priorité.</p>
+          </li>
+          <li class="pipe-step">
+            <span class="pipe-num">2</span>
+            <h3>Photos</h3>
+            <p>Concepts, références et textures : des visuels générés, toujours signalés comme tels.</p>
+          </li>
+          <li class="pipe-step">
+            <span class="pipe-num">3</span>
+            <h3>Modèles 3D</h3>
+            <p>Triple 3D transforme les références en maillages ; l’Atelier Kreo valide les lots animés.</p>
+          </li>
+          <li class="pipe-step">
+            <span class="pipe-num">4</span>
+            <h3>Contrôle</h3>
+            <p>Inspection dans la galerie : géométrie, échelle, pivots, cohérence avec la direction artistique.</p>
+          </li>
+          <li class="pipe-step">
+            <span class="pipe-num">5</span>
+            <h3>Intégration</h3>
+            <p>Placement dans le moteur : collisions, carte, Plan et 3D partagent les mêmes données.</p>
+          </li>
+        </ol>
+
+        <h2 class="section-title">Terrain de jeu actuel</h2>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-value">369 × 331 m</span><span class="stat-label">secteur jouable continu</span></div>
+          <div class="stat"><span class="stat-value">19</span><span class="stat-label">véhicules de circulation</span></div>
+          <div class="stat"><span class="stat-value">0.12</span><span class="stat-label">version — Les deux rives</span></div>
+          <div class="stat"><span class="stat-value">WebGL 2 + Plan</span><span class="stat-label">deux rendus, une sauvegarde</span></div>
+        </div>
+        <p class="muted">
+          Direction artistique : ardoise, verts d’estuaire, points chauds de sodium, veste rouille,
+          signalétique française. Dossier de référence :
+          <a href="../game/meridien/DESIGN.md" target="_blank" rel="noopener">DESIGN.md</a> ·
+          <a href="../game/meridien/EXECUTION.md" target="_blank" rel="noopener">EXECUTION.md</a>
+        </p>
+      </section>
+
+      <!-- ============ COMMANDES ============ -->
+      <section class="panel" id="tab-commandes">
+        <div class="split">
+          <div>
+            <h2 class="section-title">Déposer une commande</h2>
+            <p class="muted">
+              Chaque commande est enregistrée sur la machine (dossier <code>portal/boite/</code>) et
+              rejoint le journal d’activité. Les champs marquent l’usage prévu dans le jeu.
+            </p>
+            <form id="request-form" class="form">
+              <label>
+                Type de production
+                <select name="kind" required>
+                  <option value="photo">Photo — concept, référence, texture</option>
+                  <option value="modele">Modèle 3D — maillage (GLB)</option>
+                  <option value="decors">Décors — bâtiment, rue, quai</option>
+                  <option value="vehicule">Véhicule — berline, utilitaire…</option>
+                  <option value="personnage">Personnage — silhouette, tenue</option>
+                  <option value="autre">Autre</option>
+                </select>
+              </label>
+              <label>
+                Titre
+                <input name="title" maxlength="160" required placeholder="Ex. Hangar 07, portes coulissantes" />
+              </label>
+              <label>
+                Description
+                <textarea
+                  name="details"
+                  rows="5"
+                  maxlength="4000"
+                  placeholder="Forme, matériaux, ambiance, où cela se place dans Port-Lumière, références de la direction artistique…"
+                ></textarea>
+              </label>
+              <label>
+                Priorité
+                <select name="priority">
+                  <option value="normale" selected>Normale</option>
+                  <option value="haute">Haute</option>
+                  <option value="basse">Basse</option>
+                </select>
+              </label>
+              <button class="btn btn-primary" type="submit">Déposer la commande</button>
+              <p class="form-note" id="form-note" role="status"></p>
+            </form>
+          </div>
+          <div>
+            <h2 class="section-title">Boîte à commandes</h2>
+            <div id="request-list" class="card-list">
+              <p class="muted">Chargement…</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ GALERIE ============ -->
+      <section class="panel" id="tab-galerie">
+        <h2 class="section-title">Galerie de production</h2>
+        <p class="muted">
+          Les visuels signalés <span class="badge badge-gen">généré</span> sont des illustrations
+          produites par la machine, indiquées comme telles conformément à la charte du jeu. Cliquez
+          une image pour l’agrandir, un modèle 3D pour l’inspecter.
+        </p>
+        <div class="filters" id="gallery-filters">
+          <button class="chip-btn is-active" data-filter="tous">Tous</button>
+          <button class="chip-btn" data-filter="image">Visuels</button>
+          <button class="chip-btn" data-filter="modele">Modèles 3D</button>
+        </div>
+        <div id="gallery-grid" class="gallery">
+          <p class="muted">Chargement…</p>
+        </div>
+
+        <h2 class="section-title">Inventaire 3D du dépôt</h2>
+        <div id="assets3d-list" class="card-list">
+          <p class="muted">Chargement…</p>
+        </div>
+      </section>
+
+      <!-- ============ MACHINE ============ -->
+      <section class="panel" id="tab-machine">
+        <h2 class="section-title">État de la machine</h2>
+        <div class="stat-grid" id="machine-stats">
+          <div class="stat"><span class="stat-value">…</span><span class="stat-label">liaison…</span></div>
+        </div>
+
+        <h2 class="section-title">Fichiers du dépôt</h2>
+        <div class="split split-files">
+          <div class="tree-wrap">
+            <div id="file-tree" class="tree">
+              <p class="muted">Chargement…</p>
+            </div>
+          </div>
+          <div class="file-view">
+            <div class="file-view-head">
+              <span id="file-view-path" class="mono">sélectionnez un fichier</span>
+              <button class="btn btn-ghost" id="file-refresh" hidden>Réessayer</button>
+            </div>
+            <pre id="file-view-content" class="mono">La lecture est limitée aux fichiers texte du dépôt (256 Kio max).</pre>
+          </div>
+        </div>
+
+        <h2 class="section-title">Journal d’activité</h2>
+        <pre id="journal" class="journal mono">Chargement…</pre>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div>
+        <p class="mono">Portail Méridien · machine de production 3D</p>
+        <p class="muted">
+          Accès rapides :
+          <a href="../game/meridien/" target="_blank" rel="noopener">Méridien</a> ·
+          <a href="../game/" target="_blank" rel="noopener">Démos</a> ·
+          <a href="../editor/" target="_blank" rel="noopener">Éditeur 3D</a> ·
+          <a href="../editor/?atelier=exemple" target="_blank" rel="noopener">Atelier</a> ·
+          <a href="../" target="_blank" rel="noopener">Landing KREO</a>
+        </p>
+      </div>
+      <p class="muted" id="footer-status">—</p>
+    </footer>
+
+    <!-- Modales -->
+    <div class="modal" id="modal-image" hidden>
+      <div class="modal-box modal-wide">
+        <button class="modal-close" data-close aria-label="Fermer">×</button>
+        <img id="modal-image-src" alt="" />
+        <div class="modal-meta">
+          <p id="modal-image-title" class="mono"></p>
+          <p class="muted" id="modal-image-note"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="modal-viewer" hidden>
+      <div class="modal-box modal-wide">
+        <button class="modal-close" data-close aria-label="Fermer">×</button>
+        <p id="viewer-title" class="mono"></p>
+        <canvas id="viewer-canvas"></canvas>
+        <p class="muted viewer-hint">Glisser pour tourner · molette pour zoomer</p>
+      </div>
+    </div>
+
+    <script type="module" src="portal.js"></script>
+  </body>
+</html>

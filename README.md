@@ -8,6 +8,16 @@ python3 tools/serve.py 8000
 
 Ouvrir [http://localhost:8000/](http://localhost:8000/), puis **Jouer aux démos** ou **Commencer à créer**. Aucune installation npm n’est nécessaire pour utiliser le site.
 
+## Portail machine · production 3D
+
+Le [portail Méridien](portal/) est la fenêtre sur la machine qui fabrique la 3D du jeu :
+
+```sh
+python3 tools/portal-server.py 8080
+```
+
+Ouvrir [http://localhost:8080/](http://localhost:8080/) (redirige vers `/portal/`). Le portail expose l’état du dépôt et de la machine, l’arborescence des fichiers, le journal d’activité, la galerie des visuels et modèles produits (avec inspecteur 3D), et une **boîte à commandes** (`photo`, `modèle`, `décors`, `véhicule`, `personnage`) enregistrée dans `portal/boite/`. Les visuels générés sont signalés comme tels, conformément à la charte du jeu. La connexion du service de génération **Triple 3D** (photos de référence et maillages) se branche depuis le portail ; les commandes déposées sont traitées par la machine de production.
+
 ## Atelier Arena · créer de la 3D et des animations
 
 1. Dans l’[éditeur 3D](editor/), ouvrir **Connexion à Arena** dans le panneau Scène. Écrire un brief. Par défaut, il n’inclut **aucune donnée de scène** ; l’ajout de repères est facultatif.
